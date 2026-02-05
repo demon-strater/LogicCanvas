@@ -21,7 +21,7 @@ export function TimelineHeader({
   offsetX,
   contentOffsetY = 0,
 }: Props) {
-  const gridStartY = 50 + contentOffsetY;
+  const gridStartY = 0;
   const months = useMemo(() => {
     const result = [];
     for (let m = startMonth; m <= endMonth; m++) {
@@ -42,8 +42,9 @@ export function TimelineHeader({
     <>
       {/* Timeline header bar */}
       <div
-        className="absolute top-0 left-0 flex border-b border-border bg-background/95 backdrop-blur-sm"
+        className="absolute left-0 flex border-b border-border bg-background/95 backdrop-blur-sm"
         style={{
+          top: -50,
           width: canvasWidth,
           height: 50,
           zIndex: 100,
