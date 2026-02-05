@@ -117,9 +117,33 @@ export function GroupBox({
         transform: "translate(-50%, -50%)",
         zIndex: isSelected || isDragging ? 2 : 0,
         borderColor: isSelected ? groupColor : `${groupColor}60`,
-        // Calculate size based on content: documents stacked vertically, child groups horizontally
-        width: Math.max(360, 80 + (childGroups.length > 0 ? childGroups.length * 380 : 280)),
-        height: Math.max(200, 100 + documents.length * 160 + (childGroups.length > 0 ? 300 : 0)),
+        // Match server layout: DOC_WIDTH=280, DOC_GAP_X=80, GROUP_PADDING=50, GROUP_HEADER=70
+        width: (() => {
+          const DOC_WIDTH = 280;
+          const DOC_GAP_X = 80;
+          const GROUP_PADDING = 50;
+          // Grid layout for docs
+          const docCount = documents.length;
+          const cols = docCount <= 1 ? 1 : docCount <= 2 ? 2 : docCount <= 4 ? 2 : docCount <= 6 ? 3 : Math.ceil(Math.sqrt(docCount));
+          const docWidth = cols * (DOC_WIDTH + DOC_GAP_X) - DOC_GAP_X;
+          // Child groups width
+          const childWidth = childGroups.length * 380;
+          return Math.max(360, Math.max(docWidth, childWidth) + GROUP_PADDING * 2);
+        })(),
+        height: (() => {
+          const DOC_HEIGHT = 140;
+          const DOC_GAP_Y = 60;
+          const GROUP_HEADER = 70;
+          const GROUP_PADDING = 50;
+          // Grid layout for docs
+          const docCount = documents.length;
+          const cols = docCount <= 1 ? 1 : docCount <= 2 ? 2 : docCount <= 4 ? 2 : docCount <= 6 ? 3 : Math.ceil(Math.sqrt(docCount));
+          const rows = Math.ceil(docCount / cols) || 1;
+          const docHeight = rows * (DOC_HEIGHT + DOC_GAP_Y) - DOC_GAP_Y;
+          // Child groups height
+          const childHeight = childGroups.length > 0 ? 350 : 0;
+          return Math.max(200, GROUP_HEADER + docHeight + childHeight + GROUP_PADDING);
+        })(),
       }}
       onMouseDown={handleMouseDown}
       data-testid={`group-box-${group.id}`}

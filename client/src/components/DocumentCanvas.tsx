@@ -479,8 +479,10 @@ export function DocumentCanvas({
           })}
         </svg>
 
-        {/* Render groups as background containers */}
-        {groups.filter(g => !g.parentId).map((group, index) => {
+        {/* Render ALL groups as background containers (parents first for z-index) */}
+        {groups
+          .sort((a, b) => (a.parentId ? 1 : 0) - (b.parentId ? 1 : 0))
+          .map((group, index) => {
           const pos = groupPositions[group.id] || getGroupPosition(group, index);
           return (
             <GroupBox
