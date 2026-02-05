@@ -614,6 +614,148 @@ export async function registerRoutes(
     return created;
   }
 
+  // Re-layout existing groups and documents (compact grid layout)
+  app.post("/api/relayout", async (req, res) => {
+    try {
+      const groups = await storage.getAllGroups();
+      const documents = await storage.getAllDocuments();
+
+      if (groups.length === 0 && documents.length === 0) {
+        return res.json({ success: true, message: "정렬할 항목이 없습니다" });
+      }
+
+      // Apply compact layout
+      const DOC_WIDTH = 280;
+      const DOC_HEIGHT = 140;
+      const DOC_GAP = 24;
+      const GROUP_PADDING = 32;
+      const GROUP_GAP = 48;
+      const CANVAS_START_X = 80;
+      const CANVAS_START_Y = 80;
+      const TOP_LEVEL_COLS = 3;
+
+      // Build parent-child relationships
+      const groupIdSet = new Set(groups.map(g => g.id));
+      const childrenOf: Record<number, typeof groups> = {};
+      for (const group of groups) {
+        if (group.parentId && groupIdSet.has(group.parentId)) {
+          if (!childrenOf[group.parentId]) childrenOf[group.parentId] = [];
+          childrenOf[group.parentId].push(group);
+        }
+      }
+
+      // Calculate group sizes
+      function calculateGroupSize(groupId: number, depth: number = 0): { width: number; height: number } {
+        const docsInGroup = documents.filter(d => d.groupId === groupId);
+        const maxCols = 2;
+        const cols = Math.max(1, Math.min(docsInGroup.length, maxCols));
+        const rows = Math.max(1, Math.ceil(docsInGroup.length / maxCols));
+        
+        let baseWidth = Math.max(320, cols * (DOC_WIDTH + DOC_GAP) + GROUP_PADDING * 2);
+        let baseHeight = rows * (DOC_HEIGHT + DOC_GAP) + GROUP_PADDING * 2 + 48;
+
+        const children = childrenOf[groupId] || [];
+        if (children.length > 0) {
+          let maxChildWidth = 0;
+          let totalChildHeight = 0;
+          for (const child of children) {
+            const childSize = calculateGroupSize(child.id, depth + 1);
+            maxChildWidth = Math.max(maxChildWidth, childSize.width);
+            totalChildHeight += childSize.height + DOC_GAP;
+          }
+          baseWidth = Math.max(baseWidth, maxChildWidth + GROUP_PADDING * 2);
+          baseHeight += totalChildHeight;
+        }
+
+        return { width: baseWidth, height: Math.max(200, baseHeight) };
+      }
+
+      // Position groups and documents
+      async function positionGroup(group: typeof groups[0], startX: number, startY: number, depth: number = 0): Promise<{ width: number; height: number }> {
+        await storage.updateGroup(group.id, { x: startX, y: startY });
+
+        const headerOffset = 40 + depth * 8;
+        let currentY = startY + headerOffset;
+        const maxCols = 2;
+
+        const docsInGroup = documents.filter(d => d.groupId === group.id);
+        let docX = startX + GROUP_PADDING;
+        let colIndex = 0;
+        
+        for (const doc of docsInGroup) {
+          await storage.updateDocument(doc.id, {
+            x: docX + DOC_WIDTH / 2,
+            y: currentY + DOC_HEIGHT / 2
+          });
+          
+          colIndex++;
+          if (colIndex >= maxCols) {
+            colIndex = 0;
+            docX = startX + GROUP_PADDING;
+            currentY += DOC_HEIGHT + DOC_GAP;
+          } else {
+            docX += DOC_WIDTH + DOC_GAP;
+          }
+        }
+        
+        if (docsInGroup.length > 0 && colIndex !== 0) {
+          currentY += DOC_HEIGHT + DOC_GAP;
+        }
+
+        const children = childrenOf[group.id] || [];
+        for (const child of children) {
+          const childSize = await positionGroup(child, startX + GROUP_PADDING, currentY, depth + 1);
+          currentY += childSize.height + DOC_GAP;
+        }
+
+        return calculateGroupSize(group.id, depth);
+      }
+
+      // Get top-level groups
+      const topLevelGroups = groups.filter(g => !g.parentId || !groupIdSet.has(g.parentId));
+      
+      // Calculate sizes for column layout
+      const groupSizes = topLevelGroups.map(g => calculateGroupSize(g.id, 0));
+      const maxGroupWidth = Math.max(...groupSizes.map(s => s.width), 400);
+
+      // Arrange in columns (balanced)
+      const columnHeights = Array(TOP_LEVEL_COLS).fill(CANVAS_START_Y);
+      const columnX = Array(TOP_LEVEL_COLS).fill(0).map((_, i) => 
+        CANVAS_START_X + i * (maxGroupWidth + GROUP_GAP)
+      );
+      
+      for (let i = 0; i < topLevelGroups.length; i++) {
+        const minColIndex = columnHeights.indexOf(Math.min(...columnHeights));
+        const group = topLevelGroups[i];
+        const size = await positionGroup(group, columnX[minColIndex], columnHeights[minColIndex], 0);
+        columnHeights[minColIndex] += size.height + GROUP_GAP;
+      }
+
+      // Handle ungrouped documents
+      const ungroupedDocs = documents.filter(d => !d.groupId);
+      const maxHeight = Math.max(...columnHeights, CANVAS_START_Y + 300);
+      let ungroupedX = CANVAS_START_X;
+      let ungroupedY = maxHeight + 50;
+      
+      for (const doc of ungroupedDocs) {
+        await storage.updateDocument(doc.id, {
+          x: ungroupedX + DOC_WIDTH / 2,
+          y: ungroupedY + DOC_HEIGHT / 2
+        });
+        ungroupedX += DOC_WIDTH + DOC_GAP;
+        if (ungroupedX > CANVAS_START_X + 900) {
+          ungroupedX = CANVAS_START_X;
+          ungroupedY += DOC_HEIGHT + DOC_GAP;
+        }
+      }
+
+      res.json({ success: true, message: "레이아웃이 재정렬되었습니다" });
+    } catch (error) {
+      console.error("Relayout error:", error);
+      res.status(500).json({ error: "레이아웃 재정렬 중 오류가 발생했습니다" });
+    }
+  });
+
   return httpServer;
 }
 
@@ -672,13 +814,15 @@ function calculateGroupedLayout(
   const groupPositions: Record<number, { x: number; y: number }> = {};
   const documentPositions: Record<number, { x: number; y: number; groupId?: number }> = {};
 
-  const DOC_WIDTH = 320;
-  const DOC_HEIGHT = 180;
-  const DOC_GAP = 40;
-  const GROUP_PADDING = 50;
-  const GROUP_GAP = 80;
-  const CANVAS_START_X = 150;
-  const CANVAS_START_Y = 150;
+  const DOC_WIDTH = 280;
+  const DOC_HEIGHT = 160;
+  const DOC_GAP = 24;
+  const GROUP_PADDING = 32;
+  const GROUP_GAP = 48;
+  const CANVAS_START_X = 80;
+  const CANVAS_START_Y = 80;
+  const MAX_COLS_PER_GROUP = 2; // 그룹 내 문서 최대 2열
+  const TOP_LEVEL_COLS = 3; // 대그룹 3열 배치
 
   // Build document-to-group mapping
   const docToGroup: Record<number, number> = {};
@@ -699,29 +843,30 @@ function calculateGroupedLayout(
   }
 
   // Calculate group sizes recursively (includes children's sizes)
-  function calculateGroupSize(group: any): { width: number; height: number } {
+  function calculateGroupSize(group: any, depth: number = 0): { width: number; height: number } {
     const docsInGroup = (group.documentIds || []).length;
-    const cols = Math.max(1, Math.min(docsInGroup, 3));
-    const rows = Math.max(1, Math.ceil(docsInGroup / 3));
+    const maxCols = depth === 0 ? MAX_COLS_PER_GROUP : 2;
+    const cols = Math.max(1, Math.min(docsInGroup, maxCols));
+    const rows = Math.max(1, Math.ceil(docsInGroup / maxCols));
     
-    let baseWidth = Math.max(380, cols * (DOC_WIDTH + DOC_GAP) + GROUP_PADDING * 2);
-    let baseHeight = rows * (DOC_HEIGHT + DOC_GAP) + GROUP_PADDING * 2 + 60;
+    let baseWidth = Math.max(320, cols * (DOC_WIDTH + DOC_GAP) + GROUP_PADDING * 2);
+    let baseHeight = rows * (DOC_HEIGHT + DOC_GAP) + GROUP_PADDING * 2 + 48;
 
-    // Add space for children
+    // Add space for children (stack vertically for compact layout)
     const children = childrenOf[group.id] || [];
     if (children.length > 0) {
-      let childrenWidth = 0;
-      let maxChildHeight = 0;
+      let maxChildWidth = 0;
+      let totalChildHeight = 0;
       for (const child of children) {
-        const childSize = calculateGroupSize(child);
-        childrenWidth += childSize.width + DOC_GAP;
-        maxChildHeight = Math.max(maxChildHeight, childSize.height);
+        const childSize = calculateGroupSize(child, depth + 1);
+        maxChildWidth = Math.max(maxChildWidth, childSize.width);
+        totalChildHeight += childSize.height + DOC_GAP;
       }
-      baseWidth = Math.max(baseWidth, childrenWidth + GROUP_PADDING * 2);
-      baseHeight += maxChildHeight + DOC_GAP;
+      baseWidth = Math.max(baseWidth, maxChildWidth + GROUP_PADDING * 2);
+      baseHeight += totalChildHeight;
     }
 
-    return { width: baseWidth, height: Math.max(280, baseHeight) };
+    return { width: baseWidth, height: Math.max(200, baseHeight) };
   }
 
   // Recursive function to position a group and its contents
@@ -733,8 +878,9 @@ function calculateGroupedLayout(
   ): { width: number; height: number } {
     groupPositions[group.id] = { x: startX, y: startY };
 
-    const headerOffset = 50 + depth * 10;
+    const headerOffset = 40 + depth * 8;
     let currentY = startY + headerOffset;
+    const maxCols = depth === 0 ? MAX_COLS_PER_GROUP : 2;
 
     // Position documents in this group
     const docsInGroup = documents.filter(d => docToGroup[d.id] === group.id);
@@ -749,7 +895,7 @@ function calculateGroupedLayout(
       };
       
       colIndex++;
-      if (colIndex >= 3) {
+      if (colIndex >= maxCols) {
         colIndex = 0;
         docX = startX + GROUP_PADDING;
         currentY += DOC_HEIGHT + DOC_GAP;
@@ -762,33 +908,40 @@ function calculateGroupedLayout(
       currentY += DOC_HEIGHT + DOC_GAP;
     }
 
-    // Position child groups
+    // Position child groups vertically (stacked for compact layout)
     const children = childrenOf[group.id] || [];
-    let childX = startX + GROUP_PADDING;
-    let maxChildHeight = 0;
-    
     for (const child of children) {
-      const childSize = positionGroup(child, childX, currentY, depth + 1);
-      childX += childSize.width + DOC_GAP;
-      maxChildHeight = Math.max(maxChildHeight, childSize.height);
+      const childSize = positionGroup(child, startX + GROUP_PADDING, currentY, depth + 1);
+      currentY += childSize.height + DOC_GAP;
     }
 
     if (children.length > 0) {
-      currentY += maxChildHeight + GROUP_PADDING;
+      currentY += GROUP_PADDING / 2;
     } else {
       currentY += GROUP_PADDING;
     }
 
-    return calculateGroupSize(group);
+    return calculateGroupSize(group, depth);
   }
 
-  // Position top-level groups horizontally
+  // Position top-level groups in a grid (3 columns)
   const topLevelGroups = groups.filter(g => !g.parentId || !groupIdSet.has(g.parentId));
-  let currentX = CANVAS_START_X;
   
-  for (const group of topLevelGroups) {
-    const size = positionGroup(group, currentX, CANVAS_START_Y, 0);
-    currentX += size.width + GROUP_GAP;
+  // Calculate sizes first to determine column heights
+  const groupSizes = topLevelGroups.map(g => calculateGroupSize(g, 0));
+  
+  // Arrange in columns using a balanced approach
+  const columnHeights = Array(TOP_LEVEL_COLS).fill(CANVAS_START_Y);
+  const columnX = Array(TOP_LEVEL_COLS).fill(0).map((_, i) => 
+    CANVAS_START_X + i * (Math.max(...groupSizes.map(s => s.width)) + GROUP_GAP)
+  );
+  
+  for (let i = 0; i < topLevelGroups.length; i++) {
+    // Find the shortest column
+    const minColIndex = columnHeights.indexOf(Math.min(...columnHeights));
+    const group = topLevelGroups[i];
+    const size = positionGroup(group, columnX[minColIndex], columnHeights[minColIndex], 0);
+    columnHeights[minColIndex] += size.height + GROUP_GAP;
   }
 
   // Handle any unpositioned documents

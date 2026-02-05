@@ -368,8 +368,8 @@ export function DocumentCanvas({
             const targetPos = docPositions[edge.targetDocId];
             if (!sourcePos || !targetPos) return null;
 
-            const BOX_WIDTH = 288;
-            const BOX_HEIGHT = 160;
+            const BOX_WIDTH = 280;
+            const BOX_HEIGHT = 140;
             const HALF_W = BOX_WIDTH / 2;
             const HALF_H = BOX_HEIGHT / 2;
 

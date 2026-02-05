@@ -10,7 +10,7 @@ import { DocumentViewModal } from "@/components/DocumentViewModal";
 import { GroupInputModal } from "@/components/GroupInputModal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Wand2, FolderPlus, FileText } from "lucide-react";
+import { Plus, Wand2, FolderPlus, FileText, LayoutGrid } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -110,6 +110,24 @@ export default function Canvas() {
     },
     onError: () => {
       toast({ title: "오류", description: "워크플로우 분석에 실패했습니다.", variant: "destructive" });
+    },
+  });
+
+  const relayoutMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/relayout");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      toast({ 
+        title: "재정렬 완료", 
+        description: data.message || "그룹과 문서가 컴팩트하게 재정렬되었습니다" 
+      });
+    },
+    onError: () => {
+      toast({ title: "오류", description: "재정렬에 실패했습니다.", variant: "destructive" });
     },
   });
 
@@ -296,6 +314,19 @@ export default function Canvas() {
         )}
 
         <div className="fixed bottom-6 right-6 flex items-center gap-2">
+          {(documents.length >= 1 || (groups || []).length >= 1) && (
+            <Button
+              variant="outline"
+              size="default"
+              className="shadow-lg bg-card/95 backdrop-blur-sm"
+              onClick={() => relayoutMutation.mutate()}
+              disabled={relayoutMutation.isPending}
+              data-testid="button-relayout"
+            >
+              <LayoutGrid className="h-4 w-4 mr-2" />
+              {relayoutMutation.isPending ? "정렬 중..." : "재정렬"}
+            </Button>
+          )}
           {documents.length >= 2 && (
             <Button
               variant="outline"
