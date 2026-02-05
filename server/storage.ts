@@ -11,6 +11,7 @@ export interface IStorage {
   getAllDocuments(): Promise<Document[]>;
   getDocument(id: number): Promise<Document | undefined>;
   createDocument(doc: InsertDocument): Promise<Document>;
+  updateDocument(id: number, updates: Partial<Document>): Promise<Document | undefined>;
   deleteDocument(id: number): Promise<void>;
 
   getNodesByDocument(documentId: number): Promise<Node[]>;
@@ -62,6 +63,11 @@ export class DatabaseStorage implements IStorage {
   async createDocument(doc: InsertDocument): Promise<Document> {
     const [document] = await db.insert(documents).values(doc).returning();
     return document;
+  }
+
+  async updateDocument(id: number, updates: Partial<Document>): Promise<Document | undefined> {
+    const [updated] = await db.update(documents).set(updates).where(eq(documents.id, id)).returning();
+    return updated;
   }
 
   async deleteDocument(id: number): Promise<void> {

@@ -34,6 +34,14 @@ const parseDocumentInputSchema = insertDocumentSchema.extend({
   content: z.string().min(1, "Content is required"),
 });
 
+const documentUpdateSchema = insertDocumentSchema.pick({
+  title: true,
+  content: true,
+  summary: true,
+  x: true,
+  y: true,
+}).partial();
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -108,6 +116,26 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error parsing document:", error);
       res.status(500).json({ error: "Failed to parse document" });
+    }
+  });
+
+  app.patch("/api/documents/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updateInput = documentUpdateSchema.safeParse(req.body);
+      
+      if (!updateInput.success) {
+        return res.status(400).json({ error: updateInput.error.errors[0].message });
+      }
+
+      const document = await storage.updateDocument(id, updateInput.data);
+      if (!document) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      res.json(document);
+    } catch (error) {
+      console.error("Error updating document:", error);
+      res.status(500).json({ error: "Failed to update document" });
     }
   });
 
