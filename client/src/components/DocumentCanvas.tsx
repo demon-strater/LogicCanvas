@@ -363,7 +363,8 @@ export function DocumentCanvas({
             </marker>
           </defs>
 
-          {edges.map((edge) => {
+          {/* Filter to show only important edges: flow and depends, skip related */}
+          {edges.filter(e => e.edgeType === "flow" || e.edgeType === "depends").map((edge) => {
             const sourcePos = docPositions[edge.sourceDocId];
             const targetPos = docPositions[edge.targetDocId];
             if (!sourcePos || !targetPos) return null;
