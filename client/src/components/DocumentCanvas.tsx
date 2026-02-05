@@ -150,10 +150,19 @@ export function DocumentCanvas({
 
   // Pan mouse handlers
   const handlePanStart = useCallback((e: React.MouseEvent) => {
-    // Only left mouse button
-    if (e.button !== 0) return;
-    
     const target = e.target as HTMLElement;
+    
+    // Middle mouse button (scroll wheel click) = always pan
+    if (e.button === 1) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsPanning(true);
+      panStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+      return;
+    }
+    
+    // Only handle left mouse button for other interactions
+    if (e.button !== 0) return;
     
     // Check if clicking on interactive elements (documents, groups, buttons)
     const isInteractiveElement = target.closest('[data-testid^="document-box-"]') ||
@@ -517,6 +526,7 @@ export function DocumentCanvas({
       className={`relative w-full h-full bg-background overflow-hidden ${isPanning ? 'cursor-grabbing' : isSpacePressed ? 'cursor-grab' : ''}`}
       onClick={handleCanvasClick}
       onMouseDown={handlePanStart}
+      onAuxClick={(e) => e.preventDefault()}
       onWheel={handleWheel}
       data-testid="document-canvas"
     >
