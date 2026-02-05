@@ -8,7 +8,7 @@ type Props = {
   x: number;
   y: number;
   isSelected: boolean;
-  onSelect: (id: number) => void;
+  onSelect: (id: number, shiftKey?: boolean) => void;
   onClick: (id: number) => void;
   onDragEnd: (id: number, x: number, y: number, prevX: number, prevY: number) => void;
 };
@@ -54,7 +54,7 @@ export function DocumentBox({
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      onSelect(document.id);
+      onSelect(document.id, e.shiftKey);
       setIsDragging(true);
       setHasDragged(false);
       originalPosRef.current = { x: currentPos.x, y: currentPos.y };

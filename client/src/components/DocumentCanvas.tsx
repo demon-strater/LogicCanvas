@@ -27,6 +27,8 @@ type Props = {
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.1;
+const DOC_WIDTH = 280;
+const DOC_HEIGHT = 140;
 
 export function DocumentCanvas({
   documents,
@@ -55,6 +57,13 @@ export function DocumentCanvas({
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  
+  // Multi-selection state
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<number>>(new Set());
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<number>>(new Set());
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionRect, setSelectionRect] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
+  const selectionStartRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -164,10 +173,115 @@ export function DocumentCanvas({
       panStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
     } else if (isBackground && !isInteractiveElement) {
       e.preventDefault();
-      setIsPanning(true);
-      panStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+      
+      // Start selection rectangle instead of panning
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const worldX = (e.clientX - rect.left - pan.x) / zoom;
+        const worldY = (e.clientY - rect.top - pan.y) / zoom;
+        setIsSelecting(true);
+        selectionStartRef.current = { x: worldX, y: worldY };
+        setSelectionRect({ startX: worldX, startY: worldY, endX: worldX, endY: worldY });
+        
+        // Clear previous selection unless Shift is held
+        if (!e.shiftKey) {
+          setSelectedDocIds(new Set());
+          setSelectedGroupIds(new Set());
+        }
+      }
     }
-  }, [isSpacePressed, pan]);
+  }, [isSpacePressed, pan, zoom]);
+  
+  // Selection rectangle mouse move/up handlers
+  useEffect(() => {
+    if (!isSelecting) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      
+      const worldX = (e.clientX - rect.left - pan.x) / zoom;
+      const worldY = (e.clientY - rect.top - pan.y) / zoom;
+      
+      setSelectionRect(prev => prev ? { ...prev, endX: worldX, endY: worldY } : null);
+    };
+
+    const handleMouseUp = () => {
+      if (selectionRect) {
+        // Calculate selection bounds
+        const minX = Math.min(selectionRect.startX, selectionRect.endX);
+        const maxX = Math.max(selectionRect.startX, selectionRect.endX);
+        const minY = Math.min(selectionRect.startY, selectionRect.endY);
+        const maxY = Math.max(selectionRect.startY, selectionRect.endY);
+        
+        // Find documents within selection
+        const newSelectedDocs = new Set(selectedDocIds);
+        documents.forEach(doc => {
+          const pos = docPositions[doc.id];
+          if (pos) {
+            const docLeft = pos.x - DOC_WIDTH / 2;
+            const docRight = pos.x + DOC_WIDTH / 2;
+            const docTop = pos.y - DOC_HEIGHT / 2;
+            const docBottom = pos.y + DOC_HEIGHT / 2;
+            
+            // Check if document intersects with selection rectangle
+            if (docRight >= minX && docLeft <= maxX && docBottom >= minY && docTop <= maxY) {
+              newSelectedDocs.add(doc.id);
+            }
+          }
+        });
+        setSelectedDocIds(newSelectedDocs);
+        
+        // Find groups within selection - compute actual bounds from documents
+        const newSelectedGroups = new Set(selectedGroupIds);
+        groups.forEach(group => {
+          const pos = groupPositions[group.id];
+          if (pos) {
+            // Calculate actual group bounds from its documents
+            const groupDocs = documents.filter(d => d.groupId === group.id);
+            let groupLeft = pos.x - 150;
+            let groupRight = pos.x + 150;
+            let groupTop = pos.y - 100;
+            let groupBottom = pos.y + 100;
+            
+            if (groupDocs.length > 0) {
+              const docBounds = groupDocs.map(d => {
+                const dp = docPositions[d.id];
+                return dp ? {
+                  left: dp.x - DOC_WIDTH / 2,
+                  right: dp.x + DOC_WIDTH / 2,
+                  top: dp.y - DOC_HEIGHT / 2,
+                  bottom: dp.y + DOC_HEIGHT / 2
+                } : null;
+              }).filter(Boolean) as { left: number; right: number; top: number; bottom: number }[];
+              
+              if (docBounds.length > 0) {
+                groupLeft = Math.min(...docBounds.map(b => b.left)) - 50;
+                groupRight = Math.max(...docBounds.map(b => b.right)) + 50;
+                groupTop = Math.min(...docBounds.map(b => b.top)) - 70;
+                groupBottom = Math.max(...docBounds.map(b => b.bottom)) + 50;
+              }
+            }
+            
+            if (groupRight >= minX && groupLeft <= maxX && groupBottom >= minY && groupTop <= maxY) {
+              newSelectedGroups.add(group.id);
+            }
+          }
+        });
+        setSelectedGroupIds(newSelectedGroups);
+      }
+      
+      setIsSelecting(false);
+      setSelectionRect(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isSelecting, selectionRect, documents, groups, docPositions, groupPositions, selectedDocIds, selectedGroupIds, pan, zoom]);
 
   useEffect(() => {
     if (!isPanning) return;
@@ -234,20 +348,140 @@ export function DocumentCanvas({
       if (e.target === e.currentTarget || (e.target as HTMLElement).closest('[data-canvas-bg]')) {
         onSelectDocument(null);
         onSelectGroup(null);
+        // Clear multi-selection when clicking empty space
+        if (!e.shiftKey) {
+          setSelectedDocIds(new Set());
+          setSelectedGroupIds(new Set());
+        }
       }
     },
     [onSelectDocument, onSelectGroup]
   );
 
+  // Handle multi-drag for documents
   const handleLocalPositionUpdate = (id: number, x: number, y: number, prevX: number, prevY: number) => {
-    setDocPositions(prev => ({ ...prev, [id]: { x, y } }));
-    onUpdateDocumentPosition(id, x, y, prevX, prevY);
+    const deltaX = x - prevX;
+    const deltaY = y - prevY;
+    
+    // If this document is part of multi-selection, move all selected items
+    if (selectedDocIds.has(id) && selectedDocIds.size > 1) {
+      const newDocPositions = { ...docPositions };
+      selectedDocIds.forEach(docId => {
+        if (docId !== id && docPositions[docId]) {
+          const newX = docPositions[docId].x + deltaX;
+          const newY = docPositions[docId].y + deltaY;
+          newDocPositions[docId] = { x: newX, y: newY };
+          onUpdateDocumentPosition(docId, newX, newY);
+        }
+      });
+      newDocPositions[id] = { x, y };
+      setDocPositions(newDocPositions);
+      onUpdateDocumentPosition(id, x, y, prevX, prevY);
+      
+      // Also move selected groups
+      if (selectedGroupIds.size > 0) {
+        const newGroupPositions = { ...groupPositions };
+        selectedGroupIds.forEach(groupId => {
+          if (groupPositions[groupId]) {
+            const newX = groupPositions[groupId].x + deltaX;
+            const newY = groupPositions[groupId].y + deltaY;
+            newGroupPositions[groupId] = { x: newX, y: newY };
+            onUpdateGroupPosition(groupId, newX, newY);
+          }
+        });
+        setGroupPositions(newGroupPositions);
+      }
+    } else {
+      setDocPositions(prev => ({ ...prev, [id]: { x, y } }));
+      onUpdateDocumentPosition(id, x, y, prevX, prevY);
+    }
   };
 
+  // Handle multi-drag for groups
   const handleGroupPositionUpdate = (id: number, x: number, y: number, prevX: number, prevY: number) => {
-    setGroupPositions(prev => ({ ...prev, [id]: { x, y } }));
-    onUpdateGroupPosition(id, x, y, prevX, prevY);
+    const deltaX = x - prevX;
+    const deltaY = y - prevY;
+    
+    // If this group is part of multi-selection, move all selected items
+    if (selectedGroupIds.has(id) && (selectedGroupIds.size > 1 || selectedDocIds.size > 0)) {
+      const newGroupPositions = { ...groupPositions };
+      selectedGroupIds.forEach(groupId => {
+        if (groupId !== id && groupPositions[groupId]) {
+          const newX = groupPositions[groupId].x + deltaX;
+          const newY = groupPositions[groupId].y + deltaY;
+          newGroupPositions[groupId] = { x: newX, y: newY };
+          onUpdateGroupPosition(groupId, newX, newY);
+        }
+      });
+      newGroupPositions[id] = { x, y };
+      setGroupPositions(newGroupPositions);
+      onUpdateGroupPosition(id, x, y, prevX, prevY);
+      
+      // Also move selected documents
+      if (selectedDocIds.size > 0) {
+        const newDocPositions = { ...docPositions };
+        selectedDocIds.forEach(docId => {
+          if (docPositions[docId]) {
+            const newX = docPositions[docId].x + deltaX;
+            const newY = docPositions[docId].y + deltaY;
+            newDocPositions[docId] = { x: newX, y: newY };
+            onUpdateDocumentPosition(docId, newX, newY);
+          }
+        });
+        setDocPositions(newDocPositions);
+      }
+    } else {
+      setGroupPositions(prev => ({ ...prev, [id]: { x, y } }));
+      onUpdateGroupPosition(id, x, y, prevX, prevY);
+    }
   };
+  
+  // Handle individual item selection (with Shift for multi-select)
+  const handleDocSelect = useCallback((id: number, shiftKey?: boolean) => {
+    if (shiftKey) {
+      // Shift+click toggles the item in selection
+      setSelectedDocIds(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+        return next;
+      });
+    } else if (selectedDocIds.has(id)) {
+      // Clicking an already-selected item: keep selection for multi-drag
+      // Do nothing - keep existing selection
+    } else {
+      // Clicking a non-selected item: select only this one
+      setSelectedDocIds(new Set([id]));
+      setSelectedGroupIds(new Set());
+    }
+    onSelectDocument(id);
+  }, [onSelectDocument, selectedDocIds]);
+  
+  const handleGroupSelect = useCallback((id: number, shiftKey?: boolean) => {
+    if (shiftKey) {
+      // Shift+click toggles the item in selection
+      setSelectedGroupIds(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+        return next;
+      });
+    } else if (selectedGroupIds.has(id)) {
+      // Clicking an already-selected item: keep selection for multi-drag
+      // Do nothing - keep existing selection
+    } else {
+      // Clicking a non-selected item: select only this one
+      setSelectedGroupIds(new Set([id]));
+      setSelectedDocIds(new Set());
+    }
+    onSelectGroup(id);
+  }, [onSelectGroup, selectedGroupIds]);
 
   const getDocumentsInGroup = (groupId: number) => {
     return documents.filter(doc => doc.groupId === groupId);
@@ -592,6 +826,20 @@ export function DocumentCanvas({
           })}
         </svg>
 
+        {/* Selection rectangle */}
+        {selectionRect && (
+          <div
+            className="absolute border-2 border-primary/60 bg-primary/10 pointer-events-none"
+            style={{
+              left: Math.min(selectionRect.startX, selectionRect.endX),
+              top: Math.min(selectionRect.startY, selectionRect.endY),
+              width: Math.abs(selectionRect.endX - selectionRect.startX),
+              height: Math.abs(selectionRect.endY - selectionRect.startY),
+              zIndex: 1000,
+            }}
+          />
+        )}
+
         {/* Render ALL groups as background containers (parents first for z-index) */}
         {groups
           .sort((a, b) => (a.parentId ? 1 : 0) - (b.parentId ? 1 : 0))
@@ -606,10 +854,10 @@ export function DocumentCanvas({
               allDocuments={documents}
               x={pos.x}
               y={pos.y}
-              isSelected={selectedGroupId === group.id}
+              isSelected={selectedGroupId === group.id || selectedGroupIds.has(group.id)}
               isExpanded={true}
               isTopLevel={!group.parentId}
-              onSelect={onSelectGroup}
+              onSelect={handleGroupSelect}
               onToggleExpand={onToggleGroupExpand}
               onDragEnd={handleGroupPositionUpdate}
               onEdit={onEditGroup}
@@ -627,8 +875,8 @@ export function DocumentCanvas({
               document={doc}
               x={pos.x}
               y={pos.y}
-              isSelected={selectedDocumentId === doc.id}
-              onSelect={onSelectDocument}
+              isSelected={selectedDocumentId === doc.id || selectedDocIds.has(doc.id)}
+              onSelect={handleDocSelect}
               onClick={onClickDocument}
               onDragEnd={handleLocalPositionUpdate}
             />

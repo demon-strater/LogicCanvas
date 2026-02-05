@@ -39,11 +39,11 @@ export function TimelineHeader({
     <>
       {/* Timeline header bar */}
       <div
-        className="absolute top-0 left-0 flex border-b border-border bg-background/80 backdrop-blur-sm"
+        className="absolute top-0 left-0 flex border-b border-border bg-background/95 backdrop-blur-sm"
         style={{
           width: canvasWidth,
           height: 50,
-          zIndex: 4,
+          zIndex: 100,
           paddingLeft: offsetX,
         }}
       >

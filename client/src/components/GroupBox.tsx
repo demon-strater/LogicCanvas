@@ -26,7 +26,7 @@ type Props = {
   isSelected: boolean;
   isExpanded: boolean;
   isTopLevel?: boolean; // true for parent groups, false for child groups
-  onSelect: (id: number) => void;
+  onSelect: (id: number, shiftKey?: boolean) => void;
   onToggleExpand: (id: number) => void;
   onDragEnd: (id: number, x: number, y: number, prevX: number, prevY: number) => void;
   onEdit: (id: number) => void;
@@ -146,7 +146,7 @@ export function GroupBox({
       if ((e.target as HTMLElement).closest('button')) return;
       e.preventDefault();
       e.stopPropagation();
-      onSelect(group.id);
+      onSelect(group.id, e.shiftKey);
       setIsDragging(true);
       setHasDragged(false);
       originalPosRef.current = { x: currentPos.x, y: currentPos.y };
