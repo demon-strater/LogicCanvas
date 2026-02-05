@@ -889,12 +889,12 @@ export async function registerRoutes(
           }
         }
 
-        // Position child groups
+        // Position child groups VERTICALLY (stacked) to avoid overlapping
         const children = childrenOf[group.id] || [];
         if (children.length > 0) {
           children.sort((a, b) => getSubgroupOrder(a.name) - getSubgroupOrder(b.name));
-          const childStartY = currentY + GROUP_HEADER + grid.rows * (DOC_HEIGHT + DOC_GAP_Y) + 20;
-          let childX = currentX + GROUP_PADDING;
+          let childY = currentY + GROUP_HEADER + grid.rows * (DOC_HEIGHT + DOC_GAP_Y) + 100;
+          const childX = currentX + GROUP_PADDING;
           
           for (const child of children) {
             const childContentSize = calculateGroupContentSize(child.id);
@@ -903,7 +903,7 @@ export async function registerRoutes(
 
             await storage.updateGroup(child.id, { 
               x: childX + childGroupWidth / 2, 
-              y: childStartY + childGroupHeight / 2 
+              y: childY + childGroupHeight / 2 
             });
 
             // Position docs in child group
@@ -915,14 +915,15 @@ export async function registerRoutes(
               for (let cdCol = 0; cdCol < childDocGrid.cols && childDocIdx < childDocs.length; cdCol++) {
                 const cdoc = childDocs[childDocIdx];
                 const cdocX = childX + GROUP_PADDING + cdCol * (DOC_WIDTH + DOC_GAP_X) + DOC_WIDTH / 2;
-                const cdocY = childStartY + GROUP_HEADER + cdRow * (DOC_HEIGHT + DOC_GAP_Y) + DOC_HEIGHT / 2;
+                const cdocY = childY + GROUP_HEADER + cdRow * (DOC_HEIGHT + DOC_GAP_Y) + DOC_HEIGHT / 2;
                 
                 await storage.updateDocument(cdoc.id, { x: cdocX, y: cdocY });
                 childDocIdx++;
               }
             }
 
-            childX += childGroupWidth + DOC_GAP_X;
+            // Stack child groups vertically with large gap
+            childY += childGroupHeight + GROUP_GAP_Y;
           }
         }
       }
