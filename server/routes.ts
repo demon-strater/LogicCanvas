@@ -726,7 +726,7 @@ export async function registerRoutes(
         };
       };
 
-      // Get top-level groups and sort by month (earlier on left, later on right)
+      // Get month from group name or monthStart field
       const getMonthOrder = (g: typeof groups[0]): number => {
         if (g.monthStart) return g.monthStart;
         const name = g.name;
@@ -737,30 +737,38 @@ export async function registerRoutes(
         return 99; // Default to end
       };
       
+      // Timeline layout constants - must match frontend TimelineHeader
+      const TIMELINE_OFFSET_X = 150; // Padding before first month column
+      const MONTH_WIDTH = 500; // Width per month column
+      const TIMELINE_HEADER_HEIGHT = 60; // Height of timeline header
+      const GROUP_GAP_Y = 40; // Vertical gap between groups in same month
+      
+      // Determine month range from groups
+      const monthValues = groups.map(g => getMonthOrder(g)).filter(m => m < 99);
+      const minMonth = monthValues.length > 0 ? Math.min(...monthValues) : 12;
+      const maxMonth = monthValues.length > 0 ? Math.max(...monthValues) : 2;
+      
+      // Normalize month to column index (12->0, 1->1, 2->2, etc.)
+      const getMonthColumnIndex = (month: number): number => {
+        if (month >= 12) return month - 12; // 12->0
+        return month; // 1->1, 2->2, 3->3
+      };
+      
+      // Get top-level groups and sort by month
       const topLevelGroups = groups
         .filter(g => !g.parentId || !groupIdSet.has(g.parentId))
         .sort((a, b) => {
           const monthA = getMonthOrder(a);
           const monthB = getMonthOrder(b);
-          // Normalize: 12 comes before 1, 2, 3 (year wrap)
           const normalizedA = monthA >= 12 ? monthA - 12 : monthA;
           const normalizedB = monthB >= 12 ? monthB - 12 : monthB;
           return normalizedA - normalizedB;
         });
 
-      // Layout constants - simple grid arrangement
-      const GRID_COLS = 3; // Number of columns in the grid
-      const GROUP_GAP_X = 80; // Horizontal gap between groups
-      const GROUP_GAP_Y = 60; // Vertical gap between group rows
+      // Track Y position for each month column (stack groups vertically within each month)
+      const monthNextY: Record<number, number> = {};
       
-      // Calculate position for each top-level group in a grid
-      let currentCol = 0;
-      let currentRow = 0;
-      let rowMaxHeight = 0;
-      let rowStartY = CANVAS_START_Y;
-      const columnXPositions: number[] = [];
-
-      // First pass: determine group sizes and positions
+      // First pass: determine group sizes and positions based on timeline
       const groupLayouts: Array<{group: typeof groups[0], width: number, height: number, x: number, y: number}> = [];
       
       for (const group of topLevelGroups) {
@@ -768,33 +776,27 @@ export async function registerRoutes(
         const groupWidth = contentSize.width + GROUP_PADDING * 2;
         const groupHeight = contentSize.height + GROUP_HEADER + GROUP_PADDING;
         
-        // Calculate X position for this column
-        let currentX = CANVAS_START_X;
-        for (let c = 0; c < currentCol; c++) {
-          currentX += (columnXPositions[c] || 450) + GROUP_GAP_X;
-        }
+        // Get month for this group and calculate X position based on timeline
+        const month = getMonthOrder(group);
+        const columnIndex = getMonthColumnIndex(month);
+        const currentX = TIMELINE_OFFSET_X + columnIndex * MONTH_WIDTH;
         
-        // Track max width for this column
-        if (!columnXPositions[currentCol] || groupWidth > columnXPositions[currentCol]) {
-          columnXPositions[currentCol] = groupWidth;
+        // Initialize Y position for this month column if not set
+        if (monthNextY[month] === undefined) {
+          monthNextY[month] = CANVAS_START_Y + TIMELINE_HEADER_HEIGHT;
         }
+        const currentY = monthNextY[month];
         
         groupLayouts.push({
           group,
           width: groupWidth,
           height: groupHeight,
           x: currentX,
-          y: rowStartY
+          y: currentY
         });
         
-        rowMaxHeight = Math.max(rowMaxHeight, groupHeight);
-        currentCol++;
-        
-        if (currentCol >= GRID_COLS) {
-          currentCol = 0;
-          rowStartY += rowMaxHeight + GROUP_GAP_Y;
-          rowMaxHeight = 0;
-        }
+        // Update Y for next group in this month column
+        monthNextY[month] = currentY + groupHeight + GROUP_GAP_Y;
       }
       
       // Second pass: position groups and their documents

@@ -80,31 +80,28 @@ export function DocumentCanvas({
   }, []);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
+    e.preventDefault();
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
 
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
+    // Get cursor position relative to container
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
 
-      const worldX = (mouseX - pan.x) / zoom;
-      const worldY = (mouseY - pan.y) / zoom;
+    // Calculate world coordinates at cursor position
+    const worldX = (mouseX - pan.x) / zoom;
+    const worldY = (mouseY - pan.y) / zoom;
 
-      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom + delta));
+    // Zoom with scroll (no Ctrl needed), centered on cursor
+    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom + delta));
 
-      const newPanX = mouseX - worldX * newZoom;
-      const newPanY = mouseY - worldY * newZoom;
+    // Adjust pan to keep cursor position stable
+    const newPanX = mouseX - worldX * newZoom;
+    const newPanY = mouseY - worldY * newZoom;
 
-      setZoom(newZoom);
-      setPan({ x: newPanX, y: newPanY });
-    } else {
-      setPan(prev => ({
-        x: prev.x - e.deltaX,
-        y: prev.y - e.deltaY,
-      }));
-    }
+    setZoom(newZoom);
+    setPan({ x: newPanX, y: newPanY });
   }, [zoom, pan]);
 
   const handleZoomIn = useCallback(() => {
@@ -702,7 +699,7 @@ export function DocumentCanvas({
       </div>
 
       <div className="absolute top-4 left-4 text-xs text-muted-foreground bg-card/80 backdrop-blur-sm px-2 py-1 rounded">
-        Ctrl+스크롤: 확대/축소 | 스페이스+드래그: 화면이동 | 배경 드래그: 화면이동
+        스크롤: 확대/축소 (커서 중심) | 스페이스+드래그: 화면이동
       </div>
     </div>
   );
