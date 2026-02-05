@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
-import { parseDocumentWithAI } from "./ai";
+import { parseDocumentWithAI, analyzeDocumentWorkflow } from "./ai";
 import { insertDocumentSchema, insertNodeSchema, insertEdgeSchema, insertTaskSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -378,5 +378,113 @@ export async function registerRoutes(
     }
   });
 
+  // Document Edges (workflow relationships)
+  app.get("/api/document-edges", async (req, res) => {
+    try {
+      const edges = await storage.getAllDocumentEdges();
+      res.json(edges);
+    } catch (error) {
+      console.error("Error fetching document edges:", error);
+      res.status(500).json({ error: "Failed to fetch document edges" });
+    }
+  });
+
+  // Analyze workflow and auto-layout documents
+  app.post("/api/analyze-workflow", async (req, res) => {
+    try {
+      const documents = await storage.getAllDocuments();
+      
+      if (documents.length === 0) {
+        return res.json({ 
+          positions: {}, 
+          edges: [], 
+          summary: "문서가 없습니다" 
+        });
+      }
+
+      // Use AI to analyze document relationships
+      const analysis = await analyzeDocumentWorkflow(documents);
+
+      // Clear existing document edges and create new ones
+      await storage.clearAllDocumentEdges();
+      
+      if (analysis.relations.length > 0) {
+        await storage.createDocumentEdges(
+          analysis.relations.map(r => ({
+            sourceDocId: r.sourceDocId,
+            targetDocId: r.targetDocId,
+            label: r.label,
+            edgeType: r.edgeType,
+          }))
+        );
+      }
+
+      // Calculate auto-layout positions based on hierarchy
+      const positions = calculateHierarchicalLayout(documents, analysis);
+
+      // Update document positions in DB
+      for (const doc of documents) {
+        const pos = positions[doc.id];
+        if (pos) {
+          await storage.updateDocument(doc.id, { x: pos.x, y: pos.y });
+        }
+      }
+
+      const edges = await storage.getAllDocumentEdges();
+      
+      res.json({
+        positions,
+        edges,
+        summary: analysis.summary
+      });
+    } catch (error) {
+      console.error("Error analyzing workflow:", error);
+      res.status(500).json({ error: "Failed to analyze workflow" });
+    }
+  });
+
   return httpServer;
+}
+
+// Calculate hierarchical layout positions for documents
+function calculateHierarchicalLayout(
+  documents: any[], 
+  analysis: { hierarchyLevels: Record<number, number>; relations: any[] }
+): Record<number, { x: number; y: number }> {
+  const positions: Record<number, { x: number; y: number }> = {};
+  
+  const BOX_WIDTH = 320;
+  const BOX_HEIGHT = 180;
+  const HORIZONTAL_GAP = 80;
+  const VERTICAL_GAP = 120;
+  const CANVAS_PADDING = 200;
+
+  // Group documents by hierarchy level
+  const levelGroups: Record<number, number[]> = {};
+  for (const doc of documents) {
+    const level = analysis.hierarchyLevels[doc.id] ?? 0;
+    if (!levelGroups[level]) {
+      levelGroups[level] = [];
+    }
+    levelGroups[level].push(doc.id);
+  }
+
+  // Sort levels
+  const sortedLevels = Object.keys(levelGroups).map(Number).sort((a, b) => a - b);
+
+  // Calculate positions for each level
+  for (const level of sortedLevels) {
+    const docsInLevel = levelGroups[level];
+    const levelWidth = docsInLevel.length * (BOX_WIDTH + HORIZONTAL_GAP) - HORIZONTAL_GAP;
+    const startX = CANVAS_PADDING + (level === 0 ? 0 : BOX_WIDTH / 2);
+    
+    docsInLevel.forEach((docId, index) => {
+      positions[docId] = {
+        x: startX + index * (BOX_WIDTH + HORIZONTAL_GAP) + BOX_WIDTH / 2,
+        y: CANVAS_PADDING + level * (BOX_HEIGHT + VERTICAL_GAP) + BOX_HEIGHT / 2
+      };
+    });
+  }
+
+  return positions;
 }
