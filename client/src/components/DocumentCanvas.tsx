@@ -29,6 +29,8 @@ const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.1;
 const DOC_WIDTH = 280;
 const DOC_HEIGHT = 140;
+const TIMELINE_HEIGHT = 50;
+const TIMELINE_GAP = 40;
 
 export function DocumentCanvas({
   documents,
@@ -569,6 +571,7 @@ export function DocumentCanvas({
               canvasHeight={canvasHeight}
               monthWidth={500}
               offsetX={150}
+              contentOffsetY={TIMELINE_GAP}
             />
           );
         })()}
@@ -644,9 +647,9 @@ export function DocumentCanvas({
             const HALF_H = BOX_HEIGHT / 2;
 
             const sourceCenterX = sourcePos.x;
-            const sourceCenterY = sourcePos.y;
+            const sourceCenterY = sourcePos.y + TIMELINE_GAP;
             const targetCenterX = targetPos.x;
-            const targetCenterY = targetPos.y;
+            const targetCenterY = targetPos.y + TIMELINE_GAP;
 
             const dx = targetCenterX - sourceCenterX;
             const dy = targetCenterY - sourceCenterY;
@@ -759,9 +762,9 @@ export function DocumentCanvas({
             const HALF_H = GROUP_HEIGHT / 2;
 
             const sourceCenterX = sourcePos.x;
-            const sourceCenterY = sourcePos.y;
+            const sourceCenterY = sourcePos.y + TIMELINE_GAP;
             const targetCenterX = targetPos.x;
-            const targetCenterY = targetPos.y;
+            const targetCenterY = targetPos.y + TIMELINE_GAP;
 
             const dx = targetCenterX - sourceCenterX;
             const dy = targetCenterY - sourceCenterY;
@@ -994,7 +997,7 @@ export function DocumentCanvas({
               childGroups={getChildGroups(group.id)}
               allDocuments={documents}
               x={pos.x}
-              y={pos.y}
+              y={pos.y + TIMELINE_GAP}
               isSelected={selectedGroupId === group.id || selectedGroupIds.has(group.id)}
               isExpanded={true}
               isTopLevel={!group.parentId}
@@ -1016,7 +1019,7 @@ export function DocumentCanvas({
               key={doc.id}
               document={doc}
               x={pos.x}
-              y={pos.y}
+              y={pos.y + TIMELINE_GAP}
               isSelected={selectedDocumentId === doc.id || selectedDocIds.has(doc.id)}
               isSpacePressed={isSpacePressed}
               onSelect={handleDocSelect}

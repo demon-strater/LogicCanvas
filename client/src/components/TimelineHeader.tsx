@@ -8,6 +8,7 @@ type Props = {
   canvasHeight: number;
   monthWidth: number;
   offsetX: number;
+  contentOffsetY?: number;
 };
 
 export function TimelineHeader({
@@ -18,7 +19,9 @@ export function TimelineHeader({
   canvasHeight,
   monthWidth,
   offsetX,
+  contentOffsetY = 0,
 }: Props) {
+  const gridStartY = 50 + contentOffsetY;
   const months = useMemo(() => {
     const result = [];
     for (let m = startMonth; m <= endMonth; m++) {
@@ -81,7 +84,7 @@ export function TimelineHeader({
               {/* Month start line - solid, more visible */}
               <line
                 x1={monthX}
-                y1={50}
+                y1={gridStartY}
                 x2={monthX}
                 y2={canvasHeight}
                 stroke="hsl(var(--border))"
@@ -93,7 +96,7 @@ export function TimelineHeader({
                 <line
                   key={`week-${week}`}
                   x1={monthX + week * weekWidth}
-                  y1={50}
+                  y1={gridStartY}
                   x2={monthX + week * weekWidth}
                   y2={canvasHeight}
                   stroke="hsl(var(--border))"
@@ -108,7 +111,7 @@ export function TimelineHeader({
         {/* Final month end line */}
         <line
           x1={offsetX + months.length * monthWidth}
-          y1={50}
+          y1={gridStartY}
           x2={offsetX + months.length * monthWidth}
           y2={canvasHeight}
           stroke="hsl(var(--border))"
