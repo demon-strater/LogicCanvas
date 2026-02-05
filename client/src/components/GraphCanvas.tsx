@@ -155,9 +155,9 @@ export function GraphCanvas({
                 />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold mb-2">No logic map yet</h3>
+            <h3 className="text-lg font-semibold mb-2">로직 맵이 없습니다</h3>
             <p className="text-sm">
-              Upload a document or paste your text to transform it into an interactive logical map.
+              문서를 업로드하거나 텍스트를 붙여넣어 인터랙티브 로직 맵으로 변환하세요.
             </p>
           </div>
         </div>
