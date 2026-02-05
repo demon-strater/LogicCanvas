@@ -235,7 +235,7 @@ export function GroupBox({
     <div
       ref={boxRef}
       className={cn(
-        "absolute rounded-lg border-2 cursor-pointer transition-shadow",
+        "absolute rounded-lg border-2 cursor-pointer",
         "bg-card/80 backdrop-blur-sm hover:shadow-lg",
         isSelected
           ? "shadow-md"
@@ -243,10 +243,10 @@ export function GroupBox({
         isDragging && "shadow-xl cursor-grabbing"
       )}
       style={{
-        // Use computed center from documents when not dragging, otherwise use drag position
         left: isDragging ? currentPos.x : effectiveCenterX,
         top: isDragging ? currentPos.y : effectiveCenterY,
         transform: "translate(-50%, -50%)",
+        transition: isDragging ? 'box-shadow 0.2s' : 'left 0.15s ease-out, top 0.15s ease-out, width 0.2s ease-out, height 0.2s ease-out, box-shadow 0.2s',
         zIndex: isSelected || isDragging ? 4 : (isTopLevel ? 1 : 2),
         // Top-level groups have more transparent borders (30%), child groups are more opaque (80%)
         borderColor: isSelected ? groupColor : `${groupColor}${isTopLevel ? '30' : '80'}`,
