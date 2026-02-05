@@ -51,6 +51,9 @@ export function DocumentCanvas({
   const [groupPositions, setGroupPositions] = useState<Record<number, { x: number; y: number }>>({});
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -115,6 +118,79 @@ export function DocumentCanvas({
     setZoom(1);
     setPan({ x: 0, y: 0 });
   }, []);
+
+  // Spacebar press detection for pan mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !e.repeat && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        setIsSpacePressed(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacePressed(false);
+        setIsPanning(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // Pan mouse handlers
+  const handlePanStart = useCallback((e: React.MouseEvent) => {
+    // Only left mouse button
+    if (e.button !== 0) return;
+    
+    const target = e.target as HTMLElement;
+    
+    // Check if clicking on interactive elements (documents, groups, buttons)
+    const isInteractiveElement = target.closest('[data-testid^="document-box-"]') ||
+                                  target.closest('[data-testid^="group-box-"]') ||
+                                  target.closest('button') ||
+                                  target.closest('[role="button"]');
+    
+    const isBackground = target.hasAttribute('data-canvas-bg') || 
+                         target === containerRef.current ||
+                         target === contentRef.current ||
+                         target.tagName === 'svg';
+    
+    // Only pan if spacebar pressed (anywhere except interactive) or clicking background
+    if (isSpacePressed && !isInteractiveElement) {
+      e.preventDefault();
+      setIsPanning(true);
+      panStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+    } else if (isBackground && !isInteractiveElement) {
+      e.preventDefault();
+      setIsPanning(true);
+      panStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+    }
+  }, [isSpacePressed, pan]);
+
+  useEffect(() => {
+    if (!isPanning) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - panStartRef.current.x;
+      const dy = e.clientY - panStartRef.current.y;
+      setPan({ x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy });
+    };
+
+    const handleMouseUp = () => {
+      setIsPanning(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isPanning]);
 
   const getDocumentPosition = useCallback((doc: Document, index: number, width: number) => {
     if (doc.x && doc.y && (doc.x !== 100 || doc.y !== 100)) {
@@ -201,8 +277,9 @@ export function DocumentCanvas({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full bg-background overflow-hidden"
+      className={`relative w-full h-full bg-background overflow-hidden ${isPanning ? 'cursor-grabbing' : isSpacePressed ? 'cursor-grab' : ''}`}
       onClick={handleCanvasClick}
+      onMouseDown={handlePanStart}
       onWheel={handleWheel}
       data-testid="document-canvas"
     >
@@ -504,7 +581,7 @@ export function DocumentCanvas({
       </div>
 
       <div className="absolute top-4 left-4 text-xs text-muted-foreground bg-card/80 backdrop-blur-sm px-2 py-1 rounded">
-        Ctrl + 스크롤로 확대/축소
+        Ctrl+스크롤: 확대/축소 | 스페이스+드래그: 화면이동 | 배경 드래그: 화면이동
       </div>
     </div>
   );
