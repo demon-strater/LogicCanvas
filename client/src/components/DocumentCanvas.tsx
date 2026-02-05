@@ -291,39 +291,92 @@ export function DocumentCanvas({
             const targetPos = docPositions[edge.targetDocId];
             if (!sourcePos || !targetPos) return null;
 
-            const sourceX = sourcePos.x + 140;
-            const sourceY = sourcePos.y + 60;
-            const targetX = targetPos.x + 140;
-            const targetY = targetPos.y + 60;
+            const BOX_WIDTH = 288;
+            const BOX_HEIGHT = 160;
+            const HALF_W = BOX_WIDTH / 2;
+            const HALF_H = BOX_HEIGHT / 2;
 
-            const dx = targetX - sourceX;
-            const dy = targetY - sourceY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            const offsetStart = 80;
-            const offsetEnd = 90;
-            
-            const startX = sourceX + (dx / distance) * offsetStart;
-            const startY = sourceY + (dy / distance) * offsetStart;
-            const endX = targetX - (dx / distance) * offsetEnd;
-            const endY = targetY - (dy / distance) * offsetEnd;
+            const sourceCenterX = sourcePos.x;
+            const sourceCenterY = sourcePos.y;
+            const targetCenterX = targetPos.x;
+            const targetCenterY = targetPos.y;
 
-            const midX = (startX + endX) / 2;
-            const midY = (startY + endY) / 2;
-            const curvature = Math.min(50, distance * 0.15);
-            const perpX = -dy / distance * curvature;
-            const perpY = dx / distance * curvature;
-            const ctrlX = midX + perpX;
-            const ctrlY = midY + perpY;
+            const dx = targetCenterX - sourceCenterX;
+            const dy = targetCenterY - sourceCenterY;
+            const absDx = Math.abs(dx);
+            const absDy = Math.abs(dy);
+
+            let startX: number, startY: number, endX: number, endY: number;
+            let sourceAnchor: 'top' | 'bottom' | 'left' | 'right';
+            let targetAnchor: 'top' | 'bottom' | 'left' | 'right';
+
+            if (absDx * BOX_HEIGHT > absDy * BOX_WIDTH) {
+              if (dx > 0) {
+                startX = sourceCenterX + HALF_W;
+                startY = sourceCenterY;
+                endX = targetCenterX - HALF_W;
+                endY = targetCenterY;
+                sourceAnchor = 'right';
+                targetAnchor = 'left';
+              } else {
+                startX = sourceCenterX - HALF_W;
+                startY = sourceCenterY;
+                endX = targetCenterX + HALF_W;
+                endY = targetCenterY;
+                sourceAnchor = 'left';
+                targetAnchor = 'right';
+              }
+            } else {
+              if (dy > 0) {
+                startX = sourceCenterX;
+                startY = sourceCenterY + HALF_H;
+                endX = targetCenterX;
+                endY = targetCenterY - HALF_H;
+                sourceAnchor = 'bottom';
+                targetAnchor = 'top';
+              } else {
+                startX = sourceCenterX;
+                startY = sourceCenterY - HALF_H;
+                endX = targetCenterX;
+                endY = targetCenterY + HALF_H;
+                sourceAnchor = 'top';
+                targetAnchor = 'bottom';
+              }
+            }
+
+            const arrowOffset = 12;
+            const finalDx = endX - startX;
+            const finalDy = endY - startY;
+            const finalDist = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
+            if (finalDist > arrowOffset) {
+              endX = endX - (finalDx / finalDist) * arrowOffset;
+              endY = endY - (finalDy / finalDist) * arrowOffset;
+            }
+
+            let pathD: string;
+            const curveOffset = Math.min(60, Math.max(30, finalDist * 0.3));
+            
+            if ((sourceAnchor === 'right' && targetAnchor === 'left') || 
+                (sourceAnchor === 'left' && targetAnchor === 'right')) {
+              const ctrlX1 = startX + (sourceAnchor === 'right' ? curveOffset : -curveOffset);
+              const ctrlX2 = endX + (targetAnchor === 'left' ? -curveOffset : curveOffset);
+              pathD = `M ${startX} ${startY} C ${ctrlX1} ${startY}, ${ctrlX2} ${endY}, ${endX} ${endY}`;
+            } else {
+              const ctrlY1 = startY + (sourceAnchor === 'bottom' ? curveOffset : -curveOffset);
+              const ctrlY2 = endY + (targetAnchor === 'top' ? -curveOffset : curveOffset);
+              pathD = `M ${startX} ${startY} C ${startX} ${ctrlY1}, ${endX} ${ctrlY2}, ${endX} ${endY}`;
+            }
 
             const edgeColor = getEdgeColor(edge.edgeType);
             const isDashed = edge.edgeType === "related";
             const markerId = `arrowhead-${edge.edgeType}`;
+            const labelX = (startX + endX) / 2;
+            const labelY = (startY + endY) / 2 - 10;
 
             return (
               <g key={edge.id}>
                 <path
-                  d={`M ${startX} ${startY} Q ${ctrlX} ${ctrlY} ${endX} ${endY}`}
+                  d={pathD}
                   fill="none"
                   stroke={edgeColor}
                   strokeWidth="2"
@@ -333,8 +386,8 @@ export function DocumentCanvas({
                 />
                 {edge.label && (
                   <text
-                    x={ctrlX}
-                    y={ctrlY - 8}
+                    x={labelX}
+                    y={labelY}
                     fontSize="10"
                     fill="hsl(var(--muted-foreground))"
                     textAnchor="middle"
