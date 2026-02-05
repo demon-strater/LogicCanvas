@@ -185,10 +185,14 @@ export function GroupBox({
       onSelect(group.id, e.shiftKey);
       setIsDragging(true);
       setHasDragged(false);
-      originalPosRef.current = { x: currentPos.x, y: currentPos.y };
-      dragStartRef.current = { x: e.clientX - currentPos.x, y: e.clientY - currentPos.y };
+      // Use effective center (the actual displayed position) for drag start
+      const startX = effectiveCenterX;
+      const startY = effectiveCenterY;
+      setCurrentPos({ x: startX, y: startY });
+      originalPosRef.current = { x: startX, y: startY };
+      dragStartRef.current = { x: e.clientX - startX, y: e.clientY - startY };
     },
-    [group.id, currentPos, onSelect, isSpacePressed]
+    [group.id, effectiveCenterX, effectiveCenterY, onSelect, isSpacePressed]
   );
 
   useEffect(() => {
