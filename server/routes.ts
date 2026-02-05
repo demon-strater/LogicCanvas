@@ -792,76 +792,39 @@ export async function registerRoutes(
         };
       };
 
-      // Get month from group name or monthStart field
-      const getMonthOrder = (g: typeof groups[0]): number => {
-        if (g.monthStart) return g.monthStart;
-        const name = g.name;
-        if (name.includes("12월")) return 12;
-        if (name.includes("1월")) return 1;
-        if (name.includes("2월")) return 2;
-        if (name.includes("3월")) return 3;
-        return 99; // Default to end
-      };
-      
-      // Timeline layout constants - must match frontend TimelineHeader
-      const TIMELINE_OFFSET_X = 150; // Padding before first month column
-      const MONTH_WIDTH = 2000; // Width per month column (ultra wide spacing)
-      const TIMELINE_HEADER_HEIGHT = 60; // Height of timeline header
-      
-      // Determine month range from groups
-      const monthValues = groups.map(g => getMonthOrder(g)).filter(m => m < 99);
-      const minMonth = monthValues.length > 0 ? Math.min(...monthValues) : 12;
-      const maxMonth = monthValues.length > 0 ? Math.max(...monthValues) : 2;
-      
-      // Normalize month to column index (12->0, 1->1, 2->2, etc.)
-      const getMonthColumnIndex = (month: number): number => {
-        if (month >= 12) return month - 12; // 12->0
-        return month; // 1->1, 2->2, 3->3
-      };
-      
-      // Get top-level groups and sort by month
+      // Get top-level groups and sort by workflow order (horizontal positioning)
       const topLevelGroups = groups
         .filter(g => !g.parentId || !groupIdSet.has(g.parentId))
-        .sort((a, b) => {
-          const monthA = getMonthOrder(a);
-          const monthB = getMonthOrder(b);
-          const normalizedA = monthA >= 12 ? monthA - 12 : monthA;
-          const normalizedB = monthB >= 12 ? monthB - 12 : monthB;
-          return normalizedA - normalizedB;
-        });
+        .sort((a, b) => getWorkflowOrder(a.name) - getWorkflowOrder(b.name));
 
-      // Track Y position for each month column (stack groups vertically within each month)
-      const monthNextY: Record<number, number> = {};
-      
-      // First pass: determine group sizes and positions based on timeline
-      const groupLayouts: Array<{group: typeof groups[0], width: number, height: number, x: number, y: number}> = [];
+      // First pass: calculate all group sizes
+      const groupSizes: Map<number, { width: number; height: number }> = new Map();
       
       for (const group of topLevelGroups) {
         const contentSize = calculateGroupContentSize(group.id);
         const groupWidth = contentSize.width + GROUP_PADDING * 2;
         const groupHeight = contentSize.height + GROUP_HEADER + GROUP_PADDING;
-        
-        // Get month for this group and calculate X position based on timeline
-        const month = getMonthOrder(group);
-        const columnIndex = getMonthColumnIndex(month);
-        const currentX = TIMELINE_OFFSET_X + columnIndex * MONTH_WIDTH;
-        
-        // Initialize Y position for this month column if not set
-        if (monthNextY[month] === undefined) {
-          monthNextY[month] = CANVAS_START_Y + TIMELINE_HEADER_HEIGHT;
-        }
-        const currentY = monthNextY[month];
+        groupSizes.set(group.id, { width: groupWidth, height: groupHeight });
+      }
+      
+      // Second pass: position top-level groups HORIZONTALLY with large gaps
+      const groupLayouts: Array<{group: typeof groups[0], width: number, height: number, x: number, y: number}> = [];
+      let currentX = CANVAS_START_X;
+      const fixedY = CANVAS_START_Y + 100; // All top-level groups at same Y
+      
+      for (const group of topLevelGroups) {
+        const size = groupSizes.get(group.id)!;
         
         groupLayouts.push({
           group,
-          width: groupWidth,
-          height: groupHeight,
+          width: size.width,
+          height: size.height,
           x: currentX,
-          y: currentY
+          y: fixedY
         });
         
-        // Update Y for next group in this month column
-        monthNextY[month] = currentY + groupHeight + GROUP_GAP_Y;
+        // Move X position for next group (horizontal layout)
+        currentX += size.width + GROUP_GAP;
       }
       
       // Second pass: position groups and their documents

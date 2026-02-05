@@ -179,7 +179,9 @@ export function GroupBox({
     (e: React.MouseEvent) => {
       // Don't start drag if spacebar is pressed (canvas is panning)
       if (isSpacePressed) return;
-      if ((e.target as HTMLElement).closest('button')) return;
+      // Don't start drag if clicking on interactive elements
+      const target = e.target as HTMLElement;
+      if (target.closest('button') || target.closest('[role="menuitem"]') || target.closest('[data-radix-collection-item]')) return;
       e.preventDefault();
       e.stopPropagation();
       onSelect(group.id, e.shiftKey);
