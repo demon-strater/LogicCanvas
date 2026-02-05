@@ -9,9 +9,9 @@ import { DocumentInputModal } from "@/components/DocumentInputModal";
 import { DocumentViewModal } from "@/components/DocumentViewModal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus } from "lucide-react";
+import { Plus, Wand2 } from "lucide-react";
 
-import type { Document } from "@shared/schema";
+import type { Document, DocumentEdge } from "@shared/schema";
 
 export default function Canvas() {
   const { toast } = useToast();
@@ -21,6 +21,10 @@ export default function Canvas() {
 
   const { data: documents = [], isLoading: isLoadingDocuments } = useQuery<Document[]>({
     queryKey: ["/api/documents"],
+  });
+
+  const { data: documentEdges = [] } = useQuery<DocumentEdge[]>({
+    queryKey: ["/api/document-edges"],
   });
 
   const viewingDocument = documents.find((d) => d.id === viewingDocumentId) || null;
@@ -47,6 +51,7 @@ export default function Canvas() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/document-edges"] });
       setViewingDocumentId(null);
       toast({ title: "문서가 삭제되었습니다" });
     },
@@ -58,6 +63,24 @@ export default function Canvas() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+    },
+  });
+
+  const analyzeWorkflowMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/analyze-workflow");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/document-edges"] });
+      toast({ 
+        title: "워크플로우 분석 완료", 
+        description: data.summary || "문서들이 자동으로 정렬되었습니다" 
+      });
+    },
+    onError: () => {
+      toast({ title: "오류", description: "워크플로우 분석에 실패했습니다.", variant: "destructive" });
     },
   });
 
@@ -102,6 +125,7 @@ export default function Canvas() {
         ) : (
           <DocumentCanvas
             documents={documents}
+            edges={documentEdges}
             selectedDocumentId={selectedDocumentId}
             onSelectDocument={handleSelectDocument}
             onClickDocument={handleClickDocument}
@@ -109,15 +133,30 @@ export default function Canvas() {
           />
         )}
 
-        <Button
-          className="fixed bottom-6 right-6 shadow-lg"
-          size="lg"
-          onClick={() => setIsDocumentModalOpen(true)}
-          data-testid="button-add-document"
-        >
-          <Plus className="h-5 w-5 mr-2" />
-          새 문서
-        </Button>
+        <div className="fixed bottom-6 right-6 flex flex-col gap-3">
+          {documents.length >= 2 && (
+            <Button
+              variant="outline"
+              size="lg"
+              className="shadow-lg bg-card"
+              onClick={() => analyzeWorkflowMutation.mutate()}
+              disabled={analyzeWorkflowMutation.isPending}
+              data-testid="button-analyze-workflow"
+            >
+              <Wand2 className="h-5 w-5 mr-2" />
+              {analyzeWorkflowMutation.isPending ? "분석 중..." : "자동 정렬"}
+            </Button>
+          )}
+          <Button
+            size="lg"
+            className="shadow-lg"
+            onClick={() => setIsDocumentModalOpen(true)}
+            data-testid="button-add-document"
+          >
+            <Plus className="h-5 w-5 mr-2" />
+            새 문서
+          </Button>
+        </div>
       </div>
 
       <DocumentInputModal
