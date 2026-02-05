@@ -609,6 +609,7 @@ export function DocumentCanvas({
               y={pos.y}
               isSelected={selectedGroupId === group.id}
               isExpanded={true}
+              isTopLevel={!group.parentId}
               onSelect={onSelectGroup}
               onToggleExpand={onToggleGroupExpand}
               onDragEnd={handleGroupPositionUpdate}

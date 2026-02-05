@@ -18,6 +18,7 @@ type Props = {
   y: number;
   isSelected: boolean;
   isExpanded: boolean;
+  isTopLevel?: boolean; // true for parent groups, false for child groups
   onSelect: (id: number) => void;
   onToggleExpand: (id: number) => void;
   onDragEnd: (id: number, x: number, y: number, prevX: number, prevY: number) => void;
@@ -33,6 +34,7 @@ export function GroupBox({
   y,
   isSelected,
   isExpanded,
+  isTopLevel = true,
   onSelect,
   onToggleExpand,
   onDragEnd,
@@ -116,7 +118,9 @@ export function GroupBox({
         top: currentPos.y,
         transform: "translate(-50%, -50%)",
         zIndex: isSelected || isDragging ? 2 : 0,
-        borderColor: isSelected ? groupColor : `${groupColor}60`,
+        // Top-level groups have more transparent borders (30%), child groups are more opaque (80%)
+        borderColor: isSelected ? groupColor : `${groupColor}${isTopLevel ? '30' : '80'}`,
+        backgroundColor: isTopLevel ? 'transparent' : undefined,
         // Match server layout EXACTLY: DOC_WIDTH=280, DOC_GAP_X=80, GROUP_PADDING=50, GROUP_HEADER=70
         width: (() => {
           const DOC_WIDTH = 280;
