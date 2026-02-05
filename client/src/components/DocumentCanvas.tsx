@@ -27,8 +27,8 @@ type Props = {
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.1;
-const DOC_WIDTH = 280;
-const DOC_HEIGHT = 140;
+const DOC_WIDTH = 350;
+const DOC_HEIGHT = 200;
 const TIMELINE_HEIGHT = 50;
 const TIMELINE_GAP = 80;
 
@@ -543,7 +543,7 @@ export function DocumentCanvas({
         year={2025}
         canvasWidth={canvasWidth}
         canvasHeight={canvasHeight}
-        monthWidth={1200}
+        monthWidth={1600}
         offsetX={150}
         zoom={zoom}
         panX={pan.x}
@@ -554,7 +554,7 @@ export function DocumentCanvas({
         startMonth={timelineStartMonth}
         endMonth={timelineEndMonth}
         year={2025}
-        monthWidth={1200}
+        monthWidth={1600}
         offsetX={150}
         zoom={zoom}
         panX={pan.x}

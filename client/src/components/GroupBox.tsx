@@ -11,10 +11,10 @@ import {
 import type { DocumentGroup, Document } from "@shared/schema";
 
 // Layout constants - must match server exactly
-const DOC_WIDTH = 280;
-const DOC_HEIGHT = 140;
-const GROUP_PADDING = 50;
-const GROUP_HEADER = 70;
+const DOC_WIDTH = 350;
+const DOC_HEIGHT = 200;
+const GROUP_PADDING = 250;
+const GROUP_HEADER = 150;
 
 type Props = {
   group: DocumentGroup;

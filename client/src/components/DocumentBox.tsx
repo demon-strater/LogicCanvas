@@ -113,7 +113,7 @@ export function DocumentBox({
     <div
       ref={boxRef}
       className={cn(
-        "absolute w-[280px] p-3 rounded-lg border-2 cursor-pointer transition-shadow",
+        "absolute w-[350px] min-h-[180px] p-4 rounded-lg border-2 cursor-pointer transition-shadow",
         "bg-card hover:shadow-lg",
         isSelected
           ? "border-primary shadow-md"
