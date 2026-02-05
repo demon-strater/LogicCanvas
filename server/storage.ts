@@ -1,7 +1,7 @@
 import { db } from "./db";
-import { documents, nodes, edges, tasks, users } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
-import type { Document, InsertDocument, Node, InsertNode, Edge, InsertEdge, Task, InsertTask, User, InsertUser } from "@shared/schema";
+import { documents, nodes, edges, tasks, users, documentEdges } from "@shared/schema";
+import { eq, desc, or } from "drizzle-orm";
+import type { Document, InsertDocument, Node, InsertNode, Edge, InsertEdge, Task, InsertTask, User, InsertUser, DocumentEdge, InsertDocumentEdge } from "@shared/schema";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -33,6 +33,12 @@ export interface IStorage {
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: number, updates: Partial<Task>): Promise<Task | undefined>;
   deleteTask(id: number): Promise<void>;
+
+  getAllDocumentEdges(): Promise<DocumentEdge[]>;
+  createDocumentEdge(edge: InsertDocumentEdge): Promise<DocumentEdge>;
+  createDocumentEdges(edgesData: InsertDocumentEdge[]): Promise<DocumentEdge[]>;
+  deleteDocumentEdgesByDoc(docId: number): Promise<void>;
+  clearAllDocumentEdges(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -151,6 +157,30 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTask(id: number): Promise<void> {
     await db.delete(tasks).where(eq(tasks.id, id));
+  }
+
+  async getAllDocumentEdges(): Promise<DocumentEdge[]> {
+    return db.select().from(documentEdges);
+  }
+
+  async createDocumentEdge(edge: InsertDocumentEdge): Promise<DocumentEdge> {
+    const [created] = await db.insert(documentEdges).values(edge).returning();
+    return created;
+  }
+
+  async createDocumentEdges(edgesData: InsertDocumentEdge[]): Promise<DocumentEdge[]> {
+    if (edgesData.length === 0) return [];
+    return db.insert(documentEdges).values(edgesData).returning();
+  }
+
+  async deleteDocumentEdgesByDoc(docId: number): Promise<void> {
+    await db.delete(documentEdges).where(
+      or(eq(documentEdges.sourceDocId, docId), eq(documentEdges.targetDocId, docId))
+    );
+  }
+
+  async clearAllDocumentEdges(): Promise<void> {
+    await db.delete(documentEdges);
   }
 }
 

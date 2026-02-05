@@ -102,6 +102,24 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type Task = typeof tasks.$inferSelect;
 
+// Document edges - relationships between documents for workflow visualization
+export const documentEdges = pgTable("document_edges", {
+  id: serial("id").primaryKey(),
+  sourceDocId: integer("source_doc_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+  targetDocId: integer("target_doc_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+  label: text("label"),
+  edgeType: text("edge_type").notNull().default("flow"), // flow, depends, related, parent
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertDocumentEdgeSchema = createInsertSchema(documentEdges).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertDocumentEdge = z.infer<typeof insertDocumentEdgeSchema>;
+export type DocumentEdge = typeof documentEdges.$inferSelect;
+
 // Graph data structure for frontend
 export type GraphData = {
   nodes: Node[];
