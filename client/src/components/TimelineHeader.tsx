@@ -80,20 +80,22 @@ type GridLinesProps = {
   startMonth: number;
   endMonth: number;
   year: number;
-  canvasWidth: number;
-  canvasHeight: number;
   monthWidth: number;
   offsetX: number;
+  zoom: number;
+  panX: number;
+  viewportHeight: number;
 };
 
 export function TimelineGridLines({
   startMonth,
   endMonth,
   year,
-  canvasWidth,
-  canvasHeight,
   monthWidth,
   offsetX,
+  zoom,
+  panX,
+  viewportHeight,
 }: GridLinesProps) {
   const months = useMemo(() => {
     const result = [];
@@ -109,25 +111,33 @@ export function TimelineGridLines({
     return result;
   }, [startMonth, endMonth, year]);
 
-  const weekWidth = monthWidth / 4;
+  const scaledMonthWidth = monthWidth * zoom;
+  const scaledOffsetX = offsetX * zoom + panX;
+  const weekWidth = scaledMonthWidth / 4;
 
   return (
     <svg
-      className="absolute inset-0 pointer-events-none"
-      style={{ width: canvasWidth, height: canvasHeight, zIndex: 1 }}
+      className="absolute inset-0 pointer-events-none overflow-visible"
+      style={{ 
+        top: 48,
+        left: 0,
+        width: "100%", 
+        height: viewportHeight - 48,
+        zIndex: 1 
+      }}
     >
       {months.map((m, monthIndex) => {
-        const monthX = offsetX + monthIndex * monthWidth;
+        const monthX = scaledOffsetX + monthIndex * scaledMonthWidth;
         return (
           <g key={`grid-${m.year}-${m.month}`}>
             <line
               x1={monthX}
               y1={0}
               x2={monthX}
-              y2={canvasHeight}
+              y2={viewportHeight}
               stroke="hsl(var(--border))"
               strokeWidth="2"
-              strokeOpacity="0.6"
+              strokeOpacity="0.5"
             />
             {[1, 2, 3].map((week) => (
               <line
@@ -135,24 +145,24 @@ export function TimelineGridLines({
                 x1={monthX + week * weekWidth}
                 y1={0}
                 x2={monthX + week * weekWidth}
-                y2={canvasHeight}
+                y2={viewportHeight}
                 stroke="hsl(var(--border))"
                 strokeWidth="1"
-                strokeOpacity="0.2"
-                strokeDasharray="4,4"
+                strokeOpacity="0.15"
+                strokeDasharray="6,6"
               />
             ))}
           </g>
         );
       })}
       <line
-        x1={offsetX + months.length * monthWidth}
+        x1={scaledOffsetX + months.length * scaledMonthWidth}
         y1={0}
-        x2={offsetX + months.length * monthWidth}
-        y2={canvasHeight}
+        x2={scaledOffsetX + months.length * scaledMonthWidth}
+        y2={viewportHeight}
         stroke="hsl(var(--border))"
         strokeWidth="2"
-        strokeOpacity="0.6"
+        strokeOpacity="0.5"
       />
     </svg>
   );

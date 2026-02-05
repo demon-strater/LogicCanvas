@@ -549,6 +549,18 @@ export function DocumentCanvas({
         panX={pan.x}
       />
 
+      {/* Timeline grid lines - fixed to viewport, scales with zoom */}
+      <TimelineGridLines
+        startMonth={timelineStartMonth}
+        endMonth={timelineEndMonth}
+        year={2025}
+        monthWidth={1200}
+        offsetX={150}
+        zoom={zoom}
+        panX={pan.x}
+        viewportHeight={dimensions.height}
+      />
+
       <div
         ref={contentRef}
         className="absolute origin-top-left"
@@ -570,16 +582,6 @@ export function DocumentCanvas({
           }}
         />
 
-        {/* Timeline grid lines - inside transformed content */}
-        <TimelineGridLines
-          startMonth={timelineStartMonth}
-          endMonth={timelineEndMonth}
-          year={2025}
-          canvasWidth={canvasWidth}
-          canvasHeight={canvasHeight}
-          monthWidth={1200}
-          offsetX={150}
-        />
 
         <svg
           className="absolute inset-0 pointer-events-none"
