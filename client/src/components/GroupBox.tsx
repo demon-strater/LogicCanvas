@@ -64,6 +64,49 @@ export function GroupBox({
 
   const totalItems = documents.length + childGroups.length;
 
+  // Helper function to calculate child group bounds from its actual documents
+  const calculateChildGroupBounds = useCallback((childGroup: DocumentGroup) => {
+    const childDocs = (allDocuments || []).filter(d => d.groupId === childGroup.id);
+    
+    if (childDocs.length === 0) {
+      // Empty child group - use stored position with default size
+      return { 
+        centerX: childGroup.x, 
+        centerY: childGroup.y, 
+        width: 350, 
+        height: 200 
+      };
+    }
+    
+    // Calculate bounds from actual document positions
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const doc of childDocs) {
+      if (doc.x !== null && doc.y !== null) {
+        minX = Math.min(minX, doc.x - DOC_WIDTH / 2);
+        maxX = Math.max(maxX, doc.x + DOC_WIDTH / 2);
+        minY = Math.min(minY, doc.y - DOC_HEIGHT / 2);
+        maxY = Math.max(maxY, doc.y + DOC_HEIGHT / 2);
+      }
+    }
+    
+    if (minX === Infinity) {
+      return { centerX: childGroup.x, centerY: childGroup.y, width: 350, height: 200 };
+    }
+    
+    const contentWidth = maxX - minX;
+    const contentHeight = maxY - minY;
+    const width = Math.max(350, contentWidth + GROUP_PADDING * 2);
+    const height = Math.max(200, contentHeight + GROUP_HEADER + GROUP_PADDING);
+    
+    // Calculate center from content bounds
+    const topLeftX = minX - GROUP_PADDING;
+    const topLeftY = minY - GROUP_HEADER;
+    const centerX = topLeftX + width / 2;
+    const centerY = topLeftY + height / 2;
+    
+    return { centerX, centerY, width, height };
+  }, [allDocuments]);
+
   // Calculate bounding box and correct center from actual document and child group positions
   const { width: groupWidth, height: groupHeight, centerX: computedCenterX, centerY: computedCenterY } = useMemo(() => {
     // Get all items that should be contained in this group
@@ -81,26 +124,15 @@ export function GroupBox({
       }
     }
     
-    // Add child groups (we need to estimate their size)
+    // Add child groups - calculate their bounds from their actual documents
     for (const child of childGroups || []) {
-      if (child.x !== null && child.y !== null) {
-        // Get docs in child group
-        const childDocs = (allDocuments || []).filter(d => d.groupId === child.id);
-        // Estimate child group size
-        const childDocCount = childDocs.length;
-        const cols = childDocCount <= 1 ? 1 : childDocCount <= 2 ? 2 : childDocCount <= 4 ? 2 : Math.ceil(Math.sqrt(childDocCount));
-        const rows = childDocCount > 0 ? Math.ceil(childDocCount / cols) : 0;
-        const childContentW = childDocCount > 0 ? cols * (DOC_WIDTH + 80) - 80 : 280;
-        const childContentH = rows > 0 ? rows * (DOC_HEIGHT + 60) - 60 : 120;
-        const childW = Math.max(280, childContentW + GROUP_PADDING * 2);
-        const childH = GROUP_HEADER + Math.max(100, childContentH) + GROUP_PADDING;
-        allItems.push({ 
-          x: child.x, 
-          y: child.y, 
-          w: childW, 
-          h: childH 
-        });
-      }
+      const childBounds = calculateChildGroupBounds(child);
+      allItems.push({ 
+        x: childBounds.centerX, 
+        y: childBounds.centerY, 
+        w: childBounds.width, 
+        h: childBounds.height 
+      });
     }
     
     if (allItems.length === 0) {
@@ -137,7 +169,7 @@ export function GroupBox({
       centerX,
       centerY
     };
-  }, [documents, childGroups, allDocuments, x, y]);
+  }, [documents, childGroups, calculateChildGroupBounds, x, y]);
   
   // Use computed center if we have documents, otherwise use stored position
   const effectiveCenterX = (documents || []).length > 0 || (childGroups || []).length > 0 ? computedCenterX : x;
