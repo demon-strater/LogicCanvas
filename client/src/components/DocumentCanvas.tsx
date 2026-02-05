@@ -1012,9 +1012,38 @@ export function DocumentCanvas({
           />
         )}
 
-        {/* Render ONLY top-level groups (parentId === null) */}
+        {/* Render top-level groups (parentId === null) with their child groups (중분류) inside */}
         {groups
           .filter(g => g.parentId === null)
+          .map((group, index) => {
+          const pos = groupPositions[group.id] || getGroupPosition(group, index);
+          // Get direct child groups (중분류) for this top-level group
+          const childGroups = groups.filter(g => g.parentId === group.id);
+          return (
+            <GroupBox
+              key={`group-${group.id}`}
+              group={group}
+              documents={[]}
+              childGroups={childGroups}
+              allDocuments={documents}
+              x={pos.x}
+              y={pos.y + TIMELINE_GAP}
+              isSelected={selectedGroupId === group.id || selectedGroupIds.has(group.id)}
+              isExpanded={true}
+              isTopLevel={true}
+              isSpacePressed={isSpacePressed}
+              onSelect={handleGroupSelect}
+              onToggleExpand={onToggleGroupExpand}
+              onDragEnd={handleGroupPositionUpdate}
+              onEdit={onEditGroup}
+              onDelete={onDeleteGroup}
+            />
+          );
+        })}
+
+        {/* Render child groups (중분류) separately so they're visible and draggable */}
+        {groups
+          .filter(g => g.parentId !== null)
           .map((group, index) => {
           const pos = groupPositions[group.id] || getGroupPosition(group, index);
           return (
@@ -1028,7 +1057,7 @@ export function DocumentCanvas({
               y={pos.y + TIMELINE_GAP}
               isSelected={selectedGroupId === group.id || selectedGroupIds.has(group.id)}
               isExpanded={false}
-              isTopLevel={true}
+              isTopLevel={false}
               isSpacePressed={isSpacePressed}
               onSelect={handleGroupSelect}
               onToggleExpand={onToggleGroupExpand}
@@ -1039,8 +1068,7 @@ export function DocumentCanvas({
           );
         })}
 
-        {/* Hide all documents - only show top-level groups */}
-        {/* Documents will be shown when groups are expanded */}
+        {/* Documents will be shown later when we add the detail level */}
 
         {documents.length === 0 && groups.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center">
