@@ -24,7 +24,7 @@ type Props = {
   onDeleteGroup: (id: number) => void;
 };
 
-const MIN_ZOOM = 0.25;
+const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.1;
 const DOC_WIDTH = 350;
@@ -89,6 +89,64 @@ export function DocumentCanvas({
       observer.disconnect();
     };
   }, []);
+
+  // Initial centering: center view on diagram content when data first loads
+  const hasInitialized = useRef(false);
+  useEffect(() => {
+    if (hasInitialized.current) return;
+    
+    // Wait for documents or groups to be available
+    const hasContent = documents.length > 0 || groups.length > 0;
+    if (!hasContent || dimensions.width === 0) return;
+    
+    hasInitialized.current = true;
+    
+    // Calculate content bounds
+    const allX: number[] = [];
+    const allY: number[] = [];
+    
+    documents.forEach(d => {
+      if (d.x !== null && d.y !== null) {
+        allX.push(d.x);
+        allY.push(d.y);
+      }
+    });
+    
+    groups.forEach(g => {
+      if (g.x !== null && g.y !== null) {
+        allX.push(g.x);
+        allY.push(g.y);
+      }
+    });
+    
+    if (allX.length === 0) return;
+    
+    const minX = Math.min(...allX);
+    const maxX = Math.max(...allX);
+    const minY = Math.min(...allY);
+    const maxY = Math.max(...allY);
+    
+    // Calculate center of content
+    const contentCenterX = (minX + maxX) / 2;
+    const contentCenterY = (minY + maxY) / 2;
+    
+    // Set initial zoom to fit content (with margin)
+    const contentWidth = maxX - minX + 800;
+    const contentHeight = maxY - minY + 600;
+    const scaleX = dimensions.width / contentWidth;
+    const scaleY = (dimensions.height - 48) / contentHeight;
+    const fitZoom = Math.min(scaleX, scaleY, 1) * 0.8;
+    const initialZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitZoom));
+    
+    // Calculate pan to center content in viewport
+    const viewportCenterX = dimensions.width / 2;
+    const viewportCenterY = (dimensions.height - 48) / 2 + 48;
+    const panX = viewportCenterX - contentCenterX * initialZoom;
+    const panY = viewportCenterY - contentCenterY * initialZoom;
+    
+    setZoom(initialZoom);
+    setPan({ x: panX, y: panY });
+  }, [documents, groups, dimensions]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -522,9 +580,9 @@ export function DocumentCanvas({
   const canvasWidth = Math.max(dimensions.width / zoom, ...allPositions.map(p => p.x + 400), 1200);
   const canvasHeight = Math.max(dimensions.height / zoom, ...allPositions.map(p => p.y + 300), 800);
 
-  // Calculate month range for timeline (12월 to 다음해 2월 = months 12, 13, 14)
+  // Calculate month range for timeline (2025년 12월 to 2026년 12월 = 13 months)
   const timelineStartMonth = 12;
-  const timelineEndMonth = 14;
+  const timelineEndMonth = 24; // 24 = December of next year
 
   return (
     <div
