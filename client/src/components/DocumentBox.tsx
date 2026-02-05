@@ -8,6 +8,7 @@ type Props = {
   x: number;
   y: number;
   isSelected: boolean;
+  isSpacePressed?: boolean;
   onSelect: (id: number, shiftKey?: boolean) => void;
   onClick: (id: number) => void;
   onDragEnd: (id: number, x: number, y: number, prevX: number, prevY: number) => void;
@@ -18,6 +19,7 @@ export function DocumentBox({
   x,
   y,
   isSelected,
+  isSpacePressed = false,
   onSelect,
   onClick,
   onDragEnd,
@@ -53,6 +55,9 @@ export function DocumentBox({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      // Don't start drag if spacebar is pressed (canvas is panning)
+      if (isSpacePressed) return;
+      
       e.preventDefault();
       onSelect(document.id, e.shiftKey);
       setIsDragging(true);
@@ -60,7 +65,7 @@ export function DocumentBox({
       originalPosRef.current = { x: currentPos.x, y: currentPos.y };
       dragStartRef.current = { x: e.clientX - currentPos.x, y: e.clientY - currentPos.y };
     },
-    [document.id, currentPos, onSelect]
+    [document.id, currentPos, onSelect, isSpacePressed]
   );
 
   useEffect(() => {

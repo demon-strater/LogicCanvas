@@ -26,6 +26,7 @@ type Props = {
   isSelected: boolean;
   isExpanded: boolean;
   isTopLevel?: boolean; // true for parent groups, false for child groups
+  isSpacePressed?: boolean;
   onSelect: (id: number, shiftKey?: boolean) => void;
   onToggleExpand: (id: number) => void;
   onDragEnd: (id: number, x: number, y: number, prevX: number, prevY: number) => void;
@@ -43,6 +44,7 @@ export function GroupBox({
   isSelected,
   isExpanded,
   isTopLevel = true,
+  isSpacePressed = false,
   onSelect,
   onToggleExpand,
   onDragEnd,
@@ -143,6 +145,8 @@ export function GroupBox({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      // Don't start drag if spacebar is pressed (canvas is panning)
+      if (isSpacePressed) return;
       if ((e.target as HTMLElement).closest('button')) return;
       e.preventDefault();
       e.stopPropagation();
@@ -152,7 +156,7 @@ export function GroupBox({
       originalPosRef.current = { x: currentPos.x, y: currentPos.y };
       dragStartRef.current = { x: e.clientX - currentPos.x, y: e.clientY - currentPos.y };
     },
-    [group.id, currentPos, onSelect]
+    [group.id, currentPos, onSelect, isSpacePressed]
   );
 
   useEffect(() => {

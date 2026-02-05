@@ -166,12 +166,17 @@ export function DocumentCanvas({
                          target === contentRef.current ||
                          target.tagName === 'svg';
     
-    // Only pan if spacebar pressed (anywhere except interactive) or clicking background
-    if (isSpacePressed && !isInteractiveElement) {
+    // Spacebar + drag = always pan, regardless of what element is clicked
+    if (isSpacePressed) {
       e.preventDefault();
+      e.stopPropagation();
       setIsPanning(true);
       panStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
-    } else if (isBackground && !isInteractiveElement) {
+      return;
+    }
+    
+    // Background click = selection rectangle
+    if (isBackground && !isInteractiveElement) {
       e.preventDefault();
       
       // Start selection rectangle instead of panning
@@ -983,6 +988,7 @@ export function DocumentCanvas({
               isSelected={selectedGroupId === group.id || selectedGroupIds.has(group.id)}
               isExpanded={true}
               isTopLevel={!group.parentId}
+              isSpacePressed={isSpacePressed}
               onSelect={handleGroupSelect}
               onToggleExpand={onToggleGroupExpand}
               onDragEnd={handleGroupPositionUpdate}
@@ -1002,6 +1008,7 @@ export function DocumentCanvas({
               x={pos.x}
               y={pos.y}
               isSelected={selectedDocumentId === doc.id || selectedDocIds.has(doc.id)}
+              isSpacePressed={isSpacePressed}
               onSelect={handleDocSelect}
               onClick={onClickDocument}
               onDragEnd={handleLocalPositionUpdate}
