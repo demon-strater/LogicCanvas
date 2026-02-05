@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Folder, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { DocumentGroup, Document } from "@shared/schema";
 
+// Layout constants - must match server exactly
+const DOC_WIDTH = 280;
+const DOC_HEIGHT = 140;
+const GROUP_PADDING = 50;
+const GROUP_HEADER = 70;
+
 type Props = {
   group: DocumentGroup;
   documents: Document[];
   childGroups: DocumentGroup[];
+  allDocuments: Document[]; // All documents to find child group docs
   x: number;
   y: number;
   isSelected: boolean;
@@ -30,6 +37,7 @@ export function GroupBox({
   group,
   documents,
   childGroups,
+  allDocuments,
   x,
   y,
   isSelected,
@@ -53,6 +61,85 @@ export function GroupBox({
   }, [x, y]);
 
   const totalItems = documents.length + childGroups.length;
+
+  // Calculate bounding box and correct center from actual document and child group positions
+  const { width: groupWidth, height: groupHeight, centerX: computedCenterX, centerY: computedCenterY } = useMemo(() => {
+    // Get all items that should be contained in this group
+    const allItems: { x: number; y: number; w: number; h: number }[] = [];
+    
+    // Add direct documents
+    for (const doc of documents || []) {
+      if (doc.x !== null && doc.y !== null) {
+        allItems.push({ 
+          x: doc.x, 
+          y: doc.y, 
+          w: DOC_WIDTH, 
+          h: DOC_HEIGHT 
+        });
+      }
+    }
+    
+    // Add child groups (we need to estimate their size)
+    for (const child of childGroups || []) {
+      if (child.x !== null && child.y !== null) {
+        // Get docs in child group
+        const childDocs = (allDocuments || []).filter(d => d.groupId === child.id);
+        // Estimate child group size
+        const childDocCount = childDocs.length;
+        const cols = childDocCount <= 1 ? 1 : childDocCount <= 2 ? 2 : childDocCount <= 4 ? 2 : Math.ceil(Math.sqrt(childDocCount));
+        const rows = childDocCount > 0 ? Math.ceil(childDocCount / cols) : 0;
+        const childContentW = childDocCount > 0 ? cols * (DOC_WIDTH + 80) - 80 : 280;
+        const childContentH = rows > 0 ? rows * (DOC_HEIGHT + 60) - 60 : 120;
+        const childW = Math.max(280, childContentW + GROUP_PADDING * 2);
+        const childH = GROUP_HEADER + Math.max(100, childContentH) + GROUP_PADDING;
+        allItems.push({ 
+          x: child.x, 
+          y: child.y, 
+          w: childW, 
+          h: childH 
+        });
+      }
+    }
+    
+    if (allItems.length === 0) {
+      // Empty group - use stored position
+      return { width: 400, height: 220, centerX: x, centerY: y };
+    }
+    
+    // Calculate bounding box of all items (items are positioned at CENTER)
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const item of allItems) {
+      minX = Math.min(minX, item.x - item.w / 2);
+      maxX = Math.max(maxX, item.x + item.w / 2);
+      minY = Math.min(minY, item.y - item.h / 2);
+      maxY = Math.max(maxY, item.y + item.h / 2);
+    }
+    
+    // Calculate content dimensions and derive group box
+    const contentWidth = maxX - minX;
+    const contentHeight = maxY - minY;
+    
+    const width = contentWidth + GROUP_PADDING * 2;
+    const height = contentHeight + GROUP_HEADER + GROUP_PADDING;
+    
+    // Calculate center position: the group box should encompass all content
+    // Top-left of content area is (minX - GROUP_PADDING, minY - GROUP_HEADER)
+    const topLeftX = minX - GROUP_PADDING;
+    const topLeftY = minY - GROUP_HEADER;
+    const centerX = topLeftX + width / 2;
+    const centerY = topLeftY + height / 2;
+    
+    return { 
+      width: Math.max(400, width), 
+      height: Math.max(220, height),
+      centerX,
+      centerY
+    };
+  }, [documents, childGroups, allDocuments, x, y]);
+  
+  // Use computed center if we have documents, otherwise use stored position
+  const effectiveCenterX = (documents || []).length > 0 || (childGroups || []).length > 0 ? computedCenterX : x;
+  const effectiveCenterY = (documents || []).length > 0 || (childGroups || []).length > 0 ? computedCenterY : y;
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -114,56 +201,16 @@ export function GroupBox({
         isDragging && "shadow-xl cursor-grabbing"
       )}
       style={{
-        left: currentPos.x,
-        top: currentPos.y,
+        // Use computed center from documents when not dragging, otherwise use drag position
+        left: isDragging ? currentPos.x : effectiveCenterX,
+        top: isDragging ? currentPos.y : effectiveCenterY,
         transform: "translate(-50%, -50%)",
         zIndex: isSelected || isDragging ? 2 : 0,
         // Top-level groups have more transparent borders (30%), child groups are more opaque (80%)
         borderColor: isSelected ? groupColor : `${groupColor}${isTopLevel ? '30' : '80'}`,
         backgroundColor: isTopLevel ? 'transparent' : undefined,
-        // Match server layout EXACTLY: DOC_WIDTH=280, DOC_GAP_X=80, GROUP_PADDING=50, GROUP_HEADER=70
-        width: (() => {
-          const DOC_WIDTH = 280;
-          const DOC_GAP_X = 80;
-          const GROUP_PADDING = 50;
-          // Grid layout for docs - must match server's getDocGridLayout
-          const docCount = documents.length;
-          const cols = docCount <= 1 ? 1 : docCount <= 2 ? 2 : docCount <= 4 ? 2 : docCount <= 6 ? 3 : Math.ceil(Math.sqrt(docCount));
-          const docWidth = docCount > 0 ? cols * (DOC_WIDTH + DOC_GAP_X) - DOC_GAP_X : 0;
-          // Child groups width calculation matching server
-          let maxChildWidth = 0;
-          const childCount = childGroups.length;
-          if (childCount > 0) {
-            const childCols = childCount <= 1 ? 1 : childCount <= 2 ? 2 : childCount <= 4 ? 2 : childCount <= 6 ? 3 : Math.ceil(Math.sqrt(childCount));
-            maxChildWidth = childCols * (380 + DOC_GAP_X);
-          }
-          // Server uses: contentWidth = Math.max(docWidth, maxChildWidth, 300); groupWidth = contentWidth + GROUP_PADDING * 2
-          const contentWidth = Math.max(docWidth, maxChildWidth, 300);
-          return contentWidth + GROUP_PADDING * 2;
-        })(),
-        height: (() => {
-          const DOC_HEIGHT = 140;
-          const DOC_GAP_Y = 60;
-          const GROUP_HEADER = 70;
-          const GROUP_PADDING = 50;
-          // Grid layout for docs
-          const docCount = documents.length;
-          const cols = docCount <= 1 ? 1 : docCount <= 2 ? 2 : docCount <= 4 ? 2 : docCount <= 6 ? 3 : Math.ceil(Math.sqrt(docCount));
-          const rows = docCount > 0 ? Math.ceil(docCount / cols) : 0;
-          const docHeight = rows > 0 ? rows * (DOC_HEIGHT + DOC_GAP_Y) - DOC_GAP_Y : 0;
-          // Child groups height - matching server: childRows * (300 + DOC_GAP_Y)
-          const childCount = childGroups.length;
-          let totalChildHeight = 0;
-          if (childCount > 0) {
-            const childCols = childCount <= 1 ? 1 : childCount <= 2 ? 2 : childCount <= 4 ? 2 : childCount <= 6 ? 3 : Math.ceil(Math.sqrt(childCount));
-            const childRows = Math.ceil(childCount / childCols);
-            totalChildHeight = 30 + childRows * (300 + DOC_GAP_Y);
-          }
-          // Server uses: contentHeight = docHeight + (children.length > 0 ? 30 + totalChildHeight : 0)
-          // groupHeight = contentSize.height + GROUP_HEADER + GROUP_PADDING with Math.max(150, contentHeight)
-          const contentHeight = Math.max(150, docHeight + totalChildHeight);
-          return GROUP_HEADER + contentHeight + GROUP_PADDING;
-        })(),
+        width: groupWidth,
+        height: groupHeight,
       }}
       onMouseDown={handleMouseDown}
       data-testid={`group-box-${group.id}`}

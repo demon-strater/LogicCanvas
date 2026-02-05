@@ -603,6 +603,7 @@ export function DocumentCanvas({
               group={group}
               documents={getDocumentsInGroup(group.id)}
               childGroups={getChildGroups(group.id)}
+              allDocuments={documents}
               x={pos.x}
               y={pos.y}
               isSelected={selectedGroupId === group.id}
