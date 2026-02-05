@@ -478,6 +478,7 @@ export function DocumentCanvas({
           })}
         </svg>
 
+        {/* Render groups as background containers */}
         {groups.filter(g => !g.parentId).map((group, index) => {
           const pos = groupPositions[group.id] || getGroupPosition(group, index);
           return (
@@ -489,7 +490,7 @@ export function DocumentCanvas({
               x={pos.x}
               y={pos.y}
               isSelected={selectedGroupId === group.id}
-              isExpanded={expandedGroups?.has(group.id) || false}
+              isExpanded={true}
               onSelect={onSelectGroup}
               onToggleExpand={onToggleGroupExpand}
               onDragEnd={handleGroupPositionUpdate}
@@ -499,7 +500,8 @@ export function DocumentCanvas({
           );
         })}
 
-        {ungroupedDocuments.map((doc, index) => {
+        {/* Render ALL documents (both grouped and ungrouped) */}
+        {documents.map((doc, index) => {
           const pos = docPositions[doc.id] || getDocumentPosition(doc, index, dimensions.width);
           return (
             <DocumentBox

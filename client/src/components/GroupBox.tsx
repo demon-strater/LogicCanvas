@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Folder, ChevronDown, ChevronRight, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Folder, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -98,14 +98,6 @@ export function GroupBox({
     };
   }, [isDragging, hasDragged, group.id, currentPos, onDragEnd]);
 
-  const handleExpandClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      onToggleExpand(group.id);
-    },
-    [group.id, onToggleExpand]
-  );
-
   const groupColor = group.color || "#6366f1";
 
   return (
@@ -123,10 +115,10 @@ export function GroupBox({
         left: currentPos.x,
         top: currentPos.y,
         transform: "translate(-50%, -50%)",
-        zIndex: isSelected || isDragging ? 5 : 1,
+        zIndex: isSelected || isDragging ? 2 : 0,
         borderColor: isSelected ? groupColor : undefined,
-        minWidth: isExpanded ? "360px" : "280px",
-        minHeight: isExpanded ? "200px" : "auto",
+        minWidth: "360px",
+        minHeight: "200px",
       }}
       onMouseDown={handleMouseDown}
       data-testid={`group-box-${group.id}`}
@@ -136,17 +128,6 @@ export function GroupBox({
         style={{ backgroundColor: `${groupColor}20` }}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <button
-            onClick={handleExpandClick}
-            className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
-            data-testid={`button-expand-group-${group.id}`}
-          >
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4" style={{ color: groupColor }} />
-            ) : (
-              <ChevronRight className="h-4 w-4" style={{ color: groupColor }} />
-            )}
-          </button>
           <div
             className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
             style={{ backgroundColor: `${groupColor}30` }}
@@ -187,29 +168,6 @@ export function GroupBox({
         <p className="text-xs text-muted-foreground px-3 py-2 border-t">
           {group.description}
         </p>
-      )}
-
-      {isExpanded && totalItems > 0 && (
-        <div className="p-3 pt-2 border-t space-y-1">
-          {childGroups.map((childGroup) => (
-            <div
-              key={`child-group-${childGroup.id}`}
-              className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-xs"
-            >
-              <Folder className="h-3 w-3" style={{ color: childGroup.color || groupColor }} />
-              <span className="truncate">{childGroup.name}</span>
-            </div>
-          ))}
-          {documents.map((doc) => (
-            <div
-              key={`doc-${doc.id}`}
-              className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-xs"
-            >
-              <div className="w-2 h-2 rounded-full bg-primary/50" />
-              <span className="truncate">{doc.title}</span>
-            </div>
-          ))}
-        </div>
       )}
     </div>
   );

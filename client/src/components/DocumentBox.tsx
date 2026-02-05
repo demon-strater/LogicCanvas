@@ -119,7 +119,7 @@ export function DocumentBox({
         left: currentPos.x,
         top: currentPos.y,
         transform: "translate(-50%, -50%)",
-        zIndex: isSelected || isDragging ? 10 : 1,
+        zIndex: isSelected || isDragging ? 10 : 5,
       }}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
