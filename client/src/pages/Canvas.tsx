@@ -56,10 +56,10 @@ export default function Canvas() {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
       setSelectedDocumentId(data.id);
       setIsDocumentModalOpen(false);
-      toast({ title: "Document analyzed", description: "Your logic map has been created." });
+      toast({ title: "문서 분석 완료", description: "로직 맵이 생성되었습니다." });
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to analyze document.", variant: "destructive" });
+      toast({ title: "오류", description: "문서 분석에 실패했습니다.", variant: "destructive" });
     },
   });
 
@@ -72,7 +72,7 @@ export default function Canvas() {
       if (selectedDocumentId === deleteDocumentMutation.variables) {
         setSelectedDocumentId(null);
       }
-      toast({ title: "Document deleted" });
+      toast({ title: "문서가 삭제되었습니다" });
     },
   });
 
@@ -92,7 +92,7 @@ export default function Canvas() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedDocumentId, "graph"] });
       setSelectedNodeId(null);
-      toast({ title: "Node deleted" });
+      toast({ title: "노드가 삭제되었습니다" });
     },
   });
 
@@ -116,7 +116,7 @@ export default function Canvas() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedDocumentId, "tasks"] });
       setIsTaskModalOpen(false);
-      toast({ title: "Task created" });
+      toast({ title: "할 일이 생성되었습니다" });
     },
   });
 

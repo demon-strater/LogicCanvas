@@ -9,6 +9,7 @@ The application follows a full-stack TypeScript architecture with a React fronte
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+UI Language: Korean (한국어)
 
 ## System Architecture
 

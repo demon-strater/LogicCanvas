@@ -27,7 +27,7 @@ export function DocumentsSidebar({
 }: Props) {
   const formatDate = (date: Date | string) => {
     const d = new Date(date);
-    return d.toLocaleDateString("en-US", {
+    return d.toLocaleDateString("ko-KR", {
       month: "short",
       day: "numeric",
     });
@@ -42,7 +42,7 @@ export function DocumentsSidebar({
           </div>
           <div>
             <h1 className="font-semibold text-sm">LogicCanvas</h1>
-            <p className="text-[10px] text-muted-foreground">Cognitive Mapping</p>
+            <p className="text-[10px] text-muted-foreground">인지 맵핑 도구</p>
           </div>
         </div>
         <Button
@@ -51,7 +51,7 @@ export function DocumentsSidebar({
           data-testid="button-new-document"
         >
           <Plus className="h-4 w-4 mr-2" />
-          New Document
+          새 문서
         </Button>
       </div>
 
@@ -60,9 +60,9 @@ export function DocumentsSidebar({
           {documents.length === 0 ? (
             <div className="text-center py-8 px-4">
               <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">No documents yet</p>
+              <p className="text-sm text-muted-foreground">문서가 없습니다</p>
               <p className="text-xs text-muted-foreground/70 mt-1">
-                Create your first logic map
+                첫 번째 로직 맵을 만들어보세요
               </p>
             </div>
           ) : (
@@ -108,7 +108,7 @@ export function DocumentsSidebar({
                       data-testid={`button-delete-document-${doc.id}`}
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
+                      삭제
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

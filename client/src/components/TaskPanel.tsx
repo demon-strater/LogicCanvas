@@ -14,15 +14,15 @@ type Props = {
 };
 
 const statusConfig = {
-  pending: { icon: Circle, label: "To Do", color: "text-muted-foreground" },
-  in_progress: { icon: Clock, label: "In Progress", color: "text-chart-5" },
-  completed: { icon: CheckCircle2, label: "Done", color: "text-chart-3" },
+  pending: { icon: Circle, label: "할 일", color: "text-muted-foreground" },
+  in_progress: { icon: Clock, label: "진행 중", color: "text-chart-5" },
+  completed: { icon: CheckCircle2, label: "완료", color: "text-chart-3" },
 };
 
 const priorityConfig = {
-  low: { color: "bg-muted text-muted-foreground" },
-  medium: { color: "bg-primary/10 text-primary" },
-  high: { color: "bg-destructive/10 text-destructive" },
+  low: { color: "bg-muted text-muted-foreground", label: "낮음" },
+  medium: { color: "bg-primary/10 text-primary", label: "보통" },
+  high: { color: "bg-destructive/10 text-destructive", label: "높음" },
 };
 
 export function TaskPanel({ tasks, nodes, onAddTask, onUpdateTask, onGoToNode }: Props) {
@@ -71,7 +71,7 @@ export function TaskPanel({ tasks, nodes, onAddTask, onUpdateTask, onGoToNode }:
             )}
             <div className="flex items-center gap-2 mt-2">
               <Badge variant="secondary" className={cn("text-[10px] h-5", priority.color)}>
-                {task.priority}
+                {priority.label}
               </Badge>
               {task.nodeId && (
                 <Button
@@ -85,7 +85,7 @@ export function TaskPanel({ tasks, nodes, onAddTask, onUpdateTask, onGoToNode }:
                   data-testid={`button-goto-node-${task.nodeId}`}
                 >
                   <ArrowUpRight className="h-3 w-3 mr-1" />
-                  Go to node
+                  노드로 이동
                 </Button>
               )}
             </div>
@@ -99,10 +99,10 @@ export function TaskPanel({ tasks, nodes, onAddTask, onUpdateTask, onGoToNode }:
     <div className="h-full flex flex-col bg-sidebar">
       <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Tasks</h2>
+          <h2 className="font-semibold">할 일</h2>
           <Button size="sm" onClick={onAddTask} data-testid="button-add-task">
             <Plus className="h-4 w-4 mr-1" />
-            Add
+            추가
           </Button>
         </div>
       </div>
@@ -113,7 +113,7 @@ export function TaskPanel({ tasks, nodes, onAddTask, onUpdateTask, onGoToNode }:
             <div className="space-y-2">
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <Flag className="h-3 w-3" />
-                Tagged for Review ({taggedNodes.length})
+                검토 대상 ({taggedNodes.length})
               </h3>
               <div className="space-y-2">
                 {taggedNodes.map((node) => (
@@ -143,7 +143,7 @@ export function TaskPanel({ tasks, nodes, onAddTask, onUpdateTask, onGoToNode }:
           {inProgressTasks.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                In Progress ({inProgressTasks.length})
+                진행 중 ({inProgressTasks.length})
               </h3>
               <div className="space-y-2">
                 {inProgressTasks.map((task) => (
@@ -156,7 +156,7 @@ export function TaskPanel({ tasks, nodes, onAddTask, onUpdateTask, onGoToNode }:
           {pendingTasks.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                To Do ({pendingTasks.length})
+                할 일 ({pendingTasks.length})
               </h3>
               <div className="space-y-2">
                 {pendingTasks.map((task) => (
@@ -169,7 +169,7 @@ export function TaskPanel({ tasks, nodes, onAddTask, onUpdateTask, onGoToNode }:
           {completedTasks.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Completed ({completedTasks.length})
+                완료됨 ({completedTasks.length})
               </h3>
               <div className="space-y-2">
                 {completedTasks.map((task) => (
@@ -184,8 +184,8 @@ export function TaskPanel({ tasks, nodes, onAddTask, onUpdateTask, onGoToNode }:
               <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-muted/50 flex items-center justify-center">
                 <CheckCircle2 className="h-6 w-6 text-muted-foreground/60" />
               </div>
-              <p className="text-sm">No tasks yet</p>
-              <p className="text-xs mt-1">Tag nodes or add tasks to track your work</p>
+              <p className="text-sm">할 일이 없습니다</p>
+              <p className="text-xs mt-1">노드에 태그를 달거나 할 일을 추가하세요</p>
             </div>
           )}
         </div>

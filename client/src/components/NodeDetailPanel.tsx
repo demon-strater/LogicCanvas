@@ -17,10 +17,10 @@ type Props = {
 };
 
 const nodeTypeOptions = [
-  { value: "concept", label: "Concept", icon: Lightbulb },
-  { value: "claim", label: "Claim", icon: FileText },
-  { value: "evidence", label: "Evidence", icon: FileText },
-  { value: "question", label: "Question", icon: HelpCircle },
+  { value: "concept", label: "개념", icon: Lightbulb },
+  { value: "claim", label: "주장", icon: FileText },
+  { value: "evidence", label: "근거", icon: FileText },
+  { value: "question", label: "질문", icon: HelpCircle },
 ];
 
 export function NodeDetailPanel({ node, onClose, onUpdate, onDelete, onToggleTag }: Props) {
@@ -59,7 +59,7 @@ export function NodeDetailPanel({ node, onClose, onUpdate, onDelete, onToggleTag
   return (
     <Card className="h-full flex flex-col border-0 rounded-none">
       <div className="flex items-center justify-between p-4 border-b">
-        <h3 className="font-semibold text-sm">Node Details</h3>
+        <h3 className="font-semibold text-sm">노드 상세</h3>
         <Button variant="ghost" size="icon" onClick={onClose} data-testid="button-close-panel">
           <X className="h-4 w-4" />
         </Button>
@@ -67,17 +67,17 @@ export function NodeDetailPanel({ node, onClose, onUpdate, onDelete, onToggleTag
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">Label</label>
+          <label className="text-xs font-medium text-muted-foreground">라벨</label>
           <Input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            placeholder="Node label..."
+            placeholder="노드 라벨..."
             data-testid="input-node-label"
           />
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">Type</label>
+          <label className="text-xs font-medium text-muted-foreground">유형</label>
           <Select value={nodeType} onValueChange={setNodeType}>
             <SelectTrigger data-testid="select-node-type">
               <SelectValue />
@@ -96,11 +96,11 @@ export function NodeDetailPanel({ node, onClose, onUpdate, onDelete, onToggleTag
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">Content</label>
+          <label className="text-xs font-medium text-muted-foreground">내용</label>
           <Textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="Node content..."
+            placeholder="노드 내용..."
             rows={4}
             className="resize-none"
             data-testid="textarea-node-content"
@@ -109,7 +109,7 @@ export function NodeDetailPanel({ node, onClose, onUpdate, onDelete, onToggleTag
 
         <div className="pt-2 border-t space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Tagged for Investigation</span>
+            <span className="text-xs font-medium text-muted-foreground">검토 태그</span>
             <Badge
               variant={node.isTagged ? "default" : "secondary"}
               className="cursor-pointer"
@@ -118,11 +118,11 @@ export function NodeDetailPanel({ node, onClose, onUpdate, onDelete, onToggleTag
             >
               {node.isTagged ? (
                 <>
-                  <Flag className="h-3 w-3 mr-1" /> Tagged
+                  <Flag className="h-3 w-3 mr-1" /> 태그됨
                 </>
               ) : (
                 <>
-                  <FlagOff className="h-3 w-3 mr-1" /> Not Tagged
+                  <FlagOff className="h-3 w-3 mr-1" /> 태그 없음
                 </>
               )}
             </Badge>
@@ -130,11 +130,11 @@ export function NodeDetailPanel({ node, onClose, onUpdate, onDelete, onToggleTag
 
           {(node.isTagged || tagNote) && (
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Tag Note</label>
+              <label className="text-xs font-medium text-muted-foreground">태그 메모</label>
               <Textarea
                 value={tagNote}
                 onChange={(e) => setTagNote(e.target.value)}
-                placeholder="Add a note for this tag..."
+                placeholder="이 태그에 대한 메모 추가..."
                 rows={2}
                 className="resize-none text-sm"
                 data-testid="textarea-tag-note"
@@ -152,7 +152,7 @@ export function NodeDetailPanel({ node, onClose, onUpdate, onDelete, onToggleTag
           data-testid="button-save-node"
         >
           <Save className="h-4 w-4 mr-2" />
-          Save Changes
+          변경사항 저장
         </Button>
         <Button
           variant="ghost"
@@ -161,7 +161,7 @@ export function NodeDetailPanel({ node, onClose, onUpdate, onDelete, onToggleTag
           data-testid="button-delete-node"
         >
           <Trash2 className="h-4 w-4 mr-2" />
-          Delete Node
+          노드 삭제
         </Button>
       </div>
     </Card>

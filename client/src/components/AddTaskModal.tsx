@@ -42,31 +42,31 @@ export function AddTaskModal({ isOpen, onClose, onSubmit, isLoading }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plus className="h-5 w-5 text-primary" />
-            Add New Task
+            새 할 일 추가
           </DialogTitle>
           <DialogDescription>
-            Create a task to track work related to your document analysis.
+            문서 분석과 관련된 작업을 추적하기 위한 할 일을 만드세요.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Task Title</label>
+            <label className="text-sm font-medium">할 일 제목</label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="What needs to be done?"
+              placeholder="무엇을 해야 하나요?"
               disabled={isLoading}
               data-testid="input-task-title"
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Description (optional)</label>
+            <label className="text-sm font-medium">설명 (선택)</label>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add more details..."
+              placeholder="자세한 내용 추가..."
               rows={3}
               className="resize-none"
               disabled={isLoading}
@@ -75,15 +75,15 @@ export function AddTaskModal({ isOpen, onClose, onSubmit, isLoading }: Props) {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Priority</label>
+            <label className="text-sm font-medium">우선순위</label>
             <Select value={priority} onValueChange={setPriority} disabled={isLoading}>
               <SelectTrigger data-testid="select-task-priority">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="low">낮음</SelectItem>
+                <SelectItem value="medium">보통</SelectItem>
+                <SelectItem value="high">높음</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -96,7 +96,7 @@ export function AddTaskModal({ isOpen, onClose, onSubmit, isLoading }: Props) {
               disabled={isLoading}
               data-testid="button-cancel-task"
             >
-              Cancel
+              취소
             </Button>
             <Button
               type="submit"
@@ -106,12 +106,12 @@ export function AddTaskModal({ isOpen, onClose, onSubmit, isLoading }: Props) {
               {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating...
+                  생성 중...
                 </>
               ) : (
                 <>
                   <Plus className="h-4 w-4 mr-2" />
-                  Create Task
+                  할 일 생성
                 </>
               )}
             </Button>

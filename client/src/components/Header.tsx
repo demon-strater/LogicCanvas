@@ -24,11 +24,11 @@ export function Header({ documentTitle, onMenuClick, nodeCount, edgeCount }: Pro
         </Button>
         <div>
           <h2 className="font-medium text-sm">
-            {documentTitle || "No document selected"}
+            {documentTitle || "문서를 선택하세요"}
           </h2>
           {documentTitle && (
             <p className="text-xs text-muted-foreground">
-              {nodeCount} nodes, {edgeCount} connections
+              노드 {nodeCount}개, 연결 {edgeCount}개
             </p>
           )}
         </div>
