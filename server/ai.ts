@@ -13,8 +13,8 @@ export type GroupDefinition = {
   description: string;
   color: string;
   level: "major" | "medium" | "minor"; // 대그룹, 중그룹, 소그룹
-  monthLabel?: string; // e.g., "12월", "1월"
-  phaseLabel?: string; // e.g., "초기", "중기", "후기"
+  monthStart?: number; // 1-12 for January-December
+  monthEnd?: number; // 1-12 for January-December
   documentIds: number[];
   childGroups?: GroupDefinition[];
 };
@@ -120,46 +120,48 @@ export async function parseDocumentWithAI(content: string): Promise<ParseResult>
   }
 }
 
-const WORKFLOW_ANALYSIS_PROMPT = `You are a project management and business workflow analyst. Given a list of documents, analyze their relationships and organize them into a hierarchical group structure.
+const WORKFLOW_ANALYSIS_PROMPT = `You are a project management and business workflow analyst. Given a list of documents, analyze their relationships and organize them into a hierarchical group structure based on WORKFLOW STAGES (not time phases).
 
-IMPORTANT: Create a 3-level group hierarchy:
-1. **대그룹 (Major Groups)**: Project phases based on timeline
-   - Use time-based labels: "초기 (Early Phase)", "중기 (Mid Phase)", "후기 (Late Phase)"
-   - Or use months: "12월", "1월", "2월", etc.
-   - These show the big picture project flow
+IMPORTANT: Create a 2-level group hierarchy:
+1. **대그룹 (Major Groups)**: Project WORKFLOW STAGES based on typical project management
+   - Examples: "리서치 (Research)", "기획 (Planning)", "설계 (Design)", "실행 (Execution)", "분석 (Analysis)", "보고 (Reporting)"
+   - Group documents by their PURPOSE and FUNCTION in the project
+   - NOT by time (no 초기/중기/후기)
    
-2. **중그룹 (Medium Groups)**: Thematic categories within each phase
-   - Examples: "리서치", "기획", "실행", "분석", "설계"
-   - Group related documents by their purpose
-   
-3. **소그룹 (Minor Groups)**: Specific task clusters (only if needed)
-   - Very detailed sub-categories within medium groups
+2. **중그룹 (Medium Groups)**: Specific sub-categories within each workflow stage
+   - Examples under "리서치": "데스크 리서치", "현장 조사", "인터뷰"
+   - Examples under "기획": "컨셉 개발", "전략 수립"
+
+3. **Timeline Info**: Each group should include which month(s) the work occurred
+   - Use monthStart and monthEnd to indicate timing (1-12)
+   - Groups with similar months should be positioned at similar Y-axis levels
 
 For document relationships:
 - **flow**: Sequential workflow step (A → B)
 - **depends**: B requires/depends on A
 - **related**: Share common topics
-- **parent**: A encompasses/contains B
 
 Respond with valid JSON:
 {
   "relations": [
-    { "sourceId": 1, "targetId": 2, "label": "description", "edgeType": "flow|depends|related|parent" }
+    { "sourceId": 1, "targetId": 2, "label": "description", "edgeType": "flow|depends|related" }
   ],
   "hierarchyLevels": { "1": 0, "2": 1 },
   "groups": [
     {
-      "name": "초기 (12월)",
-      "description": "프로젝트 초기 단계",
+      "name": "리서치",
+      "description": "조사 및 데이터 수집 단계",
       "level": "major",
-      "monthLabel": "12월",
-      "phaseLabel": "초기",
+      "monthStart": 12,
+      "monthEnd": 1,
       "documentIds": [],
       "childGroups": [
         {
-          "name": "리서치",
-          "description": "초기 조사 및 분석",
+          "name": "데스크 리서치",
+          "description": "문헌 및 데이터 조사",
           "level": "medium",
+          "monthStart": 12,
+          "monthEnd": 12,
           "documentIds": [1, 2],
           "childGroups": []
         }
@@ -170,12 +172,13 @@ Respond with valid JSON:
 }
 
 Guidelines:
-- ALWAYS create at least major groups based on project timeline/phases
+- MAJOR groups = WORKFLOW STAGES (리서치, 기획, 설계, 실행, 분석, 보고 등)
 - Place EVERY document into exactly one group (at any level)
-- Analyze dates, timestamps, or content to determine which phase each document belongs to
+- Analyze content to determine workflow stage, and dates to determine month
 - Use Korean labels for groups
-- Major groups should show clear project progression (left to right = time flow)
-- If no clear timeline, use logical phases: 준비, 실행, 마무리`;
+- Groups that work in parallel (same months) should have similar monthStart/monthEnd
+- X-axis = workflow stage order (리서치 left → 보고 right)
+- Y-axis = similar timing (groups with overlapping months at similar heights)`;
 
 const GROUP_COLORS = [
   "#6366f1", // indigo

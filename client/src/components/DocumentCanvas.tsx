@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DocumentBox } from "./DocumentBox";
 import { GroupBox } from "./GroupBox";
+import { TimelineHeader } from "./TimelineHeader";
 import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Document, DocumentEdge, DocumentGroup, GroupEdge } from "@shared/schema";
@@ -303,6 +304,27 @@ export function DocumentCanvas({
             backgroundSize: "40px 40px",
           }}
         />
+
+        {/* Timeline header showing months - dynamic based on group data */}
+        {(() => {
+          // Calculate month range from groups
+          const months = groups
+            .filter(g => g.monthStart || g.monthEnd)
+            .flatMap(g => [g.monthStart, g.monthEnd].filter(Boolean) as number[]);
+          const startMonth = months.length > 0 ? Math.min(...months) : 12;
+          const endMonth = months.length > 0 ? Math.max(...months) + 1 : 14;
+          
+          return (
+            <TimelineHeader
+              startMonth={startMonth}
+              endMonth={endMonth > startMonth ? endMonth : startMonth + 3}
+              year={2025}
+              canvasWidth={canvasWidth}
+              monthWidth={500}
+              offsetX={150}
+            />
+          );
+        })()}
 
         <svg
           className="absolute inset-0 pointer-events-none"
