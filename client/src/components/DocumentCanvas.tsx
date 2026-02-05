@@ -304,7 +304,7 @@ export function DocumentCanvas({
 
         {/* Timeline header showing months - dynamic based on group data */}
         {(() => {
-          // Calculate month range from groups
+          // Calculate month range from groups (or use defaults 12월~2월)
           const months = groups
             .filter(g => g.monthStart || g.monthEnd)
             .flatMap(g => [g.monthStart, g.monthEnd].filter(Boolean) as number[]);
@@ -317,6 +317,7 @@ export function DocumentCanvas({
               endMonth={endMonth > startMonth ? endMonth : startMonth + 3}
               year={2025}
               canvasWidth={canvasWidth}
+              canvasHeight={canvasHeight}
               monthWidth={500}
               offsetX={150}
             />
