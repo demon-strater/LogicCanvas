@@ -701,7 +701,7 @@ export async function registerRoutes(
       const GROUP_GAP = 600;
       const GROUP_GAP_Y = 500; // Vertical gap between groups
       const CANVAS_START_X = 500;
-      const CANVAS_START_Y = 500;
+      const CANVAS_START_Y = 200; // Moved up from 500
 
       // Build connection map for documents
       const docConnections: Record<number, Set<number>> = {};
