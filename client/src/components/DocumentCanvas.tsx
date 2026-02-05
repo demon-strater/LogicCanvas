@@ -1,27 +1,47 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DocumentBox } from "./DocumentBox";
-import type { Document, DocumentEdge } from "@shared/schema";
+import { GroupBox } from "./GroupBox";
+import type { Document, DocumentEdge, DocumentGroup, GroupEdge } from "@shared/schema";
 
 type Props = {
   documents: Document[];
   edges: DocumentEdge[];
+  groups: DocumentGroup[];
+  groupEdges: GroupEdge[];
   selectedDocumentId: number | null;
+  selectedGroupId: number | null;
+  expandedGroups: Set<number>;
   onSelectDocument: (id: number | null) => void;
+  onSelectGroup: (id: number | null) => void;
+  onToggleGroupExpand: (id: number) => void;
   onClickDocument: (id: number) => void;
   onUpdateDocumentPosition: (id: number, x: number, y: number, prevX?: number, prevY?: number) => void;
+  onUpdateGroupPosition: (id: number, x: number, y: number, prevX?: number, prevY?: number) => void;
+  onEditGroup: (id: number) => void;
+  onDeleteGroup: (id: number) => void;
 };
 
 export function DocumentCanvas({
   documents,
   edges = [],
+  groups = [],
+  groupEdges = [],
   selectedDocumentId,
+  selectedGroupId,
+  expandedGroups,
   onSelectDocument,
+  onSelectGroup,
+  onToggleGroupExpand,
   onClickDocument,
   onUpdateDocumentPosition,
+  onUpdateGroupPosition,
+  onEditGroup,
+  onDeleteGroup,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [docPositions, setDocPositions] = useState<Record<number, { x: number; y: number }>>({});
+  const [groupPositions, setGroupPositions] = useState<Record<number, { x: number; y: number }>>({});
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -46,40 +66,74 @@ export function DocumentCanvas({
     };
   }, []);
 
-  const getDocumentPosition = useCallback((doc: Document, index: number) => {
+  const getDocumentPosition = useCallback((doc: Document, index: number, width: number) => {
     if (doc.x && doc.y && (doc.x !== 100 || doc.y !== 100)) {
       return { x: doc.x, y: doc.y };
     }
-    const cols = Math.max(1, Math.floor((dimensions.width - 100) / 320));
+    const cols = Math.max(1, Math.floor((width - 100) / 320));
     const row = Math.floor(index / cols);
     const col = index % cols;
     return {
       x: 180 + col * 320,
       y: 120 + row * 200,
     };
-  }, [dimensions]);
+  }, []);
 
   useEffect(() => {
     const positions: Record<number, { x: number; y: number }> = {};
     documents.forEach((doc, index) => {
-      positions[doc.id] = getDocumentPosition(doc, index);
+      positions[doc.id] = getDocumentPosition(doc, index, dimensions.width);
     });
     setDocPositions(positions);
-  }, [documents, getDocumentPosition]);
+  }, [documents, dimensions.width, getDocumentPosition]);
+
+  const getGroupPosition = useCallback((group: DocumentGroup, index: number) => {
+    if (group.x && group.y && (group.x !== 100 || group.y !== 100)) {
+      return { x: group.x, y: group.y };
+    }
+    return {
+      x: 150 + index * 400,
+      y: 150,
+    };
+  }, []);
+
+  useEffect(() => {
+    const positions: Record<number, { x: number; y: number }> = {};
+    groups.forEach((group, index) => {
+      positions[group.id] = getGroupPosition(group, index);
+    });
+    setGroupPositions(positions);
+  }, [groups, getGroupPosition]);
 
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent) => {
       if (e.target === e.currentTarget) {
         onSelectDocument(null);
+        onSelectGroup(null);
       }
     },
-    [onSelectDocument]
+    [onSelectDocument, onSelectGroup]
   );
 
   const handleLocalPositionUpdate = (id: number, x: number, y: number, prevX: number, prevY: number) => {
     setDocPositions(prev => ({ ...prev, [id]: { x, y } }));
     onUpdateDocumentPosition(id, x, y, prevX, prevY);
   };
+
+  const handleGroupPositionUpdate = (id: number, x: number, y: number, prevX: number, prevY: number) => {
+    setGroupPositions(prev => ({ ...prev, [id]: { x, y } }));
+    onUpdateGroupPosition(id, x, y, prevX, prevY);
+  };
+
+  const getDocumentsInGroup = (groupId: number) => {
+    return documents.filter(doc => doc.groupId === groupId);
+  };
+
+  const getChildGroups = (parentId: number) => {
+    return groups.filter(g => g.parentId === parentId);
+  };
+
+  const ungroupedDocuments = documents.filter(doc => !doc.groupId);
 
   const getEdgeColor = (edgeType: string) => {
     switch (edgeType) {
@@ -90,8 +144,9 @@ export function DocumentCanvas({
     }
   };
 
-  const canvasWidth = Math.max(dimensions.width, ...Object.values(docPositions).map(p => p.x + 200), 1200);
-  const canvasHeight = Math.max(dimensions.height, ...Object.values(docPositions).map(p => p.y + 200), 800);
+  const allPositions = [...Object.values(docPositions), ...Object.values(groupPositions)];
+  const canvasWidth = Math.max(dimensions.width, ...allPositions.map(p => p.x + 400), 1200);
+  const canvasHeight = Math.max(dimensions.height, ...allPositions.map(p => p.y + 300), 800);
 
   return (
     <div
@@ -224,8 +279,29 @@ export function DocumentCanvas({
         })}
       </svg>
 
-      {documents.map((doc, index) => {
-        const pos = docPositions[doc.id] || getDocumentPosition(doc, index);
+      {groups.filter(g => !g.parentId).map((group, index) => {
+        const pos = groupPositions[group.id] || getGroupPosition(group, index);
+        return (
+          <GroupBox
+            key={`group-${group.id}`}
+            group={group}
+            documents={getDocumentsInGroup(group.id)}
+            childGroups={getChildGroups(group.id)}
+            x={pos.x}
+            y={pos.y}
+            isSelected={selectedGroupId === group.id}
+            isExpanded={expandedGroups?.has(group.id) || false}
+            onSelect={onSelectGroup}
+            onToggleExpand={onToggleGroupExpand}
+            onDragEnd={handleGroupPositionUpdate}
+            onEdit={onEditGroup}
+            onDelete={onDeleteGroup}
+          />
+        );
+      })}
+
+      {ungroupedDocuments.map((doc, index) => {
+        const pos = docPositions[doc.id] || getDocumentPosition(doc, index, dimensions.width);
         return (
           <DocumentBox
             key={doc.id}

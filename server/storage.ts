@@ -1,7 +1,7 @@
 import { db } from "./db";
-import { documents, nodes, edges, tasks, users, documentEdges } from "@shared/schema";
-import { eq, desc, or } from "drizzle-orm";
-import type { Document, InsertDocument, Node, InsertNode, Edge, InsertEdge, Task, InsertTask, User, InsertUser, DocumentEdge, InsertDocumentEdge } from "@shared/schema";
+import { documents, nodes, edges, tasks, users, documentEdges, documentGroups, groupEdges } from "@shared/schema";
+import { eq, desc, or, isNull } from "drizzle-orm";
+import type { Document, InsertDocument, Node, InsertNode, Edge, InsertEdge, Task, InsertTask, User, InsertUser, DocumentEdge, InsertDocumentEdge, DocumentGroup, InsertDocumentGroup, GroupEdge, InsertGroupEdge } from "@shared/schema";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -39,6 +39,17 @@ export interface IStorage {
   createDocumentEdges(edgesData: InsertDocumentEdge[]): Promise<DocumentEdge[]>;
   deleteDocumentEdgesByDoc(docId: number): Promise<void>;
   clearAllDocumentEdges(): Promise<void>;
+
+  getAllGroups(): Promise<DocumentGroup[]>;
+  getGroup(id: number): Promise<DocumentGroup | undefined>;
+  createGroup(group: InsertDocumentGroup): Promise<DocumentGroup>;
+  updateGroup(id: number, updates: Partial<DocumentGroup>): Promise<DocumentGroup | undefined>;
+  deleteGroup(id: number): Promise<void>;
+
+  getAllGroupEdges(): Promise<GroupEdge[]>;
+  createGroupEdge(edge: InsertGroupEdge): Promise<GroupEdge>;
+  createGroupEdges(edgesData: InsertGroupEdge[]): Promise<GroupEdge[]>;
+  clearAllGroupEdges(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -181,6 +192,49 @@ export class DatabaseStorage implements IStorage {
 
   async clearAllDocumentEdges(): Promise<void> {
     await db.delete(documentEdges);
+  }
+
+  async getAllGroups(): Promise<DocumentGroup[]> {
+    return db.select().from(documentGroups).orderBy(desc(documentGroups.createdAt));
+  }
+
+  async getGroup(id: number): Promise<DocumentGroup | undefined> {
+    const [group] = await db.select().from(documentGroups).where(eq(documentGroups.id, id));
+    return group;
+  }
+
+  async createGroup(group: InsertDocumentGroup): Promise<DocumentGroup> {
+    const [created] = await db.insert(documentGroups).values(group).returning();
+    return created;
+  }
+
+  async updateGroup(id: number, updates: Partial<DocumentGroup>): Promise<DocumentGroup | undefined> {
+    const [updated] = await db.update(documentGroups).set(updates).where(eq(documentGroups.id, id)).returning();
+    return updated;
+  }
+
+  async deleteGroup(id: number): Promise<void> {
+    await db.update(documents).set({ groupId: null }).where(eq(documents.groupId, id));
+    await db.update(documentGroups).set({ parentId: null }).where(eq(documentGroups.parentId, id));
+    await db.delete(documentGroups).where(eq(documentGroups.id, id));
+  }
+
+  async getAllGroupEdges(): Promise<GroupEdge[]> {
+    return db.select().from(groupEdges);
+  }
+
+  async createGroupEdge(edge: InsertGroupEdge): Promise<GroupEdge> {
+    const [created] = await db.insert(groupEdges).values(edge).returning();
+    return created;
+  }
+
+  async createGroupEdges(edgesData: InsertGroupEdge[]): Promise<GroupEdge[]> {
+    if (edgesData.length === 0) return [];
+    return db.insert(groupEdges).values(edgesData).returning();
+  }
+
+  async clearAllGroupEdges(): Promise<void> {
+    await db.delete(groupEdges);
   }
 }
 

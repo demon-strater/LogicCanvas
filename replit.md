@@ -45,10 +45,21 @@ The backend provides:
 Core entities:
 - `documents`: Source content that gets parsed, with x/y position data for canvas placement
 - `documentEdges`: Relationships between documents (flow, depends, related, parent types)
+- `documentGroups`: Hierarchical groups to organize documents (name, description, parentId, color, x/y position)
+- `groupEdges`: Relationships between groups (similar to documentEdges)
 - `nodes`: Extracted concepts with position, type, and tagging
 - `edges`: Relationships between nodes (related, supports, contradicts, implies)
 - `tasks`: Work items linked to documents
 - `users`: Authentication support (prepared for future use)
+
+### Group System
+Documents can be organized into hierarchical groups:
+- Groups can have a parent group (parentId) creating nested hierarchies
+- Each group has a color for visual distinction (10 preset colors available)
+- Groups are rendered as boxes on the canvas that can be expanded/collapsed
+- Documents can belong to a group via groupId field
+- Ungrouped documents are displayed directly on the canvas root level
+- Groups support drag-and-drop positioning with Ctrl+Z undo support
 
 ### AI Integration
 - **Provider**: OpenAI API (via Replit AI Integrations)

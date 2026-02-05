@@ -7,14 +7,16 @@ import { Header } from "@/components/Header";
 import { DocumentCanvas } from "@/components/DocumentCanvas";
 import { DocumentInputModal } from "@/components/DocumentInputModal";
 import { DocumentViewModal } from "@/components/DocumentViewModal";
+import { GroupInputModal } from "@/components/GroupInputModal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Wand2 } from "lucide-react";
+import { Plus, Wand2, FolderPlus } from "lucide-react";
 
-import type { Document, DocumentEdge } from "@shared/schema";
+import type { Document, DocumentEdge, DocumentGroup, GroupEdge } from "@shared/schema";
 
 type PositionHistoryItem = {
   id: number;
+  type: "document" | "group";
   prevX: number;
   prevY: number;
 };
@@ -22,8 +24,12 @@ type PositionHistoryItem = {
 export default function Canvas() {
   const { toast } = useToast();
   const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
   const [viewingDocumentId, setViewingDocumentId] = useState<number | null>(null);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<DocumentGroup | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
   const positionHistoryRef = useRef<PositionHistoryItem[]>([]);
 
   const { data: documents = [], isLoading: isLoadingDocuments } = useQuery<Document[]>({
@@ -32,6 +38,14 @@ export default function Canvas() {
 
   const { data: documentEdges = [] } = useQuery<DocumentEdge[]>({
     queryKey: ["/api/document-edges"],
+  });
+
+  const { data: groups = [] } = useQuery<DocumentGroup[]>({
+    queryKey: ["/api/groups"],
+  });
+
+  const { data: groupEdges = [] } = useQuery<GroupEdge[]>({
+    queryKey: ["/api/group-edges"],
   });
 
   const viewingDocument = documents.find((d) => d.id === viewingDocumentId) || null;
@@ -91,8 +105,52 @@ export default function Canvas() {
     },
   });
 
+  const createGroupMutation = useMutation({
+    mutationFn: async ({ name, description, parentId, color }: { name: string; description: string; parentId: number | null; color: string }) => {
+      const response = await apiRequest("POST", "/api/groups", { name, description, parentId, color });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      setIsGroupModalOpen(false);
+      setEditingGroup(null);
+      toast({ title: "그룹이 생성되었습니다" });
+    },
+    onError: () => {
+      toast({ title: "오류", description: "그룹 생성에 실패했습니다.", variant: "destructive" });
+    },
+  });
+
+  const updateGroupMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: number; updates: Partial<DocumentGroup> }) => {
+      await apiRequest("PATCH", `/api/groups/${id}`, updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      setIsGroupModalOpen(false);
+      setEditingGroup(null);
+    },
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/groups/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      toast({ title: "그룹이 삭제되었습니다" });
+    },
+  });
+
   const handleSelectDocument = useCallback((id: number | null) => {
     setSelectedDocumentId(id);
+    if (id !== null) setSelectedGroupId(null);
+  }, []);
+
+  const handleSelectGroup = useCallback((id: number | null) => {
+    setSelectedGroupId(id);
+    if (id !== null) setSelectedDocumentId(null);
   }, []);
 
   const handleClickDocument = useCallback((id: number) => {
@@ -102,7 +160,7 @@ export default function Canvas() {
   const handleUpdateDocumentPosition = useCallback(
     (id: number, x: number, y: number, prevX?: number, prevY?: number) => {
       if (prevX !== undefined && prevY !== undefined) {
-        positionHistoryRef.current.push({ id, prevX, prevY });
+        positionHistoryRef.current.push({ id, type: "document", prevX, prevY });
         if (positionHistoryRef.current.length > 50) {
           positionHistoryRef.current.shift();
         }
@@ -112,16 +170,68 @@ export default function Canvas() {
     [updateDocumentMutation]
   );
 
+  const handleUpdateGroupPosition = useCallback(
+    (id: number, x: number, y: number, prevX?: number, prevY?: number) => {
+      if (prevX !== undefined && prevY !== undefined) {
+        positionHistoryRef.current.push({ id, type: "group", prevX, prevY });
+        if (positionHistoryRef.current.length > 50) {
+          positionHistoryRef.current.shift();
+        }
+      }
+      updateGroupMutation.mutate({ id, updates: { x, y } });
+    },
+    [updateGroupMutation]
+  );
+
+  const handleToggleGroupExpand = useCallback((id: number) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleEditGroup = useCallback((id: number) => {
+    const group = groups.find(g => g.id === id);
+    if (group) {
+      setEditingGroup(group);
+      setIsGroupModalOpen(true);
+    }
+  }, [groups]);
+
+  const handleDeleteGroup = useCallback((id: number) => {
+    deleteGroupMutation.mutate(id);
+  }, [deleteGroupMutation]);
+
+  const handleGroupSubmit = useCallback((name: string, description: string, parentId: number | null, color: string) => {
+    if (editingGroup) {
+      updateGroupMutation.mutate({ id: editingGroup.id, updates: { name, description, parentId, color } });
+    } else {
+      createGroupMutation.mutate({ name, description, parentId, color });
+    }
+  }, [editingGroup, createGroupMutation, updateGroupMutation]);
+
   const handleUndo = useCallback(() => {
     const lastAction = positionHistoryRef.current.pop();
     if (lastAction) {
-      updateDocumentMutation.mutate({ 
-        id: lastAction.id, 
-        updates: { x: lastAction.prevX, y: lastAction.prevY } 
-      });
+      if (lastAction.type === "document") {
+        updateDocumentMutation.mutate({ 
+          id: lastAction.id, 
+          updates: { x: lastAction.prevX, y: lastAction.prevY } 
+        });
+      } else {
+        updateGroupMutation.mutate({ 
+          id: lastAction.id, 
+          updates: { x: lastAction.prevX, y: lastAction.prevY } 
+        });
+      }
       toast({ title: "실행 취소됨" });
     }
-  }, [updateDocumentMutation, toast]);
+  }, [updateDocumentMutation, updateGroupMutation, toast]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -161,10 +271,19 @@ export default function Canvas() {
           <DocumentCanvas
             documents={documents}
             edges={documentEdges}
+            groups={groups}
+            groupEdges={groupEdges}
             selectedDocumentId={selectedDocumentId}
+            selectedGroupId={selectedGroupId}
+            expandedGroups={expandedGroups}
             onSelectDocument={handleSelectDocument}
+            onSelectGroup={handleSelectGroup}
+            onToggleGroupExpand={handleToggleGroupExpand}
             onClickDocument={handleClickDocument}
             onUpdateDocumentPosition={handleUpdateDocumentPosition}
+            onUpdateGroupPosition={handleUpdateGroupPosition}
+            onEditGroup={handleEditGroup}
+            onDeleteGroup={handleDeleteGroup}
           />
         )}
 
@@ -182,6 +301,19 @@ export default function Canvas() {
               {analyzeWorkflowMutation.isPending ? "분석 중..." : "자동 정렬"}
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="lg"
+            className="shadow-lg bg-card"
+            onClick={() => {
+              setEditingGroup(null);
+              setIsGroupModalOpen(true);
+            }}
+            data-testid="button-add-group"
+          >
+            <FolderPlus className="h-5 w-5 mr-2" />
+            새 그룹
+          </Button>
           <Button
             size="lg"
             className="shadow-lg"
@@ -206,6 +338,18 @@ export default function Canvas() {
         isOpen={viewingDocumentId !== null}
         onClose={() => setViewingDocumentId(null)}
         onDelete={handleDeleteDocument}
+      />
+
+      <GroupInputModal
+        isOpen={isGroupModalOpen}
+        onClose={() => {
+          setIsGroupModalOpen(false);
+          setEditingGroup(null);
+        }}
+        onSubmit={handleGroupSubmit}
+        isLoading={createGroupMutation.isPending || updateGroupMutation.isPending}
+        groups={groups}
+        editingGroup={editingGroup}
       />
     </div>
   );

@@ -24,6 +24,7 @@ export const documents = pgTable("documents", {
   title: text("title").notNull(),
   content: text("content").notNull(),
   summary: text("summary"),
+  groupId: integer("group_id"), // Reference to document group (nullable)
   x: integer("x").notNull().default(100),
   y: integer("y").notNull().default(100),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -101,6 +102,44 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
 
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type Task = typeof tasks.$inferSelect;
+
+// Document groups - hierarchical containers for organizing documents
+export const documentGroups = pgTable("document_groups", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  parentId: integer("parent_id"), // Self-reference for hierarchy
+  x: integer("x").notNull().default(100),
+  y: integer("y").notNull().default(100),
+  color: text("color").default("#6366f1"), // Group color for visual distinction
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertDocumentGroupSchema = createInsertSchema(documentGroups).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertDocumentGroup = z.infer<typeof insertDocumentGroupSchema>;
+export type DocumentGroup = typeof documentGroups.$inferSelect;
+
+// Group edges - relationships between groups for workflow visualization
+export const groupEdges = pgTable("group_edges", {
+  id: serial("id").primaryKey(),
+  sourceGroupId: integer("source_group_id").notNull().references(() => documentGroups.id, { onDelete: "cascade" }),
+  targetGroupId: integer("target_group_id").notNull().references(() => documentGroups.id, { onDelete: "cascade" }),
+  label: text("label"),
+  edgeType: text("edge_type").notNull().default("flow"), // flow, depends, related
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertGroupEdgeSchema = createInsertSchema(groupEdges).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertGroupEdge = z.infer<typeof insertGroupEdgeSchema>;
+export type GroupEdge = typeof groupEdges.$inferSelect;
 
 // Document edges - relationships between documents for workflow visualization
 export const documentEdges = pgTable("document_edges", {

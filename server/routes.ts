@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { parseDocumentWithAI, analyzeDocumentWorkflow } from "./ai";
-import { insertDocumentSchema, insertNodeSchema, insertEdgeSchema, insertTaskSchema } from "@shared/schema";
+import { insertDocumentSchema, insertNodeSchema, insertEdgeSchema, insertTaskSchema, insertDocumentGroupSchema } from "@shared/schema";
 import { z } from "zod";
 
 // Update schemas using insert schemas as base, omitting immutable fields
@@ -38,8 +38,18 @@ const documentUpdateSchema = insertDocumentSchema.pick({
   title: true,
   content: true,
   summary: true,
+  groupId: true,
   x: true,
   y: true,
+}).partial();
+
+const groupUpdateSchema = insertDocumentGroupSchema.pick({
+  name: true,
+  description: true,
+  parentId: true,
+  x: true,
+  y: true,
+  color: true,
 }).partial();
 
 export async function registerRoutes(
@@ -386,6 +396,89 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching document edges:", error);
       res.status(500).json({ error: "Failed to fetch document edges" });
+    }
+  });
+
+  // Document Groups
+  app.get("/api/groups", async (req, res) => {
+    try {
+      const groups = await storage.getAllGroups();
+      res.json(groups);
+    } catch (error) {
+      console.error("Error fetching groups:", error);
+      res.status(500).json({ error: "Failed to fetch groups" });
+    }
+  });
+
+  app.get("/api/groups/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const group = await storage.getGroup(id);
+      if (!group) {
+        return res.status(404).json({ error: "Group not found" });
+      }
+      res.json(group);
+    } catch (error) {
+      console.error("Error fetching group:", error);
+      res.status(500).json({ error: "Failed to fetch group" });
+    }
+  });
+
+  app.post("/api/groups", async (req, res) => {
+    try {
+      const groupInput = insertDocumentGroupSchema.safeParse(req.body);
+      
+      if (!groupInput.success) {
+        return res.status(400).json({ error: groupInput.error.errors[0].message });
+      }
+
+      const group = await storage.createGroup(groupInput.data);
+      res.json(group);
+    } catch (error) {
+      console.error("Error creating group:", error);
+      res.status(500).json({ error: "Failed to create group" });
+    }
+  });
+
+  app.patch("/api/groups/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updateInput = groupUpdateSchema.safeParse(req.body);
+      
+      if (!updateInput.success) {
+        return res.status(400).json({ error: updateInput.error.errors[0].message });
+      }
+
+      const group = await storage.updateGroup(id, updateInput.data);
+      if (!group) {
+        return res.status(404).json({ error: "Group not found" });
+      }
+      res.json(group);
+    } catch (error) {
+      console.error("Error updating group:", error);
+      res.status(500).json({ error: "Failed to update group" });
+    }
+  });
+
+  app.delete("/api/groups/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteGroup(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting group:", error);
+      res.status(500).json({ error: "Failed to delete group" });
+    }
+  });
+
+  // Group Edges
+  app.get("/api/group-edges", async (req, res) => {
+    try {
+      const edges = await storage.getAllGroupEdges();
+      res.json(edges);
+    } catch (error) {
+      console.error("Error fetching group edges:", error);
+      res.status(500).json({ error: "Failed to fetch group edges" });
     }
   });
 
