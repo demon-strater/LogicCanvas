@@ -543,7 +543,7 @@ export function DocumentCanvas({
         year={2025}
         canvasWidth={canvasWidth}
         canvasHeight={canvasHeight}
-        monthWidth={1600}
+        monthWidth={2000}
         offsetX={150}
         zoom={zoom}
         panX={pan.x}
@@ -554,7 +554,7 @@ export function DocumentCanvas({
         startMonth={timelineStartMonth}
         endMonth={timelineEndMonth}
         year={2025}
-        monthWidth={1600}
+        monthWidth={2000}
         offsetX={150}
         zoom={zoom}
         panX={pan.x}
