@@ -10,7 +10,7 @@ type Props = {
   isSelected: boolean;
   onSelect: (id: number) => void;
   onClick: (id: number) => void;
-  onDragEnd: (id: number, x: number, y: number) => void;
+  onDragEnd: (id: number, x: number, y: number, prevX: number, prevY: number) => void;
 };
 
 export function DocumentBox({
@@ -25,6 +25,7 @@ export function DocumentBox({
   const [isDragging, setIsDragging] = useState(false);
   const [hasDragged, setHasDragged] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
+  const originalPosRef = useRef({ x, y });
   const [currentPos, setCurrentPos] = useState({ x, y });
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +57,7 @@ export function DocumentBox({
       onSelect(document.id);
       setIsDragging(true);
       setHasDragged(false);
+      originalPosRef.current = { x: currentPos.x, y: currentPos.y };
       dragStartRef.current = { x: e.clientX - currentPos.x, y: e.clientY - currentPos.y };
     },
     [document.id, currentPos, onSelect]
@@ -74,7 +76,13 @@ export function DocumentBox({
     const handleMouseUp = () => {
       setIsDragging(false);
       if (hasDragged) {
-        onDragEnd(document.id, currentPos.x, currentPos.y);
+        onDragEnd(
+          document.id, 
+          currentPos.x, 
+          currentPos.y, 
+          originalPosRef.current.x, 
+          originalPosRef.current.y
+        );
       }
     };
 

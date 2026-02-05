@@ -8,7 +8,7 @@ type Props = {
   selectedDocumentId: number | null;
   onSelectDocument: (id: number | null) => void;
   onClickDocument: (id: number) => void;
-  onUpdateDocumentPosition: (id: number, x: number, y: number) => void;
+  onUpdateDocumentPosition: (id: number, x: number, y: number, prevX?: number, prevY?: number) => void;
 };
 
 export function DocumentCanvas({
@@ -76,9 +76,9 @@ export function DocumentCanvas({
     [onSelectDocument]
   );
 
-  const handleLocalPositionUpdate = (id: number, x: number, y: number) => {
+  const handleLocalPositionUpdate = (id: number, x: number, y: number, prevX: number, prevY: number) => {
     setDocPositions(prev => ({ ...prev, [id]: { x, y } }));
-    onUpdateDocumentPosition(id, x, y);
+    onUpdateDocumentPosition(id, x, y, prevX, prevY);
   };
 
   const getEdgeColor = (edgeType: string) => {

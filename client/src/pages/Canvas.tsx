@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -13,11 +13,18 @@ import { Plus, Wand2 } from "lucide-react";
 
 import type { Document, DocumentEdge } from "@shared/schema";
 
+type PositionHistoryItem = {
+  id: number;
+  prevX: number;
+  prevY: number;
+};
+
 export default function Canvas() {
   const { toast } = useToast();
   const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null);
   const [viewingDocumentId, setViewingDocumentId] = useState<number | null>(null);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const positionHistoryRef = useRef<PositionHistoryItem[]>([]);
 
   const { data: documents = [], isLoading: isLoadingDocuments } = useQuery<Document[]>({
     queryKey: ["/api/documents"],
@@ -93,11 +100,39 @@ export default function Canvas() {
   }, []);
 
   const handleUpdateDocumentPosition = useCallback(
-    (id: number, x: number, y: number) => {
+    (id: number, x: number, y: number, prevX?: number, prevY?: number) => {
+      if (prevX !== undefined && prevY !== undefined) {
+        positionHistoryRef.current.push({ id, prevX, prevY });
+        if (positionHistoryRef.current.length > 50) {
+          positionHistoryRef.current.shift();
+        }
+      }
       updateDocumentMutation.mutate({ id, updates: { x, y } });
     },
     [updateDocumentMutation]
   );
+
+  const handleUndo = useCallback(() => {
+    const lastAction = positionHistoryRef.current.pop();
+    if (lastAction) {
+      updateDocumentMutation.mutate({ 
+        id: lastAction.id, 
+        updates: { x: lastAction.prevX, y: lastAction.prevY } 
+      });
+      toast({ title: "실행 취소됨" });
+    }
+  }, [updateDocumentMutation, toast]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        handleUndo();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleUndo]);
 
   const handleDeleteDocument = useCallback(
     (id: number) => {
