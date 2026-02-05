@@ -699,6 +699,7 @@ export async function registerRoutes(
       const GROUP_PADDING = 350;
       const GROUP_HEADER = 200;
       const GROUP_GAP = 600;
+      const GROUP_GAP_Y = 500; // Vertical gap between groups
       const CANVAS_START_X = 500;
       const CANVAS_START_Y = 500;
 
@@ -754,7 +755,7 @@ export async function registerRoutes(
         return { cols, rows };
       };
 
-      // Calculate content size for a group
+      // Calculate content size for a group (child groups are stacked vertically)
       const calculateGroupContentSize = (gId: number): { width: number; height: number } => {
         const docsInGroup = documents.filter(d => d.groupId === gId);
         const children = childrenOf[gId] || [];
@@ -764,25 +765,26 @@ export async function registerRoutes(
         const docWidth = grid.cols * (DOC_WIDTH + DOC_GAP_X) - DOC_GAP_X;
         const docHeight = grid.rows * (DOC_HEIGHT + DOC_GAP_Y) - DOC_GAP_Y;
         
-        // Child groups arranged in grid too
-        const childGrid = getDocGridLayout(children.length);
+        // Child groups are stacked VERTICALLY - sum up all their heights
         let maxChildWidth = 0;
         let totalChildHeight = 0;
         
         for (const child of children) {
           const childSize = calculateGroupContentSize(child.id);
-          maxChildWidth = Math.max(maxChildWidth, childSize.width + GROUP_PADDING * 2);
+          const childGroupWidth = childSize.width + GROUP_PADDING * 2;
+          const childGroupHeight = childSize.height + GROUP_HEADER + GROUP_PADDING;
+          
+          maxChildWidth = Math.max(maxChildWidth, childGroupWidth);
+          totalChildHeight += childGroupHeight + GROUP_GAP_Y;
         }
         
+        // Remove extra gap after last child
         if (children.length > 0) {
-          const childCols = childGrid.cols;
-          const childRows = childGrid.rows;
-          totalChildHeight = childRows * (300 + DOC_GAP_Y);
-          maxChildWidth = childCols * (maxChildWidth + DOC_GAP_X);
+          totalChildHeight -= GROUP_GAP_Y;
         }
 
         const contentWidth = Math.max(docWidth, maxChildWidth, 300);
-        const contentHeight = docHeight + (children.length > 0 ? 30 + totalChildHeight : 0);
+        const contentHeight = docHeight + (children.length > 0 ? 100 + totalChildHeight : 0);
 
         return { 
           width: contentWidth, 
@@ -805,7 +807,6 @@ export async function registerRoutes(
       const TIMELINE_OFFSET_X = 150; // Padding before first month column
       const MONTH_WIDTH = 2000; // Width per month column (ultra wide spacing)
       const TIMELINE_HEADER_HEIGHT = 60; // Height of timeline header
-      const GROUP_GAP_Y = 500; // Vertical gap between groups in same month
       
       // Determine month range from groups
       const monthValues = groups.map(g => getMonthOrder(g)).filter(m => m < 99);
