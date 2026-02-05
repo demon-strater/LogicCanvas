@@ -8,7 +8,8 @@ type Props = {
   canvasHeight: number;
   monthWidth: number;
   offsetX: number;
-  contentOffsetY?: number;
+  zoom: number;
+  panX: number;
 };
 
 export function TimelineHeader({
@@ -19,9 +20,9 @@ export function TimelineHeader({
   canvasHeight,
   monthWidth,
   offsetX,
-  contentOffsetY = 0,
+  zoom,
+  panX,
 }: Props) {
-  const gridStartY = 0;
   const months = useMemo(() => {
     const result = [];
     for (let m = startMonth; m <= endMonth; m++) {
@@ -36,28 +37,27 @@ export function TimelineHeader({
     return result;
   }, [startMonth, endMonth, year]);
 
-  const weekWidth = monthWidth / 4; // 4 weeks per month
+  const scaledMonthWidth = monthWidth * zoom;
+  const scaledOffsetX = offsetX * zoom + panX;
 
   return (
-    <>
-      {/* Timeline header bar */}
+    <div
+      className="absolute top-0 left-0 right-0 h-12 border-b border-border bg-background/95 backdrop-blur-sm overflow-hidden"
+      style={{ zIndex: 100 }}
+    >
       <div
-        className="absolute left-0 flex border-b border-border bg-background/95 backdrop-blur-sm"
+        className="flex h-full"
         style={{
-          top: -50,
-          width: canvasWidth,
-          height: 50,
-          zIndex: 100,
-          paddingLeft: offsetX,
+          transform: `translateX(${scaledOffsetX}px)`,
         }}
       >
         {months.map((m, index) => (
           <div
             key={`${m.year}-${m.month}`}
-            className="flex items-center justify-center border-r border-border/50 text-sm font-medium text-muted-foreground"
+            className="flex items-center justify-center border-r border-border/50 text-sm font-medium text-muted-foreground flex-shrink-0"
             style={{
-              width: monthWidth,
-              minWidth: monthWidth,
+              width: scaledMonthWidth,
+              minWidth: scaledMonthWidth,
             }}
             data-testid={`timeline-month-${m.month}`}
           >
@@ -72,54 +72,88 @@ export function TimelineHeader({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
 
-      {/* Vertical grid lines - SVG overlay */}
-      <svg
-        className="absolute inset-0 pointer-events-none"
-        style={{ width: canvasWidth, height: canvasHeight, zIndex: 1 }}
-      >
-        {months.map((m, monthIndex) => {
-          const monthX = offsetX + monthIndex * monthWidth;
-          return (
-            <g key={`grid-${m.year}-${m.month}`}>
-              {/* Month start line - solid, more visible */}
+type GridLinesProps = {
+  startMonth: number;
+  endMonth: number;
+  year: number;
+  canvasWidth: number;
+  canvasHeight: number;
+  monthWidth: number;
+  offsetX: number;
+};
+
+export function TimelineGridLines({
+  startMonth,
+  endMonth,
+  year,
+  canvasWidth,
+  canvasHeight,
+  monthWidth,
+  offsetX,
+}: GridLinesProps) {
+  const months = useMemo(() => {
+    const result = [];
+    for (let m = startMonth; m <= endMonth; m++) {
+      const monthNum = ((m - 1) % 12) + 1;
+      const yearOffset = Math.floor((m - 1) / 12);
+      result.push({
+        month: monthNum,
+        year: year + yearOffset,
+        label: `${monthNum}월`,
+      });
+    }
+    return result;
+  }, [startMonth, endMonth, year]);
+
+  const weekWidth = monthWidth / 4;
+
+  return (
+    <svg
+      className="absolute inset-0 pointer-events-none"
+      style={{ width: canvasWidth, height: canvasHeight, zIndex: 1 }}
+    >
+      {months.map((m, monthIndex) => {
+        const monthX = offsetX + monthIndex * monthWidth;
+        return (
+          <g key={`grid-${m.year}-${m.month}`}>
+            <line
+              x1={monthX}
+              y1={0}
+              x2={monthX}
+              y2={canvasHeight}
+              stroke="hsl(var(--border))"
+              strokeWidth="2"
+              strokeOpacity="0.6"
+            />
+            {[1, 2, 3].map((week) => (
               <line
-                x1={monthX}
-                y1={gridStartY}
-                x2={monthX}
+                key={`week-${week}`}
+                x1={monthX + week * weekWidth}
+                y1={0}
+                x2={monthX + week * weekWidth}
                 y2={canvasHeight}
                 stroke="hsl(var(--border))"
-                strokeWidth="2"
-                strokeOpacity="0.6"
+                strokeWidth="1"
+                strokeOpacity="0.2"
+                strokeDasharray="4,4"
               />
-              {/* Week lines - dashed, more transparent */}
-              {[1, 2, 3].map((week) => (
-                <line
-                  key={`week-${week}`}
-                  x1={monthX + week * weekWidth}
-                  y1={gridStartY}
-                  x2={monthX + week * weekWidth}
-                  y2={canvasHeight}
-                  stroke="hsl(var(--border))"
-                  strokeWidth="1"
-                  strokeOpacity="0.2"
-                  strokeDasharray="4,4"
-                />
-              ))}
-            </g>
-          );
-        })}
-        {/* Final month end line */}
-        <line
-          x1={offsetX + months.length * monthWidth}
-          y1={gridStartY}
-          x2={offsetX + months.length * monthWidth}
-          y2={canvasHeight}
-          stroke="hsl(var(--border))"
-          strokeWidth="2"
-          strokeOpacity="0.6"
-        />
-      </svg>
-    </>
+            ))}
+          </g>
+        );
+      })}
+      <line
+        x1={offsetX + months.length * monthWidth}
+        y1={0}
+        x2={offsetX + months.length * monthWidth}
+        y2={canvasHeight}
+        stroke="hsl(var(--border))"
+        strokeWidth="2"
+        strokeOpacity="0.6"
+      />
+    </svg>
   );
 }

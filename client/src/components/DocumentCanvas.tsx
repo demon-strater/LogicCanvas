@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DocumentBox } from "./DocumentBox";
 import { GroupBox } from "./GroupBox";
-import { TimelineHeader } from "./TimelineHeader";
+import { TimelineHeader, TimelineGridLines } from "./TimelineHeader";
 import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Document, DocumentEdge, DocumentGroup, GroupEdge } from "@shared/schema";
@@ -522,6 +522,13 @@ export function DocumentCanvas({
   const canvasWidth = Math.max(dimensions.width / zoom, ...allPositions.map(p => p.x + 400), 1200);
   const canvasHeight = Math.max(dimensions.height / zoom, ...allPositions.map(p => p.y + 300), 800);
 
+  // Calculate month range for timeline
+  const timelineMonths = groups
+    .filter(g => g.monthStart || g.monthEnd)
+    .flatMap(g => [g.monthStart, g.monthEnd].filter(Boolean) as number[]);
+  const timelineStartMonth = timelineMonths.length > 0 ? Math.min(...timelineMonths) : 12;
+  const timelineEndMonth = timelineMonths.length > 0 ? Math.max(...timelineMonths) + 1 : 14;
+
   return (
     <div
       ref={containerRef}
@@ -532,11 +539,24 @@ export function DocumentCanvas({
       onWheel={handleWheel}
       data-testid="document-canvas"
     >
+      {/* Fixed timeline header at top */}
+      <TimelineHeader
+        startMonth={timelineStartMonth}
+        endMonth={timelineEndMonth > timelineStartMonth ? timelineEndMonth : timelineStartMonth + 3}
+        year={2025}
+        canvasWidth={canvasWidth}
+        canvasHeight={canvasHeight}
+        monthWidth={500}
+        offsetX={150}
+        zoom={zoom}
+        panX={pan.x}
+      />
+
       <div
         ref={contentRef}
         className="absolute origin-top-left"
         style={{
-          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transform: `translate(${pan.x}px, ${pan.y + 48}px) scale(${zoom})`,
           width: canvasWidth,
           height: canvasHeight,
         }}
@@ -553,28 +573,16 @@ export function DocumentCanvas({
           }}
         />
 
-        {/* Timeline header showing months - dynamic based on group data */}
-        {(() => {
-          // Calculate month range from groups (or use defaults 12월~2월)
-          const months = groups
-            .filter(g => g.monthStart || g.monthEnd)
-            .flatMap(g => [g.monthStart, g.monthEnd].filter(Boolean) as number[]);
-          const startMonth = months.length > 0 ? Math.min(...months) : 12;
-          const endMonth = months.length > 0 ? Math.max(...months) + 1 : 14;
-          
-          return (
-            <TimelineHeader
-              startMonth={startMonth}
-              endMonth={endMonth > startMonth ? endMonth : startMonth + 3}
-              year={2025}
-              canvasWidth={canvasWidth}
-              canvasHeight={canvasHeight}
-              monthWidth={500}
-              offsetX={150}
-              contentOffsetY={TIMELINE_GAP}
-            />
-          );
-        })()}
+        {/* Timeline grid lines - inside transformed content */}
+        <TimelineGridLines
+          startMonth={timelineStartMonth}
+          endMonth={timelineEndMonth > timelineStartMonth ? timelineEndMonth : timelineStartMonth + 3}
+          year={2025}
+          canvasWidth={canvasWidth}
+          canvasHeight={canvasHeight}
+          monthWidth={500}
+          offsetX={150}
+        />
 
         <svg
           className="absolute inset-0 pointer-events-none"
