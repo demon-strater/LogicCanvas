@@ -306,7 +306,7 @@ export function DocumentCanvas({
 
         <svg
           className="absolute inset-0 pointer-events-none"
-          style={{ width: canvasWidth, height: canvasHeight }}
+          style={{ width: canvasWidth, height: canvasHeight, zIndex: 3 }}
         >
           <defs>
             <marker
