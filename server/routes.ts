@@ -614,28 +614,38 @@ export async function registerRoutes(
     return created;
   }
 
-  // Re-layout existing groups and documents (timeline flow: left to right)
+  // Re-layout existing groups and documents (mind-map style diagram)
   app.post("/api/relayout", async (req, res) => {
     try {
       const groups = await storage.getAllGroups();
       const documents = await storage.getAllDocuments();
+      const documentEdges = await storage.getAllDocumentEdges();
 
       if (groups.length === 0 && documents.length === 0) {
         return res.json({ success: true, message: "정렬할 항목이 없습니다" });
       }
 
-      // Layout constants
+      // Layout constants for mind-map style
       const DOC_WIDTH = 280;
       const DOC_HEIGHT = 140;
-      const DOC_GAP = 20;
-      const GROUP_PADDING = 40;
-      const GROUP_HEADER = 60;
-      const GROUP_GAP = 60;
-      const CHILD_GROUP_GAP = 30;
-      const CANVAS_START_X = 100;
-      const CANVAS_START_Y = 100;
+      const DOC_GAP_X = 80;
+      const DOC_GAP_Y = 60;
+      const GROUP_PADDING = 50;
+      const GROUP_HEADER = 70;
+      const GROUP_GAP = 100;
+      const CANVAS_START_X = 150;
+      const CANVAS_START_Y = 150;
 
-      // Build parent-child relationships
+      // Build connection map for documents
+      const docConnections: Record<number, Set<number>> = {};
+      for (const edge of documentEdges) {
+        if (!docConnections[edge.sourceDocId]) docConnections[edge.sourceDocId] = new Set();
+        if (!docConnections[edge.targetDocId]) docConnections[edge.targetDocId] = new Set();
+        docConnections[edge.sourceDocId].add(edge.targetDocId);
+        docConnections[edge.targetDocId].add(edge.sourceDocId);
+      }
+
+      // Build parent-child relationships for groups
       const groupIdSet = new Set(groups.map(g => g.id));
       const childrenOf: Record<number, typeof groups> = {};
       for (const group of groups) {
@@ -646,131 +656,172 @@ export async function registerRoutes(
       }
 
       // Get phase order for sorting (초기=0, 중기=1, 후기=2)
-      function getPhaseOrder(name: string): number {
+      const getPhaseOrder = (name: string): number => {
         if (name.includes("초기") || name.includes("12월")) return 0;
         if (name.includes("중기") || name.includes("1월")) return 1;
         if (name.includes("후기") || name.includes("2월")) return 2;
         return 3;
-      }
+      };
 
       // Get subgroup order within a phase
-      function getSubgroupOrder(name: string): number {
+      const getSubgroupOrder = (name: string): number => {
         if (name.includes("기획")) return 0;
         if (name.includes("리서치")) return 1;
         if (name.includes("실행")) return 2;
         if (name.includes("협업") || name.includes("커뮤니케이션")) return 3;
         if (name.includes("사업화") || name.includes("모델링")) return 4;
         return 5;
-      }
+      };
 
-      // Calculate content size for a group (documents + child groups)
-      function calculateGroupContentSize(groupId: number): { width: number; height: number; docRows: number } {
-        const docsInGroup = documents.filter(d => d.groupId === groupId);
-        const children = childrenOf[groupId] || [];
+      // Calculate grid layout for documents in a group (spread across X and Y)
+      const getDocGridLayout = (docCount: number): { cols: number; rows: number } => {
+        if (docCount <= 1) return { cols: 1, rows: 1 };
+        if (docCount <= 2) return { cols: 2, rows: 1 };
+        if (docCount <= 4) return { cols: 2, rows: 2 };
+        if (docCount <= 6) return { cols: 3, rows: 2 };
+        const cols = Math.ceil(Math.sqrt(docCount));
+        const rows = Math.ceil(docCount / cols);
+        return { cols, rows };
+      };
+
+      // Calculate content size for a group
+      const calculateGroupContentSize = (gId: number): { width: number; height: number } => {
+        const docsInGroup = documents.filter(d => d.groupId === gId);
+        const children = childrenOf[gId] || [];
         
-        // Documents in single column for clarity
-        const docRows = docsInGroup.length;
-        const docHeight = docRows > 0 ? docRows * (DOC_HEIGHT + DOC_GAP) : 0;
+        // Documents in grid layout
+        const grid = getDocGridLayout(docsInGroup.length);
+        const docWidth = grid.cols * (DOC_WIDTH + DOC_GAP_X) - DOC_GAP_X;
+        const docHeight = grid.rows * (DOC_HEIGHT + DOC_GAP_Y) - DOC_GAP_Y;
         
-        // Child groups arranged horizontally
-        let childrenWidth = 0;
-        let childrenMaxHeight = 0;
+        // Child groups arranged in grid too
+        const childGrid = getDocGridLayout(children.length);
+        let maxChildWidth = 0;
+        let totalChildHeight = 0;
+        
         for (const child of children) {
           const childSize = calculateGroupContentSize(child.id);
-          const childW = childSize.width + GROUP_PADDING * 2;
-          const childH = childSize.height + GROUP_HEADER + GROUP_PADDING;
-          childrenWidth += childW + CHILD_GROUP_GAP;
-          childrenMaxHeight = Math.max(childrenMaxHeight, childH);
+          maxChildWidth = Math.max(maxChildWidth, childSize.width + GROUP_PADDING * 2);
         }
-        if (children.length > 0) childrenWidth -= CHILD_GROUP_GAP;
+        
+        if (children.length > 0) {
+          const childCols = childGrid.cols;
+          const childRows = childGrid.rows;
+          totalChildHeight = childRows * (300 + DOC_GAP_Y);
+          maxChildWidth = childCols * (maxChildWidth + DOC_GAP_X);
+        }
 
-        const contentWidth = Math.max(DOC_WIDTH, childrenWidth);
-        const contentHeight = docHeight + childrenMaxHeight;
+        const contentWidth = Math.max(docWidth, maxChildWidth, 300);
+        const contentHeight = docHeight + (children.length > 0 ? 30 + totalChildHeight : 0);
 
         return { 
-          width: Math.max(300, contentWidth), 
-          height: Math.max(100, contentHeight),
-          docRows 
+          width: contentWidth, 
+          height: Math.max(150, contentHeight)
         };
-      }
+      };
 
-      // Position a group and its contents
-      async function positionGroup(
-        group: typeof groups[0], 
-        startX: number, 
-        startY: number
-      ): Promise<{ width: number; height: number }> {
-        const contentSize = calculateGroupContentSize(group.id);
-        const groupWidth = contentSize.width + GROUP_PADDING * 2;
-        const groupHeight = contentSize.height + GROUP_HEADER + GROUP_PADDING;
-
-        // Position group at center of its bounding box
-        await storage.updateGroup(group.id, { 
-          x: startX + groupWidth / 2, 
-          y: startY + groupHeight / 2 
-        });
-
-        // Position documents in this group (single column, vertical stack)
-        const docsInGroup = documents.filter(d => d.groupId === group.id);
-        let docY = startY + GROUP_HEADER;
-        for (const doc of docsInGroup) {
-          await storage.updateDocument(doc.id, {
-            x: startX + GROUP_PADDING + DOC_WIDTH / 2,
-            y: docY + DOC_HEIGHT / 2
-          });
-          docY += DOC_HEIGHT + DOC_GAP;
-        }
-
-        // Position child groups horizontally below documents
-        const children = childrenOf[group.id] || [];
-        if (children.length > 0) {
-          // Sort children by subgroup order
-          children.sort((a, b) => getSubgroupOrder(a.name) - getSubgroupOrder(b.name));
-          
-          let childX = startX + GROUP_PADDING;
-          const childY = docY + (docsInGroup.length > 0 ? 10 : 0);
-          
-          for (const child of children) {
-            const childResult = await positionGroup(child, childX, childY);
-            childX += childResult.width + CHILD_GROUP_GAP;
-          }
-        }
-
-        return { width: groupWidth, height: groupHeight };
-      }
-
-      // Get top-level groups and sort by phase order (left to right = 초기 → 중기 → 후기)
+      // Get top-level groups and sort by phase order
       const topLevelGroups = groups
         .filter(g => !g.parentId || !groupIdSet.has(g.parentId))
         .sort((a, b) => getPhaseOrder(a.name) - getPhaseOrder(b.name));
 
-      // Position top-level groups horizontally (timeline flow)
-      let currentX = CANVAS_START_X;
-      for (const group of topLevelGroups) {
-        const result = await positionGroup(group, currentX, CANVAS_START_Y);
-        currentX += result.width + GROUP_GAP;
+      // Position top-level groups in a grid layout (not just horizontal)
+      const topGrid = getDocGridLayout(topLevelGroups.length);
+      let groupIndex = 0;
+      
+      for (let row = 0; row < topGrid.rows && groupIndex < topLevelGroups.length; row++) {
+        let currentX = CANVAS_START_X;
+        for (let col = 0; col < topGrid.cols && groupIndex < topLevelGroups.length; col++) {
+          const group = topLevelGroups[groupIndex];
+          
+          // Inline position for this group
+          const contentSize = calculateGroupContentSize(group.id);
+          const groupWidth = contentSize.width + GROUP_PADDING * 2;
+          const groupHeight = contentSize.height + GROUP_HEADER + GROUP_PADDING;
+
+          await storage.updateGroup(group.id, { 
+            x: currentX + groupWidth / 2, 
+            y: CANVAS_START_Y + row * 500 + groupHeight / 2 
+          });
+
+          // Position documents in grid
+          const docsInGroup = documents.filter(d => d.groupId === group.id);
+          const grid = getDocGridLayout(docsInGroup.length);
+          
+          let docIdx = 0;
+          for (let dRow = 0; dRow < grid.rows && docIdx < docsInGroup.length; dRow++) {
+            for (let dCol = 0; dCol < grid.cols && docIdx < docsInGroup.length; dCol++) {
+              const doc = docsInGroup[docIdx];
+              const docX = currentX + GROUP_PADDING + dCol * (DOC_WIDTH + DOC_GAP_X) + DOC_WIDTH / 2;
+              const docY = CANVAS_START_Y + row * 500 + GROUP_HEADER + dRow * (DOC_HEIGHT + DOC_GAP_Y) + DOC_HEIGHT / 2;
+              
+              await storage.updateDocument(doc.id, { x: docX, y: docY });
+              docIdx++;
+            }
+          }
+
+          // Position child groups
+          const children = childrenOf[group.id] || [];
+          if (children.length > 0) {
+            children.sort((a, b) => getSubgroupOrder(a.name) - getSubgroupOrder(b.name));
+            const childStartY = CANVAS_START_Y + row * 500 + GROUP_HEADER + grid.rows * (DOC_HEIGHT + DOC_GAP_Y) + 20;
+            let childX = currentX + GROUP_PADDING;
+            
+            for (const child of children) {
+              const childContentSize = calculateGroupContentSize(child.id);
+              const childGroupWidth = childContentSize.width + GROUP_PADDING * 2;
+              const childGroupHeight = childContentSize.height + GROUP_HEADER + GROUP_PADDING;
+
+              await storage.updateGroup(child.id, { 
+                x: childX + childGroupWidth / 2, 
+                y: childStartY + childGroupHeight / 2 
+              });
+
+              // Position docs in child group
+              const childDocs = documents.filter(d => d.groupId === child.id);
+              const childDocGrid = getDocGridLayout(childDocs.length);
+              let childDocIdx = 0;
+              
+              for (let cdRow = 0; cdRow < childDocGrid.rows && childDocIdx < childDocs.length; cdRow++) {
+                for (let cdCol = 0; cdCol < childDocGrid.cols && childDocIdx < childDocs.length; cdCol++) {
+                  const cdoc = childDocs[childDocIdx];
+                  const cdocX = childX + GROUP_PADDING + cdCol * (DOC_WIDTH + DOC_GAP_X) + DOC_WIDTH / 2;
+                  const cdocY = childStartY + GROUP_HEADER + cdRow * (DOC_HEIGHT + DOC_GAP_Y) + DOC_HEIGHT / 2;
+                  
+                  await storage.updateDocument(cdoc.id, { x: cdocX, y: cdocY });
+                  childDocIdx++;
+                }
+              }
+
+              childX += childGroupWidth + DOC_GAP_X;
+            }
+          }
+
+          currentX += groupWidth + GROUP_GAP;
+          groupIndex++;
+        }
       }
 
-      // Handle ungrouped documents at the bottom
+      // Handle ungrouped documents in a grid at the bottom
       const ungroupedDocs = documents.filter(d => !d.groupId);
       if (ungroupedDocs.length > 0) {
-        let ungroupedX = CANVAS_START_X;
-        let ungroupedY = CANVAS_START_Y + 600;
+        const ungroupedGrid = getDocGridLayout(ungroupedDocs.length);
+        let udIdx = 0;
+        const ungroupedStartY = CANVAS_START_Y + topGrid.rows * 500 + 100;
         
-        for (const doc of ungroupedDocs) {
-          await storage.updateDocument(doc.id, {
-            x: ungroupedX + DOC_WIDTH / 2,
-            y: ungroupedY + DOC_HEIGHT / 2
-          });
-          ungroupedX += DOC_WIDTH + DOC_GAP;
-          if (ungroupedX > CANVAS_START_X + 1200) {
-            ungroupedX = CANVAS_START_X;
-            ungroupedY += DOC_HEIGHT + DOC_GAP;
+        for (let row = 0; row < ungroupedGrid.rows && udIdx < ungroupedDocs.length; row++) {
+          for (let col = 0; col < ungroupedGrid.cols && udIdx < ungroupedDocs.length; col++) {
+            const doc = ungroupedDocs[udIdx];
+            await storage.updateDocument(doc.id, {
+              x: CANVAS_START_X + col * (DOC_WIDTH + DOC_GAP_X) + DOC_WIDTH / 2,
+              y: ungroupedStartY + row * (DOC_HEIGHT + DOC_GAP_Y) + DOC_HEIGHT / 2
+            });
+            udIdx++;
           }
         }
       }
 
-      res.json({ success: true, message: "타임라인 순서로 재정렬되었습니다 (왼쪽→오른쪽: 초기→후기)" });
+      res.json({ success: true, message: "다이어그램 형태로 재정렬되었습니다 (X/Y축 활용)" });
     } catch (error) {
       console.error("Relayout error:", error);
       res.status(500).json({ error: "레이아웃 재정렬 중 오류가 발생했습니다" });
