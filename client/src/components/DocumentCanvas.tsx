@@ -499,6 +499,99 @@ export function DocumentCanvas({
               </g>
             );
           })}
+
+          {/* Group connection lines */}
+          {groupEdges.filter(e => e.edgeType === "flow" || e.edgeType === "depends").map((edge) => {
+            const sourcePos = groupPositions[edge.sourceGroupId];
+            const targetPos = groupPositions[edge.targetGroupId];
+            if (!sourcePos || !targetPos) return null;
+
+            const GROUP_WIDTH = 400;
+            const GROUP_HEIGHT = 300;
+            const HALF_W = GROUP_WIDTH / 2;
+            const HALF_H = GROUP_HEIGHT / 2;
+
+            const sourceCenterX = sourcePos.x;
+            const sourceCenterY = sourcePos.y;
+            const targetCenterX = targetPos.x;
+            const targetCenterY = targetPos.y;
+
+            const dx = targetCenterX - sourceCenterX;
+            const dy = targetCenterY - sourceCenterY;
+            const absDx = Math.abs(dx);
+            const absDy = Math.abs(dy);
+
+            let startX: number, startY: number, endX: number, endY: number;
+
+            if (absDx > absDy) {
+              if (dx > 0) {
+                startX = sourceCenterX + HALF_W;
+                startY = sourceCenterY;
+                endX = targetCenterX - HALF_W;
+                endY = targetCenterY;
+              } else {
+                startX = sourceCenterX - HALF_W;
+                startY = sourceCenterY;
+                endX = targetCenterX + HALF_W;
+                endY = targetCenterY;
+              }
+            } else {
+              if (dy > 0) {
+                startX = sourceCenterX;
+                startY = sourceCenterY + HALF_H;
+                endX = targetCenterX;
+                endY = targetCenterY - HALF_H;
+              } else {
+                startX = sourceCenterX;
+                startY = sourceCenterY - HALF_H;
+                endX = targetCenterX;
+                endY = targetCenterY + HALF_H;
+              }
+            }
+
+            const arrowOffset = 12;
+            const finalDx = endX - startX;
+            const finalDy = endY - startY;
+            const finalDist = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
+            if (finalDist > arrowOffset) {
+              endX = endX - (finalDx / finalDist) * arrowOffset;
+              endY = endY - (finalDy / finalDist) * arrowOffset;
+            }
+
+            const curveOffset = Math.min(80, Math.max(40, finalDist * 0.3));
+            const midX = (startX + endX) / 2;
+            const midY = (startY + endY) / 2;
+            const pathD = `M ${startX} ${startY} Q ${midX} ${midY - curveOffset}, ${endX} ${endY}`;
+
+            const edgeColor = edge.edgeType === "depends" ? "hsl(var(--destructive))" : "hsl(var(--primary))";
+            const markerId = `arrowhead-${edge.edgeType}`;
+
+            return (
+              <g key={`group-edge-${edge.id}`}>
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke={edgeColor}
+                  strokeWidth="3"
+                  strokeOpacity="0.6"
+                  markerEnd={`url(#${markerId})`}
+                  className="transition-opacity"
+                />
+                {edge.label && (
+                  <text
+                    x={midX}
+                    y={midY - curveOffset - 5}
+                    fontSize="11"
+                    fill="hsl(var(--muted-foreground))"
+                    textAnchor="middle"
+                    className="select-none font-medium"
+                  >
+                    {edge.label.length > 25 ? edge.label.slice(0, 25) + "..." : edge.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
         </svg>
 
         {/* Render ALL groups as background containers (parents first for z-index) */}

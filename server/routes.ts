@@ -726,51 +726,65 @@ export async function registerRoutes(
         };
       };
 
-      // Get top-level groups and sort by workflow stage order (X-axis)
+      // Get top-level groups and sort by id for consistent ordering
       const topLevelGroups = groups
         .filter(g => !g.parentId || !groupIdSet.has(g.parentId))
-        .sort((a, b) => getWorkflowOrder(a.name) - getWorkflowOrder(b.name));
+        .sort((a, b) => a.id - b.id);
 
-      // Timeline constants for Y-axis positioning
-      const TIMELINE_START_Y = 100; // Below timeline header
-      const MONTH_HEIGHT = 400; // Height per month band
-      const TIMELINE_HEADER_HEIGHT = 60;
+      // Layout constants - simple grid arrangement
+      const GRID_COLS = 3; // Number of columns in the grid
+      const GROUP_GAP_X = 80; // Horizontal gap between groups
+      const GROUP_GAP_Y = 60; // Vertical gap between group rows
+      
+      // Calculate position for each top-level group in a grid
+      let currentCol = 0;
+      let currentRow = 0;
+      let rowMaxHeight = 0;
+      let rowStartY = CANVAS_START_Y;
+      const columnXPositions: number[] = [];
 
-      // Get month from group (use monthStart or infer from name)
-      const getGroupMonth = (g: typeof groups[0]): number => {
-        if (g.monthStart) return g.monthStart;
-        const name = g.name;
-        if (name.includes("12월")) return 12;
-        if (name.includes("1월")) return 1;
-        if (name.includes("2월")) return 2;
-        if (name.includes("3월")) return 3;
-        return 1; // Default to January
-      };
-
-      // Track X position for each workflow stage column
-      const workflowColumnX: Record<number, number> = {};
-      const COLUMN_WIDTH = 500;
-
-      // Position top-level groups: X by workflow stage, Y by month
+      // First pass: determine group sizes and positions
+      const groupLayouts: Array<{group: typeof groups[0], width: number, height: number, x: number, y: number}> = [];
+      
       for (const group of topLevelGroups) {
-        const workflowOrder = getWorkflowOrder(group.name);
-        const month = getGroupMonth(group);
-        
-        // Calculate X position (workflow stage column)
-        if (workflowColumnX[workflowOrder] === undefined) {
-          workflowColumnX[workflowOrder] = CANVAS_START_X + workflowOrder * COLUMN_WIDTH;
-        }
-        const currentX = workflowColumnX[workflowOrder];
-        
-        // Calculate Y position (month band, normalized to start from month 12)
-        const monthOffset = month >= 12 ? month - 12 : month;
-        const currentY = TIMELINE_START_Y + TIMELINE_HEADER_HEIGHT + monthOffset * MONTH_HEIGHT;
-
-        // Calculate group size
         const contentSize = calculateGroupContentSize(group.id);
         const groupWidth = contentSize.width + GROUP_PADDING * 2;
         const groupHeight = contentSize.height + GROUP_HEADER + GROUP_PADDING;
+        
+        // Calculate X position for this column
+        let currentX = CANVAS_START_X;
+        for (let c = 0; c < currentCol; c++) {
+          currentX += (columnXPositions[c] || 450) + GROUP_GAP_X;
+        }
+        
+        // Track max width for this column
+        if (!columnXPositions[currentCol] || groupWidth > columnXPositions[currentCol]) {
+          columnXPositions[currentCol] = groupWidth;
+        }
+        
+        groupLayouts.push({
+          group,
+          width: groupWidth,
+          height: groupHeight,
+          x: currentX,
+          y: rowStartY
+        });
+        
+        rowMaxHeight = Math.max(rowMaxHeight, groupHeight);
+        currentCol++;
+        
+        if (currentCol >= GRID_COLS) {
+          currentCol = 0;
+          rowStartY += rowMaxHeight + GROUP_GAP_Y;
+          rowMaxHeight = 0;
+        }
+      }
+      
+      // Second pass: position groups and their documents
+      for (const layout of groupLayouts) {
+        const { group, width: groupWidth, height: groupHeight, x: currentX, y: currentY } = layout;
 
+        // Store group position (center point)
         await storage.updateGroup(group.id, { 
           x: currentX + groupWidth / 2, 
           y: currentY + groupHeight / 2 
@@ -828,18 +842,18 @@ export async function registerRoutes(
             childX += childGroupWidth + DOC_GAP_X;
           }
         }
-
-        // Update column X for next group in same workflow stage
-        workflowColumnX[workflowOrder] = currentX + groupWidth + GROUP_GAP;
       }
+
+      // Find the maximum Y position used by groups
+      const maxGroupY = groupLayouts.reduce((max, layout) => 
+        Math.max(max, layout.y + layout.height), CANVAS_START_Y);
 
       // Handle ungrouped documents in a grid at the bottom
       const ungroupedDocs = documents.filter(d => !d.groupId);
       if (ungroupedDocs.length > 0) {
         const ungroupedGrid = getDocGridLayout(ungroupedDocs.length);
         let udIdx = 0;
-        // Position ungrouped docs below the month bands (3 months * 400 height + buffer)
-        const ungroupedStartY = TIMELINE_START_Y + TIMELINE_HEADER_HEIGHT + 3 * MONTH_HEIGHT + 100;
+        const ungroupedStartY = maxGroupY + 100;
         
         for (let row = 0; row < ungroupedGrid.rows && udIdx < ungroupedDocs.length; row++) {
           for (let col = 0; col < ungroupedGrid.cols && udIdx < ungroupedDocs.length; col++) {

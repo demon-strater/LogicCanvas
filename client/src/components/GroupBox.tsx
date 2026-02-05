@@ -117,18 +117,25 @@ export function GroupBox({
         transform: "translate(-50%, -50%)",
         zIndex: isSelected || isDragging ? 2 : 0,
         borderColor: isSelected ? groupColor : `${groupColor}60`,
-        // Match server layout: DOC_WIDTH=280, DOC_GAP_X=80, GROUP_PADDING=50, GROUP_HEADER=70
+        // Match server layout EXACTLY: DOC_WIDTH=280, DOC_GAP_X=80, GROUP_PADDING=50, GROUP_HEADER=70
         width: (() => {
           const DOC_WIDTH = 280;
           const DOC_GAP_X = 80;
           const GROUP_PADDING = 50;
-          // Grid layout for docs
+          // Grid layout for docs - must match server's getDocGridLayout
           const docCount = documents.length;
           const cols = docCount <= 1 ? 1 : docCount <= 2 ? 2 : docCount <= 4 ? 2 : docCount <= 6 ? 3 : Math.ceil(Math.sqrt(docCount));
-          const docWidth = cols * (DOC_WIDTH + DOC_GAP_X) - DOC_GAP_X;
-          // Child groups width
-          const childWidth = childGroups.length * 380;
-          return Math.max(360, Math.max(docWidth, childWidth) + GROUP_PADDING * 2);
+          const docWidth = docCount > 0 ? cols * (DOC_WIDTH + DOC_GAP_X) - DOC_GAP_X : 0;
+          // Child groups width calculation matching server
+          let maxChildWidth = 0;
+          const childCount = childGroups.length;
+          if (childCount > 0) {
+            const childCols = childCount <= 1 ? 1 : childCount <= 2 ? 2 : childCount <= 4 ? 2 : childCount <= 6 ? 3 : Math.ceil(Math.sqrt(childCount));
+            maxChildWidth = childCols * (380 + DOC_GAP_X);
+          }
+          // Server uses: contentWidth = Math.max(docWidth, maxChildWidth, 300); groupWidth = contentWidth + GROUP_PADDING * 2
+          const contentWidth = Math.max(docWidth, maxChildWidth, 300);
+          return contentWidth + GROUP_PADDING * 2;
         })(),
         height: (() => {
           const DOC_HEIGHT = 140;
@@ -138,11 +145,20 @@ export function GroupBox({
           // Grid layout for docs
           const docCount = documents.length;
           const cols = docCount <= 1 ? 1 : docCount <= 2 ? 2 : docCount <= 4 ? 2 : docCount <= 6 ? 3 : Math.ceil(Math.sqrt(docCount));
-          const rows = Math.ceil(docCount / cols) || 1;
-          const docHeight = rows * (DOC_HEIGHT + DOC_GAP_Y) - DOC_GAP_Y;
-          // Child groups height
-          const childHeight = childGroups.length > 0 ? 350 : 0;
-          return Math.max(200, GROUP_HEADER + docHeight + childHeight + GROUP_PADDING);
+          const rows = docCount > 0 ? Math.ceil(docCount / cols) : 0;
+          const docHeight = rows > 0 ? rows * (DOC_HEIGHT + DOC_GAP_Y) - DOC_GAP_Y : 0;
+          // Child groups height - matching server: childRows * (300 + DOC_GAP_Y)
+          const childCount = childGroups.length;
+          let totalChildHeight = 0;
+          if (childCount > 0) {
+            const childCols = childCount <= 1 ? 1 : childCount <= 2 ? 2 : childCount <= 4 ? 2 : childCount <= 6 ? 3 : Math.ceil(Math.sqrt(childCount));
+            const childRows = Math.ceil(childCount / childCols);
+            totalChildHeight = 30 + childRows * (300 + DOC_GAP_Y);
+          }
+          // Server uses: contentHeight = docHeight + (children.length > 0 ? 30 + totalChildHeight : 0)
+          // groupHeight = contentSize.height + GROUP_HEADER + GROUP_PADDING with Math.max(150, contentHeight)
+          const contentHeight = Math.max(150, docHeight + totalChildHeight);
+          return GROUP_HEADER + contentHeight + GROUP_PADDING;
         })(),
       }}
       onMouseDown={handleMouseDown}
