@@ -617,8 +617,8 @@ export function DocumentCanvas({
             </marker>
           </defs>
 
-          {/* Filter to show only important edges: flow and depends, skip related */}
-          {edges.filter(e => e.edgeType === "flow" || e.edgeType === "depends").map((edge) => {
+          {/* Show only the most important document edges: depends only */}
+          {edges.filter(e => e.edgeType === "depends").map((edge) => {
             const sourcePos = docPositions[edge.sourceDocId];
             const targetPos = docPositions[edge.targetDocId];
             if (!sourcePos || !targetPos) return null;
@@ -819,6 +819,132 @@ export function DocumentCanvas({
                     className="select-none font-medium"
                   >
                     {edge.label.length > 25 ? edge.label.slice(0, 25) + "..." : edge.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+          {/* Group-to-group edges (workflow connections between groups) */}
+          {groupEdges.map((edge) => {
+            const sourceGroup = groups.find(g => g.id === edge.sourceGroupId);
+            const targetGroup = groups.find(g => g.id === edge.targetGroupId);
+            if (!sourceGroup || !targetGroup) return null;
+            
+            // Calculate group centers based on their documents
+            const getGroupCenter = (group: typeof sourceGroup) => {
+              const groupDocs = documents.filter(d => d.groupId === group.id);
+              const pos = groupPositions[group.id];
+              if (!pos) return null;
+              
+              if (groupDocs.length === 0) {
+                return { x: pos.x, y: pos.y, width: 300, height: 200 };
+              }
+              
+              const docBounds = groupDocs.map(d => {
+                const dp = docPositions[d.id];
+                return dp ? { x: dp.x, y: dp.y } : null;
+              }).filter(Boolean) as { x: number; y: number }[];
+              
+              if (docBounds.length === 0) return { x: pos.x, y: pos.y, width: 300, height: 200 };
+              
+              const minX = Math.min(...docBounds.map(b => b.x - DOC_WIDTH / 2));
+              const maxX = Math.max(...docBounds.map(b => b.x + DOC_WIDTH / 2));
+              const minY = Math.min(...docBounds.map(b => b.y - DOC_HEIGHT / 2));
+              const maxY = Math.max(...docBounds.map(b => b.y + DOC_HEIGHT / 2));
+              
+              return {
+                x: (minX + maxX) / 2,
+                y: (minY + maxY) / 2,
+                width: maxX - minX + 100,
+                height: maxY - minY + 120
+              };
+            };
+            
+            const sourceCenter = getGroupCenter(sourceGroup);
+            const targetCenter = getGroupCenter(targetGroup);
+            if (!sourceCenter || !targetCenter) return null;
+            
+            const HALF_W = sourceCenter.width / 2;
+            const HALF_H = sourceCenter.height / 2;
+            const TARGET_HALF_W = targetCenter.width / 2;
+            const TARGET_HALF_H = targetCenter.height / 2;
+            
+            const dx = targetCenter.x - sourceCenter.x;
+            const dy = targetCenter.y - sourceCenter.y;
+            const absDx = Math.abs(dx);
+            const absDy = Math.abs(dy);
+            
+            let startX: number, startY: number, endX: number, endY: number;
+            
+            if (absDx * sourceCenter.height > absDy * sourceCenter.width) {
+              if (dx > 0) {
+                startX = sourceCenter.x + HALF_W;
+                startY = sourceCenter.y;
+                endX = targetCenter.x - TARGET_HALF_W;
+                endY = targetCenter.y;
+              } else {
+                startX = sourceCenter.x - HALF_W;
+                startY = sourceCenter.y;
+                endX = targetCenter.x + TARGET_HALF_W;
+                endY = targetCenter.y;
+              }
+            } else {
+              if (dy > 0) {
+                startX = sourceCenter.x;
+                startY = sourceCenter.y + HALF_H;
+                endX = targetCenter.x;
+                endY = targetCenter.y - TARGET_HALF_H;
+              } else {
+                startX = sourceCenter.x;
+                startY = sourceCenter.y - HALF_H;
+                endX = targetCenter.x;
+                endY = targetCenter.y + TARGET_HALF_H;
+              }
+            }
+            
+            const arrowOffset = 15;
+            const finalDx = endX - startX;
+            const finalDy = endY - startY;
+            const finalDist = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
+            if (finalDist > arrowOffset) {
+              endX = endX - (finalDx / finalDist) * arrowOffset;
+              endY = endY - (finalDy / finalDist) * arrowOffset;
+            }
+            
+            const curveOffset = Math.min(100, Math.max(50, finalDist * 0.25));
+            const midX = (startX + endX) / 2;
+            const midY = (startY + endY) / 2;
+            const pathD = `M ${startX} ${startY} Q ${midX} ${midY - curveOffset}, ${endX} ${endY}`;
+            
+            const edgeColor = edge.edgeType === "depends" 
+              ? "hsl(var(--destructive))" 
+              : edge.edgeType === "flow"
+              ? "hsl(210, 100%, 50%)"
+              : "hsl(var(--muted-foreground))";
+            
+            return (
+              <g key={`group-edge-${edge.id}`}>
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke={edgeColor}
+                  strokeWidth="4"
+                  strokeOpacity="0.7"
+                  strokeDasharray={edge.edgeType === "related" ? "8,4" : undefined}
+                  markerEnd={`url(#arrowhead-${edge.edgeType === "depends" ? "depends" : "flow"})`}
+                  className="transition-opacity"
+                />
+                {edge.label && (
+                  <text
+                    x={midX}
+                    y={midY - curveOffset - 8}
+                    fontSize="12"
+                    fontWeight="600"
+                    fill="hsl(var(--foreground))"
+                    textAnchor="middle"
+                    className="select-none"
+                  >
+                    {edge.label.length > 30 ? edge.label.slice(0, 30) + "..." : edge.label}
                   </text>
                 )}
               </g>
