@@ -10,7 +10,13 @@ import { DocumentViewModal } from "@/components/DocumentViewModal";
 import { GroupInputModal } from "@/components/GroupInputModal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Wand2, FolderPlus } from "lucide-react";
+import { Plus, Wand2, FolderPlus, FileText } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import type { Document, DocumentEdge, DocumentGroup, GroupEdge } from "@shared/schema";
 
@@ -255,7 +261,7 @@ export default function Canvas() {
     <div className="h-screen flex flex-col overflow-hidden">
       <Header
         documentCount={documents.length}
-        onNewDocument={() => setIsDocumentModalOpen(true)}
+        groupCount={groups.length}
       />
 
       <div className="flex-1 relative">
@@ -287,42 +293,50 @@ export default function Canvas() {
           />
         )}
 
-        <div className="fixed bottom-6 right-6 flex flex-col gap-3">
+        <div className="fixed bottom-6 right-6 flex items-center gap-2">
           {documents.length >= 2 && (
             <Button
               variant="outline"
-              size="lg"
-              className="shadow-lg bg-card"
+              size="default"
+              className="shadow-lg bg-card/95 backdrop-blur-sm"
               onClick={() => analyzeWorkflowMutation.mutate()}
               disabled={analyzeWorkflowMutation.isPending}
               data-testid="button-analyze-workflow"
             >
-              <Wand2 className="h-5 w-5 mr-2" />
+              <Wand2 className="h-4 w-4 mr-2" />
               {analyzeWorkflowMutation.isPending ? "분석 중..." : "자동 정렬"}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="lg"
-            className="shadow-lg bg-card"
-            onClick={() => {
-              setEditingGroup(null);
-              setIsGroupModalOpen(true);
-            }}
-            data-testid="button-add-group"
-          >
-            <FolderPlus className="h-5 w-5 mr-2" />
-            새 그룹
-          </Button>
-          <Button
-            size="lg"
-            className="shadow-lg"
-            onClick={() => setIsDocumentModalOpen(true)}
-            data-testid="button-add-document"
-          >
-            <Plus className="h-5 w-5 mr-2" />
-            새 문서
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="lg"
+                className="shadow-lg h-12 w-12 rounded-full p-0"
+                data-testid="button-add-menu"
+              >
+                <Plus className="h-6 w-6" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem
+                onClick={() => setIsDocumentModalOpen(true)}
+                data-testid="menu-item-add-document"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                새 문서
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setEditingGroup(null);
+                  setIsGroupModalOpen(true);
+                }}
+                data-testid="menu-item-add-group"
+              >
+                <FolderPlus className="h-4 w-4 mr-2" />
+                새 그룹
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
