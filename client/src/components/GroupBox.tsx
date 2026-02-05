@@ -241,7 +241,7 @@ export function GroupBox({
         left: isDragging ? currentPos.x : effectiveCenterX,
         top: isDragging ? currentPos.y : effectiveCenterY,
         transform: "translate(-50%, -50%)",
-        zIndex: isSelected || isDragging ? 2 : 0,
+        zIndex: isSelected || isDragging ? 4 : (isTopLevel ? 1 : 2),
         // Top-level groups have more transparent borders (30%), child groups are more opaque (80%)
         borderColor: isSelected ? groupColor : `${groupColor}${isTopLevel ? '30' : '80'}`,
         backgroundColor: isTopLevel ? 'transparent' : undefined,
@@ -252,8 +252,8 @@ export function GroupBox({
       data-testid={`group-box-${group.id}`}
     >
       <div
-        className="flex items-center justify-between gap-2 p-3 rounded-t-md"
-        style={{ backgroundColor: `${groupColor}20` }}
+        className="flex items-center justify-between gap-2 p-3 rounded-t-md relative"
+        style={{ backgroundColor: `${groupColor}30`, zIndex: 10 }}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <div

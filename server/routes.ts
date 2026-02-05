@@ -805,7 +805,7 @@ export async function registerRoutes(
       const TIMELINE_OFFSET_X = 150; // Padding before first month column
       const MONTH_WIDTH = 1600; // Width per month column (maximum spacing)
       const TIMELINE_HEADER_HEIGHT = 60; // Height of timeline header
-      const GROUP_GAP_Y = 40; // Vertical gap between groups in same month
+      const GROUP_GAP_Y = 200; // Vertical gap between groups in same month
       
       // Determine month range from groups
       const monthValues = groups.map(g => getMonthOrder(g)).filter(m => m < 99);
