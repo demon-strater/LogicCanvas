@@ -548,11 +548,75 @@ export async function registerRoutes(
       const edges = await storage.getAllDocumentEdges();
       const groups = await storage.getAllGroups();
       
+      // Create group-to-group edges based on AI analysis
+      await storage.clearAllGroupEdges();
+      if (analysis.groupRelations && analysis.groupRelations.length > 0) {
+        // Build a map of original AI group names to created group IDs
+        // Only map major/parent groups (parentId is null) for workflow connections
+        const majorGroups = groups.filter(g => g.parentId === null);
+        
+        // Create normalized name-to-ID map for major groups only
+        const normalizeGroupName = (name: string): string => {
+          // Remove month/phase labels and trim
+          return name.replace(/\s*\([^)]*\)\s*/g, '').trim().toLowerCase();
+        };
+        
+        const groupEdgesToCreate = analysis.groupRelations
+          .map(rel => {
+            const sourceNameNorm = normalizeGroupName(rel.sourceGroupName);
+            const targetNameNorm = normalizeGroupName(rel.targetGroupName);
+            
+            // Find matching major groups by normalized name
+            const sourceGroup = majorGroups.find(g => {
+              const gNameNorm = normalizeGroupName(g.name);
+              return gNameNorm === sourceNameNorm || 
+                     gNameNorm.includes(sourceNameNorm) ||
+                     sourceNameNorm.includes(gNameNorm);
+            });
+            
+            const targetGroup = majorGroups.find(g => {
+              const gNameNorm = normalizeGroupName(g.name);
+              return gNameNorm === targetNameNorm || 
+                     gNameNorm.includes(targetNameNorm) ||
+                     targetNameNorm.includes(gNameNorm);
+            });
+            
+            if (sourceGroup && targetGroup && sourceGroup.id !== targetGroup.id) {
+              return {
+                sourceGroupId: sourceGroup.id,
+                targetGroupId: targetGroup.id,
+                label: rel.label,
+                edgeType: rel.edgeType
+              };
+            }
+            
+            // Log unmatched relations for debugging
+            if (!sourceGroup || !targetGroup) {
+              console.log(`Group relation not matched: ${rel.sourceGroupName} -> ${rel.targetGroupName}`);
+            }
+            
+            return null;
+          })
+          .filter((e): e is NonNullable<typeof e> => e !== null);
+        
+        // Deduplicate edges (same source/target pair)
+        const uniqueEdges = groupEdgesToCreate.filter((edge, idx, arr) => 
+          arr.findIndex(e => e.sourceGroupId === edge.sourceGroupId && e.targetGroupId === edge.targetGroupId) === idx
+        );
+        
+        if (uniqueEdges.length > 0) {
+          await storage.createGroupEdges(uniqueEdges);
+        }
+      }
+      
+      const groupEdges = await storage.getAllGroupEdges();
+      
       res.json({
         positions: documentPositions,
         groupPositions,
         edges,
         groups,
+        groupEdges,
         summary: analysis.summary
       });
     } catch (error) {

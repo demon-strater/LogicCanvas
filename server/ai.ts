@@ -19,10 +19,18 @@ export type GroupDefinition = {
   childGroups?: GroupDefinition[];
 };
 
+export type GroupRelation = {
+  sourceGroupName: string;
+  targetGroupName: string;
+  label: string;
+  edgeType: "flow" | "depends" | "related";
+};
+
 export type WorkflowAnalysisResult = {
   relations: DocumentRelation[];
   hierarchyLevels: Record<number, number>;
   groups: GroupDefinition[];
+  groupRelations: GroupRelation[];
   summary: string;
 };
 
@@ -141,10 +149,19 @@ For document relationships:
 - **depends**: B requires/depends on A
 - **related**: Share common topics
 
+For GROUP-TO-GROUP relationships (IMPORTANT - show workflow between groups):
+- **flow**: One stage leads to another (리서치 → 기획)
+- **depends**: One stage depends on outputs from another
+- Create edges between MAJOR groups to show the overall project workflow
+
 Respond with valid JSON:
 {
   "relations": [
     { "sourceId": 1, "targetId": 2, "label": "description", "edgeType": "flow|depends|related" }
+  ],
+  "groupRelations": [
+    { "sourceGroupName": "리서치", "targetGroupName": "기획", "label": "리서치 결과를 기획에 반영", "edgeType": "flow" },
+    { "sourceGroupName": "기획", "targetGroupName": "실행", "label": "기획 완료 후 실행", "edgeType": "flow" }
   ],
   "hierarchyLevels": { "1": 0, "2": 1 },
   "groups": [
@@ -195,7 +212,7 @@ const GROUP_COLORS = [
 
 export async function analyzeDocumentWorkflow(documents: Document[]): Promise<WorkflowAnalysisResult> {
   if (documents.length === 0) {
-    return { relations: [], hierarchyLevels: {}, groups: [], summary: "No documents to analyze" };
+    return { relations: [], hierarchyLevels: {}, groups: [], groupRelations: [], summary: "No documents to analyze" };
   }
 
   if (documents.length === 1) {
@@ -209,6 +226,7 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
         level: "major",
         documentIds: [documents[0].id],
       }],
+      groupRelations: [],
       summary: "Single document - no workflow relationships" 
     };
   }
@@ -303,10 +321,27 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
       }
     }
 
+    // Process group relations
+    const groupRelations: GroupRelation[] = (parsed.groupRelations || [])
+      .filter((r: any) => 
+        typeof r.sourceGroupName === "string" && 
+        typeof r.targetGroupName === "string" &&
+        r.sourceGroupName !== r.targetGroupName
+      )
+      .map((r: any) => ({
+        sourceGroupName: String(r.sourceGroupName),
+        targetGroupName: String(r.targetGroupName),
+        label: String(r.label || ""),
+        edgeType: ["flow", "depends", "related"].includes(r.edgeType) 
+          ? r.edgeType as "flow" | "depends" | "related"
+          : "flow"
+      }));
+
     return {
       relations: validRelations,
       hierarchyLevels,
       groups,
+      groupRelations,
       summary: String(parsed.summary || "Workflow analysis complete")
     };
   } catch (e) {
