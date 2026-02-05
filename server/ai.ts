@@ -8,9 +8,21 @@ export type DocumentRelation = {
   edgeType: "flow" | "depends" | "related" | "parent";
 };
 
+export type GroupDefinition = {
+  name: string;
+  description: string;
+  color: string;
+  level: "major" | "medium" | "minor"; // 대그룹, 중그룹, 소그룹
+  monthLabel?: string; // e.g., "12월", "1월"
+  phaseLabel?: string; // e.g., "초기", "중기", "후기"
+  documentIds: number[];
+  childGroups?: GroupDefinition[];
+};
+
 export type WorkflowAnalysisResult = {
   relations: DocumentRelation[];
-  hierarchyLevels: Record<number, number>; // docId -> level (0 is root)
+  hierarchyLevels: Record<number, number>;
+  groups: GroupDefinition[];
   summary: string;
 };
 
@@ -70,12 +82,10 @@ export async function parseDocumentWithAI(content: string): Promise<ParseResult>
   try {
     const parsed = JSON.parse(result) as ParseResult;
     
-    // Validate the structure
     if (!Array.isArray(parsed.concepts) || !Array.isArray(parsed.relations)) {
       throw new Error("Invalid response structure");
     }
 
-    // Validate concepts
     parsed.concepts = parsed.concepts.map((c: any) => ({
       label: String(c.label || "Untitled"),
       content: String(c.content || ""),
@@ -84,7 +94,6 @@ export async function parseDocumentWithAI(content: string): Promise<ParseResult>
         : "concept",
     })) as ParsedConcept[];
 
-    // Validate relations
     parsed.relations = parsed.relations
       .filter((r: any) => 
         typeof r.sourceIndex === "number" && 
@@ -111,47 +120,92 @@ export async function parseDocumentWithAI(content: string): Promise<ParseResult>
   }
 }
 
-const WORKFLOW_ANALYSIS_PROMPT = `You are a business workflow analyst. Given a list of documents, analyze their relationships based on business flow, workflow sequence, and logical hierarchy.
+const WORKFLOW_ANALYSIS_PROMPT = `You are a project management and business workflow analyst. Given a list of documents, analyze their relationships and organize them into a hierarchical group structure.
 
-For each pair of related documents, identify their relationship:
-- **flow**: Document A leads to or continues into Document B (sequential workflow step)
-- **depends**: Document B depends on or requires Document A
-- **related**: Documents share common topics or themes
-- **parent**: Document A is a parent/category that encompasses Document B
+IMPORTANT: Create a 3-level group hierarchy:
+1. **대그룹 (Major Groups)**: Project phases based on timeline
+   - Use time-based labels: "초기 (Early Phase)", "중기 (Mid Phase)", "후기 (Late Phase)"
+   - Or use months: "12월", "1월", "2월", etc.
+   - These show the big picture project flow
+   
+2. **중그룹 (Medium Groups)**: Thematic categories within each phase
+   - Examples: "리서치", "기획", "실행", "분석", "설계"
+   - Group related documents by their purpose
+   
+3. **소그룹 (Minor Groups)**: Specific task clusters (only if needed)
+   - Very detailed sub-categories within medium groups
 
-Also determine the hierarchy level for each document:
-- Level 0: Root documents (starting points, high-level plans)
-- Level 1: Direct children of root (major phases or categories)  
-- Level 2+: Sub-items and detailed documents
+For document relationships:
+- **flow**: Sequential workflow step (A → B)
+- **depends**: B requires/depends on A
+- **related**: Share common topics
+- **parent**: A encompasses/contains B
 
-Respond with valid JSON matching this exact structure:
+Respond with valid JSON:
 {
   "relations": [
-    { "sourceId": 1, "targetId": 2, "label": "description of relationship", "edgeType": "flow|depends|related|parent" }
+    { "sourceId": 1, "targetId": 2, "label": "description", "edgeType": "flow|depends|related|parent" }
   ],
-  "hierarchyLevels": {
-    "1": 0,
-    "2": 1
-  },
-  "summary": "Brief summary of the overall workflow structure"
+  "hierarchyLevels": { "1": 0, "2": 1 },
+  "groups": [
+    {
+      "name": "초기 (12월)",
+      "description": "프로젝트 초기 단계",
+      "level": "major",
+      "monthLabel": "12월",
+      "phaseLabel": "초기",
+      "documentIds": [],
+      "childGroups": [
+        {
+          "name": "리서치",
+          "description": "초기 조사 및 분석",
+          "level": "medium",
+          "documentIds": [1, 2],
+          "childGroups": []
+        }
+      ]
+    }
+  ],
+  "summary": "Overall workflow summary"
 }
 
 Guidelines:
-- Analyze document titles and content to understand their purpose
-- Create meaningful connections that show work progression
-- Hierarchy should reflect natural business/project structure
-- If documents are unrelated, don't force connections
-- Flow relations should show temporal or logical sequence`;
+- ALWAYS create at least major groups based on project timeline/phases
+- Place EVERY document into exactly one group (at any level)
+- Analyze dates, timestamps, or content to determine which phase each document belongs to
+- Use Korean labels for groups
+- Major groups should show clear project progression (left to right = time flow)
+- If no clear timeline, use logical phases: 준비, 실행, 마무리`;
+
+const GROUP_COLORS = [
+  "#6366f1", // indigo
+  "#8b5cf6", // violet
+  "#ec4899", // pink
+  "#f43f5e", // rose
+  "#f97316", // orange
+  "#eab308", // yellow
+  "#22c55e", // green
+  "#14b8a6", // teal
+  "#06b6d4", // cyan
+  "#3b82f6", // blue
+];
 
 export async function analyzeDocumentWorkflow(documents: Document[]): Promise<WorkflowAnalysisResult> {
   if (documents.length === 0) {
-    return { relations: [], hierarchyLevels: {}, summary: "No documents to analyze" };
+    return { relations: [], hierarchyLevels: {}, groups: [], summary: "No documents to analyze" };
   }
 
   if (documents.length === 1) {
     return { 
       relations: [], 
-      hierarchyLevels: { [documents[0].id]: 0 }, 
+      hierarchyLevels: { [documents[0].id]: 0 },
+      groups: [{
+        name: "문서",
+        description: "단일 문서",
+        color: GROUP_COLORS[0],
+        level: "major",
+        documentIds: [documents[0].id],
+      }],
       summary: "Single document - no workflow relationships" 
     };
   }
@@ -159,7 +213,8 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
   const docSummaries = documents.map(doc => ({
     id: doc.id,
     title: doc.title,
-    preview: (doc.summary || doc.content || "").slice(0, 300)
+    createdAt: doc.createdAt,
+    preview: (doc.summary || doc.content || "").slice(0, 500)
   }));
 
   const response = await openai.chat.completions.create({
@@ -168,11 +223,11 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
       { role: "system", content: WORKFLOW_ANALYSIS_PROMPT },
       { 
         role: "user", 
-        content: `Analyze the workflow relationships between these documents:\n\n${JSON.stringify(docSummaries, null, 2)}` 
+        content: `Analyze the workflow relationships and create hierarchical groups for these documents:\n\n${JSON.stringify(docSummaries, null, 2)}` 
       },
     ],
     response_format: { type: "json_object" },
-    max_completion_tokens: 2048,
+    max_completion_tokens: 4096,
   });
 
   const result = response.choices[0]?.message?.content;
@@ -184,7 +239,6 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
     const parsed = JSON.parse(result);
     const docIds = new Set(documents.map(d => d.id));
     
-    // Validate and filter relations
     const validRelations: DocumentRelation[] = (parsed.relations || [])
       .filter((r: any) => 
         docIds.has(Number(r.sourceId)) && 
@@ -200,7 +254,6 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
           : "related"
       }));
 
-    // Validate hierarchy levels
     const hierarchyLevels: Record<number, number> = {};
     if (parsed.hierarchyLevels) {
       for (const [idStr, level] of Object.entries(parsed.hierarchyLevels)) {
@@ -211,20 +264,52 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
       }
     }
     
-    // Assign level 0 to any unassigned documents
     for (const doc of documents) {
       if (!(doc.id in hierarchyLevels)) {
         hierarchyLevels[doc.id] = 0;
       }
     }
 
+    // Process groups with validation and color assignment
+    const groups = processGroups(parsed.groups || [], docIds, 0);
+
     return {
       relations: validRelations,
       hierarchyLevels,
+      groups,
       summary: String(parsed.summary || "Workflow analysis complete")
     };
   } catch (e) {
     console.error("Failed to parse workflow analysis:", result);
     throw new Error("Failed to parse workflow analysis as JSON");
   }
+}
+
+function processGroups(
+  groups: any[], 
+  validDocIds: Set<number>, 
+  colorIndex: number
+): GroupDefinition[] {
+  return groups.map((g: any, idx: number) => {
+    const color = GROUP_COLORS[(colorIndex + idx) % GROUP_COLORS.length];
+    
+    const documentIds = (g.documentIds || [])
+      .map((id: any) => Number(id))
+      .filter((id: number) => validDocIds.has(id));
+
+    const childGroups = g.childGroups 
+      ? processGroups(g.childGroups, validDocIds, colorIndex + idx + 1)
+      : undefined;
+
+    return {
+      name: String(g.name || "그룹"),
+      description: String(g.description || ""),
+      color,
+      level: (["major", "medium", "minor"].includes(g.level) ? g.level : "major") as "major" | "medium" | "minor",
+      monthLabel: g.monthLabel ? String(g.monthLabel) : undefined,
+      phaseLabel: g.phaseLabel ? String(g.phaseLabel) : undefined,
+      documentIds,
+      childGroups: childGroups && childGroups.length > 0 ? childGroups : undefined,
+    };
+  });
 }

@@ -101,9 +101,11 @@ export default function Canvas() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
       queryClient.invalidateQueries({ queryKey: ["/api/document-edges"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      const groupCount = data.groups?.length || 0;
       toast({ 
         title: "워크플로우 분석 완료", 
-        description: data.summary || "문서들이 자동으로 정렬되었습니다" 
+        description: `${data.summary || "문서들이 자동으로 정렬되었습니다"} (${groupCount}개 그룹 생성)` 
       });
     },
     onError: () => {

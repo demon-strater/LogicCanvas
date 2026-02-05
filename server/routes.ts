@@ -490,12 +490,13 @@ export async function registerRoutes(
       if (documents.length === 0) {
         return res.json({ 
           positions: {}, 
-          edges: [], 
+          edges: [],
+          groups: [],
           summary: "문서가 없습니다" 
         });
       }
 
-      // Use AI to analyze document relationships
+      // Use AI to analyze document relationships and create groups
       const analysis = await analyzeDocumentWorkflow(documents);
 
       // Clear existing document edges and create new ones
@@ -512,22 +513,46 @@ export async function registerRoutes(
         );
       }
 
-      // Calculate auto-layout positions based on hierarchy
-      const positions = calculateHierarchicalLayout(documents, analysis);
+      // Clear existing groups and create new ones based on AI analysis
+      await storage.clearAllGroups();
+      
+      const createdGroups = await createGroupsFromAnalysis(analysis.groups, null, 0);
 
-      // Update document positions in DB
-      for (const doc of documents) {
-        const pos = positions[doc.id];
+      // Calculate auto-layout positions for groups and documents
+      const { groupPositions, documentPositions } = calculateGroupedLayout(
+        documents, 
+        createdGroups,
+        analysis
+      );
+
+      // Update group positions in DB
+      for (const group of createdGroups) {
+        const pos = groupPositions[group.id];
         if (pos) {
-          await storage.updateDocument(doc.id, { x: pos.x, y: pos.y });
+          await storage.updateGroup(group.id, { x: pos.x, y: pos.y });
+        }
+      }
+
+      // Update document positions and group assignments in DB
+      for (const doc of documents) {
+        const pos = documentPositions[doc.id];
+        if (pos) {
+          await storage.updateDocument(doc.id, { 
+            x: pos.x, 
+            y: pos.y,
+            groupId: pos.groupId || null
+          });
         }
       }
 
       const edges = await storage.getAllDocumentEdges();
+      const groups = await storage.getAllGroups();
       
       res.json({
-        positions,
+        positions: documentPositions,
+        groupPositions,
         edges,
+        groups,
         summary: analysis.summary
       });
     } catch (error) {
@@ -535,6 +560,59 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to analyze workflow" });
     }
   });
+
+  // Helper function to create groups recursively
+  async function createGroupsFromAnalysis(
+    groupDefs: any[], 
+    parentId: number | null,
+    startX: number
+  ): Promise<any[]> {
+    const created: any[] = [];
+    const GROUP_WIDTH = 400;
+    const GAP = 50;
+
+    for (let i = 0; i < groupDefs.length; i++) {
+      const def = groupDefs[i];
+      
+      // Create group name with month/phase labels
+      let name = def.name;
+      if (def.monthLabel && !name.includes(def.monthLabel)) {
+        name = `${def.phaseLabel || name} (${def.monthLabel})`;
+      }
+
+      const group = await storage.createGroup({
+        name,
+        description: def.description || "",
+        parentId,
+        color: def.color || "#6366f1",
+        x: startX + i * (GROUP_WIDTH + GAP),
+        y: parentId ? 200 : 100,
+      });
+
+      // Update documents to belong to this group
+      for (const docId of def.documentIds || []) {
+        await storage.updateDocument(docId, { groupId: group.id });
+      }
+
+      created.push({
+        ...group,
+        level: def.level,
+        documentIds: def.documentIds || [],
+      });
+
+      // Create child groups recursively
+      if (def.childGroups && def.childGroups.length > 0) {
+        const children = await createGroupsFromAnalysis(
+          def.childGroups, 
+          group.id,
+          startX + i * (GROUP_WIDTH + GAP)
+        );
+        created.push(...children);
+      }
+    }
+
+    return created;
+  }
 
   return httpServer;
 }
@@ -580,4 +658,107 @@ function calculateHierarchicalLayout(
   }
 
   return positions;
+}
+
+// Calculate layout positions for documents organized in groups
+function calculateGroupedLayout(
+  documents: any[],
+  groups: any[],
+  analysis: { hierarchyLevels: Record<number, number>; relations: any[] }
+): {
+  groupPositions: Record<number, { x: number; y: number }>;
+  documentPositions: Record<number, { x: number; y: number; groupId?: number }>;
+} {
+  const groupPositions: Record<number, { x: number; y: number }> = {};
+  const documentPositions: Record<number, { x: number; y: number; groupId?: number }> = {};
+
+  const DOC_WIDTH = 320;
+  const DOC_HEIGHT = 180;
+  const DOC_GAP = 40;
+  const GROUP_PADDING = 60;
+  const GROUP_GAP = 100;
+  const CANVAS_START_X = 150;
+  const CANVAS_START_Y = 150;
+
+  // Separate major groups (top-level) from nested groups
+  const majorGroups = groups.filter(g => g.level === "major" && !groups.some(p => p.id !== g.id && groups.find(c => c.id === g.id)?.parentId === p.id));
+  const docToGroup: Record<number, number> = {};
+  
+  // Build document-to-group mapping
+  for (const group of groups) {
+    for (const docId of group.documentIds || []) {
+      docToGroup[docId] = group.id;
+    }
+  }
+
+  // Calculate group sizes based on content
+  const groupSizes: Record<number, { width: number; height: number; docCount: number }> = {};
+  
+  for (const group of groups) {
+    const docsInGroup = (group.documentIds || []).length;
+    const cols = Math.min(docsInGroup, 3);
+    const rows = Math.ceil(docsInGroup / 3);
+    
+    groupSizes[group.id] = {
+      width: Math.max(350, cols * (DOC_WIDTH + DOC_GAP) + GROUP_PADDING * 2),
+      height: Math.max(250, rows * (DOC_HEIGHT + DOC_GAP) + GROUP_PADDING * 2 + 60),
+      docCount: docsInGroup
+    };
+  }
+
+  // Position major groups horizontally (left to right = time flow)
+  let currentX = CANVAS_START_X;
+  
+  for (const group of majorGroups) {
+    const size = groupSizes[group.id] || { width: 400, height: 300 };
+    
+    groupPositions[group.id] = {
+      x: currentX,
+      y: CANVAS_START_Y
+    };
+
+    // Position documents inside this group
+    const docsInGroup = documents.filter(d => docToGroup[d.id] === group.id);
+    let docX = currentX + GROUP_PADDING;
+    let docY = CANVAS_START_Y + GROUP_PADDING + 50;
+    let colIndex = 0;
+    
+    for (const doc of docsInGroup) {
+      documentPositions[doc.id] = {
+        x: docX + DOC_WIDTH / 2,
+        y: docY + DOC_HEIGHT / 2,
+        groupId: group.id
+      };
+      
+      colIndex++;
+      if (colIndex >= 3) {
+        colIndex = 0;
+        docX = currentX + GROUP_PADDING;
+        docY += DOC_HEIGHT + DOC_GAP;
+      } else {
+        docX += DOC_WIDTH + DOC_GAP;
+      }
+    }
+
+    currentX += size.width + GROUP_GAP;
+  }
+
+  // Handle documents not assigned to any group
+  const unassignedDocs = documents.filter(d => !docToGroup[d.id]);
+  let ungroupedY = CANVAS_START_Y + 600;
+  let ungroupedX = CANVAS_START_X;
+  
+  for (const doc of unassignedDocs) {
+    documentPositions[doc.id] = {
+      x: ungroupedX + DOC_WIDTH / 2,
+      y: ungroupedY + DOC_HEIGHT / 2
+    };
+    ungroupedX += DOC_WIDTH + DOC_GAP;
+    if (ungroupedX > 1500) {
+      ungroupedX = CANVAS_START_X;
+      ungroupedY += DOC_HEIGHT + DOC_GAP;
+    }
+  }
+
+  return { groupPositions, documentPositions };
 }

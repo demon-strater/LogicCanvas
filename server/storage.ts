@@ -45,6 +45,7 @@ export interface IStorage {
   createGroup(group: InsertDocumentGroup): Promise<DocumentGroup>;
   updateGroup(id: number, updates: Partial<DocumentGroup>): Promise<DocumentGroup | undefined>;
   deleteGroup(id: number): Promise<void>;
+  clearAllGroups(): Promise<void>;
 
   getAllGroupEdges(): Promise<GroupEdge[]>;
   createGroupEdge(edge: InsertGroupEdge): Promise<GroupEdge>;
@@ -217,6 +218,12 @@ export class DatabaseStorage implements IStorage {
     await db.update(documents).set({ groupId: null }).where(eq(documents.groupId, id));
     await db.update(documentGroups).set({ parentId: null }).where(eq(documentGroups.parentId, id));
     await db.delete(documentGroups).where(eq(documentGroups.id, id));
+  }
+
+  async clearAllGroups(): Promise<void> {
+    await db.update(documents).set({ groupId: null });
+    await db.delete(groupEdges);
+    await db.delete(documentGroups);
   }
 
   async getAllGroupEdges(): Promise<GroupEdge[]> {
