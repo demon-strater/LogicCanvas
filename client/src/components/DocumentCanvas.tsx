@@ -803,119 +803,48 @@ export function DocumentCanvas({
             );
           })}
 
-          {/* Group connection lines */}
-          {groupEdges.filter(e => e.edgeType === "flow" || e.edgeType === "depends").map((edge) => {
-            const sourcePos = groupPositions[edge.sourceGroupId];
-            const targetPos = groupPositions[edge.targetGroupId];
-            if (!sourcePos || !targetPos) return null;
-
-            const GROUP_WIDTH = 400;
-            const GROUP_HEIGHT = 300;
-            const HALF_W = GROUP_WIDTH / 2;
-            const HALF_H = GROUP_HEIGHT / 2;
-
-            const sourceCenterX = sourcePos.x;
-            const sourceCenterY = sourcePos.y + TIMELINE_GAP;
-            const targetCenterX = targetPos.x;
-            const targetCenterY = targetPos.y + TIMELINE_GAP;
-
-            const dx = targetCenterX - sourceCenterX;
-            const dy = targetCenterY - sourceCenterY;
-            const absDx = Math.abs(dx);
-            const absDy = Math.abs(dy);
-
-            let startX: number, startY: number, endX: number, endY: number;
-
-            if (absDx > absDy) {
-              if (dx > 0) {
-                startX = sourceCenterX + HALF_W;
-                startY = sourceCenterY;
-                endX = targetCenterX - HALF_W;
-                endY = targetCenterY;
-              } else {
-                startX = sourceCenterX - HALF_W;
-                startY = sourceCenterY;
-                endX = targetCenterX + HALF_W;
-                endY = targetCenterY;
-              }
-            } else {
-              if (dy > 0) {
-                startX = sourceCenterX;
-                startY = sourceCenterY + HALF_H;
-                endX = targetCenterX;
-                endY = targetCenterY - HALF_H;
-              } else {
-                startX = sourceCenterX;
-                startY = sourceCenterY - HALF_H;
-                endX = targetCenterX;
-                endY = targetCenterY + HALF_H;
-              }
-            }
-
-            const arrowOffset = 12;
-            const finalDx = endX - startX;
-            const finalDy = endY - startY;
-            const finalDist = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
-            if (finalDist > arrowOffset) {
-              endX = endX - (finalDx / finalDist) * arrowOffset;
-              endY = endY - (finalDy / finalDist) * arrowOffset;
-            }
-
-            const curveOffset = Math.min(80, Math.max(40, finalDist * 0.3));
-            const midX = (startX + endX) / 2;
-            const midY = (startY + endY) / 2;
-            const pathD = `M ${startX} ${startY} Q ${midX} ${midY - curveOffset}, ${endX} ${endY}`;
-
-            const edgeColor = edge.edgeType === "depends" ? "hsl(var(--destructive))" : "hsl(var(--primary))";
-            const markerId = `arrowhead-${edge.edgeType}`;
-
-            return (
-              <g key={`group-edge-${edge.id}`}>
-                <path
-                  d={pathD}
-                  fill="none"
-                  stroke={edgeColor}
-                  strokeWidth="3"
-                  strokeOpacity="0.6"
-                  markerEnd={`url(#${markerId})`}
-                  className="transition-opacity"
-                />
-              </g>
-            );
-          })}
           {/* Group-to-group edges (workflow connections between groups) */}
           {groupEdges.map((edge) => {
             const sourceGroup = groups.find(g => g.id === edge.sourceGroupId);
             const targetGroup = groups.find(g => g.id === edge.targetGroupId);
             if (!sourceGroup || !targetGroup) return null;
             
-            // Calculate group centers based on their documents
+            // Calculate group centers based on child groups or stored position
             const getGroupCenter = (group: typeof sourceGroup) => {
-              const groupDocs = documents.filter(d => d.groupId === group.id);
               const pos = groupPositions[group.id];
               if (!pos) return null;
               
-              if (groupDocs.length === 0) {
-                return { x: pos.x, y: pos.y, width: 300, height: 200 };
+              // Check if this is a top-level group (has child groups)
+              const childGroups = groups.filter(g => g.parentId === group.id);
+              
+              if (childGroups.length > 0) {
+                // Top-level group: calculate center based on child group positions
+                const childBounds = childGroups.map(cg => {
+                  const cgPos = groupPositions[cg.id];
+                  return cgPos ? { x: cgPos.x, y: cgPos.y + TIMELINE_GAP } : null;
+                }).filter(Boolean) as { x: number; y: number }[];
+                
+                if (childBounds.length > 0) {
+                  const minX = Math.min(...childBounds.map(b => b.x)) - 200;
+                  const maxX = Math.max(...childBounds.map(b => b.x)) + 200;
+                  const minY = Math.min(...childBounds.map(b => b.y)) - 100;
+                  const maxY = Math.max(...childBounds.map(b => b.y)) + 200;
+                  
+                  return {
+                    x: (minX + maxX) / 2,
+                    y: (minY + maxY) / 2,
+                    width: maxX - minX,
+                    height: maxY - minY
+                  };
+                }
               }
               
-              const docBounds = groupDocs.map(d => {
-                const dp = docPositions[d.id];
-                return dp ? { x: dp.x, y: dp.y } : null;
-              }).filter(Boolean) as { x: number; y: number }[];
-              
-              if (docBounds.length === 0) return { x: pos.x, y: pos.y, width: 300, height: 200 };
-              
-              const minX = Math.min(...docBounds.map(b => b.x - DOC_WIDTH / 2));
-              const maxX = Math.max(...docBounds.map(b => b.x + DOC_WIDTH / 2));
-              const minY = Math.min(...docBounds.map(b => b.y - DOC_HEIGHT / 2));
-              const maxY = Math.max(...docBounds.map(b => b.y + DOC_HEIGHT / 2));
-              
-              return {
-                x: (minX + maxX) / 2,
-                y: (minY + maxY) / 2,
-                width: maxX - minX + 100,
-                height: maxY - minY + 120
+              // Child group or empty group: use stored position with TIMELINE_GAP
+              return { 
+                x: pos.x, 
+                y: pos.y + TIMELINE_GAP, 
+                width: 350, 
+                height: 200 
               };
             };
             
