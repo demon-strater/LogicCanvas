@@ -522,12 +522,9 @@ export function DocumentCanvas({
   const canvasWidth = Math.max(dimensions.width / zoom, ...allPositions.map(p => p.x + 400), 1200);
   const canvasHeight = Math.max(dimensions.height / zoom, ...allPositions.map(p => p.y + 300), 800);
 
-  // Calculate month range for timeline
-  const timelineMonths = groups
-    .filter(g => g.monthStart || g.monthEnd)
-    .flatMap(g => [g.monthStart, g.monthEnd].filter(Boolean) as number[]);
-  const timelineStartMonth = timelineMonths.length > 0 ? Math.min(...timelineMonths) : 12;
-  const timelineEndMonth = timelineMonths.length > 0 ? Math.max(...timelineMonths) + 1 : 14;
+  // Calculate month range for timeline (12월 to 다음해 2월 = months 12, 13, 14)
+  const timelineStartMonth = 12;
+  const timelineEndMonth = 14;
 
   return (
     <div
@@ -542,7 +539,7 @@ export function DocumentCanvas({
       {/* Fixed timeline header at top */}
       <TimelineHeader
         startMonth={timelineStartMonth}
-        endMonth={timelineEndMonth > timelineStartMonth ? timelineEndMonth : timelineStartMonth + 3}
+        endMonth={timelineEndMonth}
         year={2025}
         canvasWidth={canvasWidth}
         canvasHeight={canvasHeight}
@@ -576,7 +573,7 @@ export function DocumentCanvas({
         {/* Timeline grid lines - inside transformed content */}
         <TimelineGridLines
           startMonth={timelineStartMonth}
-          endMonth={timelineEndMonth > timelineStartMonth ? timelineEndMonth : timelineStartMonth + 3}
+          endMonth={timelineEndMonth}
           year={2025}
           canvasWidth={canvasWidth}
           canvasHeight={canvasHeight}
