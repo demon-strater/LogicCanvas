@@ -1012,23 +1012,23 @@ export function DocumentCanvas({
           />
         )}
 
-        {/* Render ALL groups as background containers (parents first for z-index) */}
+        {/* Render ONLY top-level groups (parentId === null) */}
         {groups
-          .sort((a, b) => (a.parentId ? 1 : 0) - (b.parentId ? 1 : 0))
+          .filter(g => g.parentId === null)
           .map((group, index) => {
           const pos = groupPositions[group.id] || getGroupPosition(group, index);
           return (
             <GroupBox
               key={`group-${group.id}`}
               group={group}
-              documents={getDocumentsInGroup(group.id)}
-              childGroups={getChildGroups(group.id)}
+              documents={[]}
+              childGroups={[]}
               allDocuments={documents}
               x={pos.x}
               y={pos.y + TIMELINE_GAP}
               isSelected={selectedGroupId === group.id || selectedGroupIds.has(group.id)}
-              isExpanded={true}
-              isTopLevel={!group.parentId}
+              isExpanded={false}
+              isTopLevel={true}
               isSpacePressed={isSpacePressed}
               onSelect={handleGroupSelect}
               onToggleExpand={onToggleGroupExpand}
@@ -1039,23 +1039,8 @@ export function DocumentCanvas({
           );
         })}
 
-        {/* Render ALL documents (both grouped and ungrouped) */}
-        {documents.map((doc, index) => {
-          const pos = docPositions[doc.id] || getDocumentPosition(doc, index, dimensions.width);
-          return (
-            <DocumentBox
-              key={doc.id}
-              document={doc}
-              x={pos.x}
-              y={pos.y + TIMELINE_GAP}
-              isSelected={selectedDocumentId === doc.id || selectedDocIds.has(doc.id)}
-              isSpacePressed={isSpacePressed}
-              onSelect={handleDocSelect}
-              onClick={onClickDocument}
-              onDragEnd={handleLocalPositionUpdate}
-            />
-          );
-        })}
+        {/* Hide all documents - only show top-level groups */}
+        {/* Documents will be shown when groups are expanded */}
 
         {documents.length === 0 && groups.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center">
