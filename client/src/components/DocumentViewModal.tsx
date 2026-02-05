@@ -75,14 +75,14 @@ export function DocumentViewModal({ document, isOpen, onClose, onDelete }: Props
           </div>
         )}
 
-        <ScrollArea className="flex-1 mt-4">
-          <div className="pr-4">
-            <p className="text-sm font-medium mb-2">전문</p>
-            <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
+        <div className="flex-1 mt-4 min-h-0 overflow-hidden">
+          <p className="text-sm font-medium mb-2">원문</p>
+          <ScrollArea className="h-full max-h-[50vh]">
+            <div className="pr-4 text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
               {document.content}
             </div>
-          </div>
-        </ScrollArea>
+          </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
