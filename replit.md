@@ -67,8 +67,12 @@ Documents can be organized into hierarchical groups:
 - **Purpose**: 
   - Extract logical structure (concepts, claims, evidence, questions) and relationships from text
   - Analyze multiple documents to identify workflow relationships, dependencies, and hierarchies
+  - **Automatic hierarchical grouping** of documents into:
+    - **대그룹 (Major Groups)**: Time-based project phases (초기/중기/후기) with month labels (12월, 1월, 2월)
+    - **중그룹 (Medium Groups)**: Thematic categories within phases (리서치, 기획, 실행, 분석)
+    - **소그룹 (Minor Groups)**: Specific task clusters (only when needed)
 
-The AI returns structured JSON matching the `ParseResult` type for document parsing, or workflow analysis data with positions and edges for document layout. Results are stored in the database.
+The AI returns structured JSON matching the `ParseResult` type for document parsing, or workflow analysis data with positions, edges, and group definitions for document layout. Groups are automatically created and documents are assigned based on content analysis and business flow. Results are stored in the database.
 
 ### Document Canvas Features
 - **Auto-layout**: AI analyzes documents to determine optimal positions based on workflow/dependencies

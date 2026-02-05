@@ -271,7 +271,34 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
     }
 
     // Process groups with validation and color assignment
-    const groups = processGroups(parsed.groups || [], docIds, 0);
+    const assignedDocIds = new Set<number>();
+    const groups = processGroups(parsed.groups || [], docIds, assignedDocIds, 0);
+
+    // If no groups were created by AI, create a single default group with all docs
+    if (groups.length === 0) {
+      groups.push({
+        name: "전체 문서",
+        description: "모든 문서",
+        color: GROUP_COLORS[0],
+        level: "major" as const,
+        documentIds: documents.map(d => d.id),
+      });
+      // Mark all docs as assigned
+      documents.forEach(d => assignedDocIds.add(d.id));
+    } else {
+      // Ensure every document is assigned exactly once
+      // If some documents are not assigned, create a fallback group
+      const unassignedDocs = documents.filter(d => !assignedDocIds.has(d.id));
+      if (unassignedDocs.length > 0) {
+        groups.push({
+          name: "기타 문서",
+          description: "분류되지 않은 문서",
+          color: GROUP_COLORS[groups.length % GROUP_COLORS.length],
+          level: "major" as const,
+          documentIds: unassignedDocs.map(d => d.id),
+        });
+      }
+    }
 
     return {
       relations: validRelations,
@@ -287,18 +314,23 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
 
 function processGroups(
   groups: any[], 
-  validDocIds: Set<number>, 
+  validDocIds: Set<number>,
+  assignedDocIds: Set<number>,
   colorIndex: number
 ): GroupDefinition[] {
   return groups.map((g: any, idx: number) => {
     const color = GROUP_COLORS[(colorIndex + idx) % GROUP_COLORS.length];
     
+    // Filter document IDs: must be valid and not already assigned to another group
     const documentIds = (g.documentIds || [])
       .map((id: any) => Number(id))
-      .filter((id: number) => validDocIds.has(id));
+      .filter((id: number) => validDocIds.has(id) && !assignedDocIds.has(id));
+    
+    // Mark these documents as assigned
+    documentIds.forEach((id: number) => assignedDocIds.add(id));
 
     const childGroups = g.childGroups 
-      ? processGroups(g.childGroups, validDocIds, colorIndex + idx + 1)
+      ? processGroups(g.childGroups, validDocIds, assignedDocIds, colorIndex + idx + 1)
       : undefined;
 
     return {

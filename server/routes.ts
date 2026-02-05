@@ -675,86 +675,134 @@ function calculateGroupedLayout(
   const DOC_WIDTH = 320;
   const DOC_HEIGHT = 180;
   const DOC_GAP = 40;
-  const GROUP_PADDING = 60;
-  const GROUP_GAP = 100;
+  const GROUP_PADDING = 50;
+  const GROUP_GAP = 80;
   const CANVAS_START_X = 150;
   const CANVAS_START_Y = 150;
 
-  // Separate major groups (top-level) from nested groups
-  const majorGroups = groups.filter(g => g.level === "major" && !groups.some(p => p.id !== g.id && groups.find(c => c.id === g.id)?.parentId === p.id));
-  const docToGroup: Record<number, number> = {};
-  
   // Build document-to-group mapping
+  const docToGroup: Record<number, number> = {};
   for (const group of groups) {
     for (const docId of group.documentIds || []) {
       docToGroup[docId] = group.id;
     }
   }
 
-  // Calculate group sizes based on content
-  const groupSizes: Record<number, { width: number; height: number; docCount: number }> = {};
-  
+  // Build parent-child relationships
+  const groupIdSet = new Set(groups.map(g => g.id));
+  const childrenOf: Record<number, any[]> = {};
   for (const group of groups) {
-    const docsInGroup = (group.documentIds || []).length;
-    const cols = Math.min(docsInGroup, 3);
-    const rows = Math.ceil(docsInGroup / 3);
-    
-    groupSizes[group.id] = {
-      width: Math.max(350, cols * (DOC_WIDTH + DOC_GAP) + GROUP_PADDING * 2),
-      height: Math.max(250, rows * (DOC_HEIGHT + DOC_GAP) + GROUP_PADDING * 2 + 60),
-      docCount: docsInGroup
-    };
+    if (group.parentId && groupIdSet.has(group.parentId)) {
+      if (!childrenOf[group.parentId]) childrenOf[group.parentId] = [];
+      childrenOf[group.parentId].push(group);
+    }
   }
 
-  // Position major groups horizontally (left to right = time flow)
-  let currentX = CANVAS_START_X;
-  
-  for (const group of majorGroups) {
-    const size = groupSizes[group.id] || { width: 400, height: 300 };
+  // Calculate group sizes recursively (includes children's sizes)
+  function calculateGroupSize(group: any): { width: number; height: number } {
+    const docsInGroup = (group.documentIds || []).length;
+    const cols = Math.max(1, Math.min(docsInGroup, 3));
+    const rows = Math.max(1, Math.ceil(docsInGroup / 3));
     
-    groupPositions[group.id] = {
-      x: currentX,
-      y: CANVAS_START_Y
-    };
+    let baseWidth = Math.max(380, cols * (DOC_WIDTH + DOC_GAP) + GROUP_PADDING * 2);
+    let baseHeight = rows * (DOC_HEIGHT + DOC_GAP) + GROUP_PADDING * 2 + 60;
 
-    // Position documents inside this group
+    // Add space for children
+    const children = childrenOf[group.id] || [];
+    if (children.length > 0) {
+      let childrenWidth = 0;
+      let maxChildHeight = 0;
+      for (const child of children) {
+        const childSize = calculateGroupSize(child);
+        childrenWidth += childSize.width + DOC_GAP;
+        maxChildHeight = Math.max(maxChildHeight, childSize.height);
+      }
+      baseWidth = Math.max(baseWidth, childrenWidth + GROUP_PADDING * 2);
+      baseHeight += maxChildHeight + DOC_GAP;
+    }
+
+    return { width: baseWidth, height: Math.max(280, baseHeight) };
+  }
+
+  // Recursive function to position a group and its contents
+  function positionGroup(
+    group: any, 
+    startX: number, 
+    startY: number,
+    depth: number = 0
+  ): { width: number; height: number } {
+    groupPositions[group.id] = { x: startX, y: startY };
+
+    const headerOffset = 50 + depth * 10;
+    let currentY = startY + headerOffset;
+
+    // Position documents in this group
     const docsInGroup = documents.filter(d => docToGroup[d.id] === group.id);
-    let docX = currentX + GROUP_PADDING;
-    let docY = CANVAS_START_Y + GROUP_PADDING + 50;
+    let docX = startX + GROUP_PADDING;
     let colIndex = 0;
     
     for (const doc of docsInGroup) {
       documentPositions[doc.id] = {
         x: docX + DOC_WIDTH / 2,
-        y: docY + DOC_HEIGHT / 2,
+        y: currentY + DOC_HEIGHT / 2,
         groupId: group.id
       };
       
       colIndex++;
       if (colIndex >= 3) {
         colIndex = 0;
-        docX = currentX + GROUP_PADDING;
-        docY += DOC_HEIGHT + DOC_GAP;
+        docX = startX + GROUP_PADDING;
+        currentY += DOC_HEIGHT + DOC_GAP;
       } else {
         docX += DOC_WIDTH + DOC_GAP;
       }
     }
+    
+    if (docsInGroup.length > 0 && colIndex !== 0) {
+      currentY += DOC_HEIGHT + DOC_GAP;
+    }
 
+    // Position child groups
+    const children = childrenOf[group.id] || [];
+    let childX = startX + GROUP_PADDING;
+    let maxChildHeight = 0;
+    
+    for (const child of children) {
+      const childSize = positionGroup(child, childX, currentY, depth + 1);
+      childX += childSize.width + DOC_GAP;
+      maxChildHeight = Math.max(maxChildHeight, childSize.height);
+    }
+
+    if (children.length > 0) {
+      currentY += maxChildHeight + GROUP_PADDING;
+    } else {
+      currentY += GROUP_PADDING;
+    }
+
+    return calculateGroupSize(group);
+  }
+
+  // Position top-level groups horizontally
+  const topLevelGroups = groups.filter(g => !g.parentId || !groupIdSet.has(g.parentId));
+  let currentX = CANVAS_START_X;
+  
+  for (const group of topLevelGroups) {
+    const size = positionGroup(group, currentX, CANVAS_START_Y, 0);
     currentX += size.width + GROUP_GAP;
   }
 
-  // Handle documents not assigned to any group
-  const unassignedDocs = documents.filter(d => !docToGroup[d.id]);
-  let ungroupedY = CANVAS_START_Y + 600;
+  // Handle any unpositioned documents
+  const unpositionedDocs = documents.filter(d => !documentPositions[d.id]);
+  let ungroupedY = CANVAS_START_Y + 700;
   let ungroupedX = CANVAS_START_X;
   
-  for (const doc of unassignedDocs) {
+  for (const doc of unpositionedDocs) {
     documentPositions[doc.id] = {
       x: ungroupedX + DOC_WIDTH / 2,
       y: ungroupedY + DOC_HEIGHT / 2
     };
     ungroupedX += DOC_WIDTH + DOC_GAP;
-    if (ungroupedX > 1500) {
+    if (ungroupedX > 1600) {
       ungroupedX = CANVAS_START_X;
       ungroupedY += DOC_HEIGHT + DOC_GAP;
     }
