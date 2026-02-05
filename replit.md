@@ -43,7 +43,8 @@ The backend provides:
 - **Schema Location**: `shared/schema.ts` (shared between frontend and backend)
 
 Core entities:
-- `documents`: Source content that gets parsed
+- `documents`: Source content that gets parsed, with x/y position data for canvas placement
+- `documentEdges`: Relationships between documents (flow, depends, related, parent types)
 - `nodes`: Extracted concepts with position, type, and tagging
 - `edges`: Relationships between nodes (related, supports, contradicts, implies)
 - `tasks`: Work items linked to documents
@@ -51,10 +52,21 @@ Core entities:
 
 ### AI Integration
 - **Provider**: OpenAI API (via Replit AI Integrations)
-- **Model**: GPT for document parsing
-- **Purpose**: Extract logical structure (concepts, claims, evidence, questions) and relationships from text
+- **Model**: GPT for document parsing and workflow analysis
+- **Purpose**: 
+  - Extract logical structure (concepts, claims, evidence, questions) and relationships from text
+  - Analyze multiple documents to identify workflow relationships, dependencies, and hierarchies
 
-The AI returns structured JSON matching the `ParseResult` type, which is then stored as nodes and edges in the database.
+The AI returns structured JSON matching the `ParseResult` type for document parsing, or workflow analysis data with positions and edges for document layout. Results are stored in the database.
+
+### Document Canvas Features
+- **Auto-layout**: AI analyzes documents to determine optimal positions based on workflow/dependencies
+- **Connection Lines**: SVG-based arrows connecting related documents with color-coded edge types:
+  - Flow (primary): Sequential workflow steps
+  - Depends (red): Dependency relationships  
+  - Parent (green): Hierarchical relationships
+  - Related (muted dashed): General associations
+- **Hierarchical Layout**: Documents arranged in layers to prevent overlap
 
 ### Build and Development
 - **Development**: `tsx` for direct TypeScript execution with Vite dev server
