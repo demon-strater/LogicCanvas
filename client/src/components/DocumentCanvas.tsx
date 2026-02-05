@@ -739,18 +739,6 @@ export function DocumentCanvas({
                   markerEnd={`url(#${markerId})`}
                   className="transition-opacity"
                 />
-                {edge.label && (
-                  <text
-                    x={labelX}
-                    y={labelY}
-                    fontSize="10"
-                    fill="hsl(var(--muted-foreground))"
-                    textAnchor="middle"
-                    className="select-none"
-                  >
-                    {edge.label.length > 20 ? edge.label.slice(0, 20) + "..." : edge.label}
-                  </text>
-                )}
               </g>
             );
           })}
@@ -832,18 +820,6 @@ export function DocumentCanvas({
                   markerEnd={`url(#${markerId})`}
                   className="transition-opacity"
                 />
-                {edge.label && (
-                  <text
-                    x={midX}
-                    y={midY - curveOffset - 5}
-                    fontSize="11"
-                    fill="hsl(var(--muted-foreground))"
-                    textAnchor="middle"
-                    className="select-none font-medium"
-                  >
-                    {edge.label.length > 25 ? edge.label.slice(0, 25) + "..." : edge.label}
-                  </text>
-                )}
               </g>
             );
           })}
@@ -957,19 +933,6 @@ export function DocumentCanvas({
                   markerEnd={`url(#arrowhead-${edge.edgeType === "depends" ? "depends" : "flow"})`}
                   className="transition-opacity"
                 />
-                {edge.label && (
-                  <text
-                    x={midX}
-                    y={midY - curveOffset - 8}
-                    fontSize="12"
-                    fontWeight="600"
-                    fill="hsl(var(--foreground))"
-                    textAnchor="middle"
-                    className="select-none"
-                  >
-                    {edge.label.length > 30 ? edge.label.slice(0, 30) + "..." : edge.label}
-                  </text>
-                )}
               </g>
             );
           })}
