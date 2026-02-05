@@ -30,7 +30,7 @@ const ZOOM_STEP = 0.1;
 const DOC_WIDTH = 280;
 const DOC_HEIGHT = 140;
 const TIMELINE_HEIGHT = 50;
-const TIMELINE_GAP = 40;
+const TIMELINE_GAP = 80;
 
 export function DocumentCanvas({
   documents,
