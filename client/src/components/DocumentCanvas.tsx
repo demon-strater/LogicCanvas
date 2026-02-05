@@ -13,7 +13,7 @@ type Props = {
 
 export function DocumentCanvas({
   documents,
-  edges,
+  edges = [],
   selectedDocumentId,
   onSelectDocument,
   onClickDocument,
@@ -46,24 +46,7 @@ export function DocumentCanvas({
     };
   }, []);
 
-  useEffect(() => {
-    const positions: Record<number, { x: number; y: number }> = {};
-    documents.forEach((doc, index) => {
-      positions[doc.id] = getDocumentPosition(doc, index);
-    });
-    setDocPositions(positions);
-  }, [documents, dimensions]);
-
-  const handleCanvasClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.target === e.currentTarget) {
-        onSelectDocument(null);
-      }
-    },
-    [onSelectDocument]
-  );
-
-  const getDocumentPosition = (doc: Document, index: number) => {
+  const getDocumentPosition = useCallback((doc: Document, index: number) => {
     if (doc.x && doc.y && (doc.x !== 100 || doc.y !== 100)) {
       return { x: doc.x, y: doc.y };
     }
@@ -74,7 +57,24 @@ export function DocumentCanvas({
       x: 180 + col * 320,
       y: 120 + row * 200,
     };
-  };
+  }, [dimensions]);
+
+  useEffect(() => {
+    const positions: Record<number, { x: number; y: number }> = {};
+    documents.forEach((doc, index) => {
+      positions[doc.id] = getDocumentPosition(doc, index);
+    });
+    setDocPositions(positions);
+  }, [documents, getDocumentPosition]);
+
+  const handleCanvasClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === e.currentTarget) {
+        onSelectDocument(null);
+      }
+    },
+    [onSelectDocument]
+  );
 
   const handleLocalPositionUpdate = (id: number, x: number, y: number) => {
     setDocPositions(prev => ({ ...prev, [id]: { x, y } }));
