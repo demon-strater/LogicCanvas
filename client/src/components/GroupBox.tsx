@@ -116,9 +116,10 @@ export function GroupBox({
         top: currentPos.y,
         transform: "translate(-50%, -50%)",
         zIndex: isSelected || isDragging ? 2 : 0,
-        borderColor: isSelected ? groupColor : undefined,
-        minWidth: "360px",
-        minHeight: "200px",
+        borderColor: isSelected ? groupColor : `${groupColor}60`,
+        // Calculate size based on content: documents stacked vertically, child groups horizontally
+        width: Math.max(360, 80 + (childGroups.length > 0 ? childGroups.length * 380 : 280)),
+        height: Math.max(200, 100 + documents.length * 160 + (childGroups.length > 0 ? 300 : 0)),
       }}
       onMouseDown={handleMouseDown}
       data-testid={`group-box-${group.id}`}

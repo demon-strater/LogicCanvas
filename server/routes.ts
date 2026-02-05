@@ -614,7 +614,7 @@ export async function registerRoutes(
     return created;
   }
 
-  // Re-layout existing groups and documents (compact grid layout)
+  // Re-layout existing groups and documents (timeline flow: left to right)
   app.post("/api/relayout", async (req, res) => {
     try {
       const groups = await storage.getAllGroups();
@@ -624,15 +624,16 @@ export async function registerRoutes(
         return res.json({ success: true, message: "정렬할 항목이 없습니다" });
       }
 
-      // Apply compact layout
+      // Layout constants
       const DOC_WIDTH = 280;
       const DOC_HEIGHT = 140;
-      const DOC_GAP = 24;
-      const GROUP_PADDING = 32;
-      const GROUP_GAP = 48;
-      const CANVAS_START_X = 80;
-      const CANVAS_START_Y = 80;
-      const TOP_LEVEL_COLS = 3;
+      const DOC_GAP = 20;
+      const GROUP_PADDING = 40;
+      const GROUP_HEADER = 60;
+      const GROUP_GAP = 60;
+      const CHILD_GROUP_GAP = 30;
+      const CANVAS_START_X = 100;
+      const CANVAS_START_Y = 100;
 
       // Build parent-child relationships
       const groupIdSet = new Set(groups.map(g => g.id));
@@ -644,112 +645,132 @@ export async function registerRoutes(
         }
       }
 
-      // Calculate group sizes
-      function calculateGroupSize(groupId: number, depth: number = 0): { width: number; height: number } {
-        const docsInGroup = documents.filter(d => d.groupId === groupId);
-        const maxCols = 2;
-        const cols = Math.max(1, Math.min(docsInGroup.length, maxCols));
-        const rows = Math.max(1, Math.ceil(docsInGroup.length / maxCols));
-        
-        let baseWidth = Math.max(320, cols * (DOC_WIDTH + DOC_GAP) + GROUP_PADDING * 2);
-        let baseHeight = rows * (DOC_HEIGHT + DOC_GAP) + GROUP_PADDING * 2 + 48;
-
-        const children = childrenOf[groupId] || [];
-        if (children.length > 0) {
-          let maxChildWidth = 0;
-          let totalChildHeight = 0;
-          for (const child of children) {
-            const childSize = calculateGroupSize(child.id, depth + 1);
-            maxChildWidth = Math.max(maxChildWidth, childSize.width);
-            totalChildHeight += childSize.height + DOC_GAP;
-          }
-          baseWidth = Math.max(baseWidth, maxChildWidth + GROUP_PADDING * 2);
-          baseHeight += totalChildHeight;
-        }
-
-        return { width: baseWidth, height: Math.max(200, baseHeight) };
+      // Get phase order for sorting (초기=0, 중기=1, 후기=2)
+      function getPhaseOrder(name: string): number {
+        if (name.includes("초기") || name.includes("12월")) return 0;
+        if (name.includes("중기") || name.includes("1월")) return 1;
+        if (name.includes("후기") || name.includes("2월")) return 2;
+        return 3;
       }
 
-      // Position groups and documents
-      async function positionGroup(group: typeof groups[0], startX: number, startY: number, depth: number = 0): Promise<{ width: number; height: number }> {
-        await storage.updateGroup(group.id, { x: startX, y: startY });
+      // Get subgroup order within a phase
+      function getSubgroupOrder(name: string): number {
+        if (name.includes("기획")) return 0;
+        if (name.includes("리서치")) return 1;
+        if (name.includes("실행")) return 2;
+        if (name.includes("협업") || name.includes("커뮤니케이션")) return 3;
+        if (name.includes("사업화") || name.includes("모델링")) return 4;
+        return 5;
+      }
 
-        const headerOffset = 40 + depth * 8;
-        let currentY = startY + headerOffset;
-        const maxCols = 2;
-
-        const docsInGroup = documents.filter(d => d.groupId === group.id);
-        let docX = startX + GROUP_PADDING;
-        let colIndex = 0;
+      // Calculate content size for a group (documents + child groups)
+      function calculateGroupContentSize(groupId: number): { width: number; height: number; docRows: number } {
+        const docsInGroup = documents.filter(d => d.groupId === groupId);
+        const children = childrenOf[groupId] || [];
         
+        // Documents in single column for clarity
+        const docRows = docsInGroup.length;
+        const docHeight = docRows > 0 ? docRows * (DOC_HEIGHT + DOC_GAP) : 0;
+        
+        // Child groups arranged horizontally
+        let childrenWidth = 0;
+        let childrenMaxHeight = 0;
+        for (const child of children) {
+          const childSize = calculateGroupContentSize(child.id);
+          const childW = childSize.width + GROUP_PADDING * 2;
+          const childH = childSize.height + GROUP_HEADER + GROUP_PADDING;
+          childrenWidth += childW + CHILD_GROUP_GAP;
+          childrenMaxHeight = Math.max(childrenMaxHeight, childH);
+        }
+        if (children.length > 0) childrenWidth -= CHILD_GROUP_GAP;
+
+        const contentWidth = Math.max(DOC_WIDTH, childrenWidth);
+        const contentHeight = docHeight + childrenMaxHeight;
+
+        return { 
+          width: Math.max(300, contentWidth), 
+          height: Math.max(100, contentHeight),
+          docRows 
+        };
+      }
+
+      // Position a group and its contents
+      async function positionGroup(
+        group: typeof groups[0], 
+        startX: number, 
+        startY: number
+      ): Promise<{ width: number; height: number }> {
+        const contentSize = calculateGroupContentSize(group.id);
+        const groupWidth = contentSize.width + GROUP_PADDING * 2;
+        const groupHeight = contentSize.height + GROUP_HEADER + GROUP_PADDING;
+
+        // Position group at center of its bounding box
+        await storage.updateGroup(group.id, { 
+          x: startX + groupWidth / 2, 
+          y: startY + groupHeight / 2 
+        });
+
+        // Position documents in this group (single column, vertical stack)
+        const docsInGroup = documents.filter(d => d.groupId === group.id);
+        let docY = startY + GROUP_HEADER;
         for (const doc of docsInGroup) {
           await storage.updateDocument(doc.id, {
-            x: docX + DOC_WIDTH / 2,
-            y: currentY + DOC_HEIGHT / 2
+            x: startX + GROUP_PADDING + DOC_WIDTH / 2,
+            y: docY + DOC_HEIGHT / 2
           });
+          docY += DOC_HEIGHT + DOC_GAP;
+        }
+
+        // Position child groups horizontally below documents
+        const children = childrenOf[group.id] || [];
+        if (children.length > 0) {
+          // Sort children by subgroup order
+          children.sort((a, b) => getSubgroupOrder(a.name) - getSubgroupOrder(b.name));
           
-          colIndex++;
-          if (colIndex >= maxCols) {
-            colIndex = 0;
-            docX = startX + GROUP_PADDING;
-            currentY += DOC_HEIGHT + DOC_GAP;
-          } else {
-            docX += DOC_WIDTH + DOC_GAP;
+          let childX = startX + GROUP_PADDING;
+          const childY = docY + (docsInGroup.length > 0 ? 10 : 0);
+          
+          for (const child of children) {
+            const childResult = await positionGroup(child, childX, childY);
+            childX += childResult.width + CHILD_GROUP_GAP;
           }
         }
-        
-        if (docsInGroup.length > 0 && colIndex !== 0) {
-          currentY += DOC_HEIGHT + DOC_GAP;
-        }
 
-        const children = childrenOf[group.id] || [];
-        for (const child of children) {
-          const childSize = await positionGroup(child, startX + GROUP_PADDING, currentY, depth + 1);
-          currentY += childSize.height + DOC_GAP;
-        }
-
-        return calculateGroupSize(group.id, depth);
+        return { width: groupWidth, height: groupHeight };
       }
 
-      // Get top-level groups
-      const topLevelGroups = groups.filter(g => !g.parentId || !groupIdSet.has(g.parentId));
-      
-      // Calculate sizes for column layout
-      const groupSizes = topLevelGroups.map(g => calculateGroupSize(g.id, 0));
-      const maxGroupWidth = Math.max(...groupSizes.map(s => s.width), 400);
+      // Get top-level groups and sort by phase order (left to right = 초기 → 중기 → 후기)
+      const topLevelGroups = groups
+        .filter(g => !g.parentId || !groupIdSet.has(g.parentId))
+        .sort((a, b) => getPhaseOrder(a.name) - getPhaseOrder(b.name));
 
-      // Arrange in columns (balanced)
-      const columnHeights = Array(TOP_LEVEL_COLS).fill(CANVAS_START_Y);
-      const columnX = Array(TOP_LEVEL_COLS).fill(0).map((_, i) => 
-        CANVAS_START_X + i * (maxGroupWidth + GROUP_GAP)
-      );
-      
-      for (let i = 0; i < topLevelGroups.length; i++) {
-        const minColIndex = columnHeights.indexOf(Math.min(...columnHeights));
-        const group = topLevelGroups[i];
-        const size = await positionGroup(group, columnX[minColIndex], columnHeights[minColIndex], 0);
-        columnHeights[minColIndex] += size.height + GROUP_GAP;
+      // Position top-level groups horizontally (timeline flow)
+      let currentX = CANVAS_START_X;
+      for (const group of topLevelGroups) {
+        const result = await positionGroup(group, currentX, CANVAS_START_Y);
+        currentX += result.width + GROUP_GAP;
       }
 
-      // Handle ungrouped documents
+      // Handle ungrouped documents at the bottom
       const ungroupedDocs = documents.filter(d => !d.groupId);
-      const maxHeight = Math.max(...columnHeights, CANVAS_START_Y + 300);
-      let ungroupedX = CANVAS_START_X;
-      let ungroupedY = maxHeight + 50;
-      
-      for (const doc of ungroupedDocs) {
-        await storage.updateDocument(doc.id, {
-          x: ungroupedX + DOC_WIDTH / 2,
-          y: ungroupedY + DOC_HEIGHT / 2
-        });
-        ungroupedX += DOC_WIDTH + DOC_GAP;
-        if (ungroupedX > CANVAS_START_X + 900) {
-          ungroupedX = CANVAS_START_X;
-          ungroupedY += DOC_HEIGHT + DOC_GAP;
+      if (ungroupedDocs.length > 0) {
+        let ungroupedX = CANVAS_START_X;
+        let ungroupedY = CANVAS_START_Y + 600;
+        
+        for (const doc of ungroupedDocs) {
+          await storage.updateDocument(doc.id, {
+            x: ungroupedX + DOC_WIDTH / 2,
+            y: ungroupedY + DOC_HEIGHT / 2
+          });
+          ungroupedX += DOC_WIDTH + DOC_GAP;
+          if (ungroupedX > CANVAS_START_X + 1200) {
+            ungroupedX = CANVAS_START_X;
+            ungroupedY += DOC_HEIGHT + DOC_GAP;
+          }
         }
       }
 
-      res.json({ success: true, message: "레이아웃이 재정렬되었습니다" });
+      res.json({ success: true, message: "타임라인 순서로 재정렬되었습니다 (왼쪽→오른쪽: 초기→후기)" });
     } catch (error) {
       console.error("Relayout error:", error);
       res.status(500).json({ error: "레이아웃 재정렬 중 오류가 발생했습니다" });
