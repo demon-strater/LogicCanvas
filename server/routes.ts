@@ -691,16 +691,16 @@ export async function registerRoutes(
         return res.json({ success: true, message: "정렬할 항목이 없습니다" });
       }
 
-      // Layout constants for mind-map style (generous spacing for clarity)
-      const DOC_WIDTH = 280;
-      const DOC_HEIGHT = 140;
-      const DOC_GAP_X = 180;
-      const DOC_GAP_Y = 150;
-      const GROUP_PADDING = 120;
-      const GROUP_HEADER = 100;
-      const GROUP_GAP = 200;
-      const CANVAS_START_X = 250;
-      const CANVAS_START_Y = 250;
+      // Layout constants for mind-map style (extra generous spacing)
+      const DOC_WIDTH = 300;
+      const DOC_HEIGHT = 160;
+      const DOC_GAP_X = 250;
+      const DOC_GAP_Y = 200;
+      const GROUP_PADDING = 180;
+      const GROUP_HEADER = 120;
+      const GROUP_GAP = 300;
+      const CANVAS_START_X = 300;
+      const CANVAS_START_Y = 300;
 
       // Build connection map for documents
       const docConnections: Record<number, Set<number>> = {};
@@ -803,7 +803,7 @@ export async function registerRoutes(
       
       // Timeline layout constants - must match frontend TimelineHeader
       const TIMELINE_OFFSET_X = 150; // Padding before first month column
-      const MONTH_WIDTH = 900; // Width per month column (generous spacing)
+      const MONTH_WIDTH = 1200; // Width per month column (extra generous spacing)
       const TIMELINE_HEADER_HEIGHT = 60; // Height of timeline header
       const GROUP_GAP_Y = 40; // Vertical gap between groups in same month
       
