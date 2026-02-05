@@ -726,10 +726,27 @@ export async function registerRoutes(
         };
       };
 
-      // Get top-level groups and sort by id for consistent ordering
+      // Get top-level groups and sort by month (earlier on left, later on right)
+      const getMonthOrder = (g: typeof groups[0]): number => {
+        if (g.monthStart) return g.monthStart;
+        const name = g.name;
+        if (name.includes("12월")) return 12;
+        if (name.includes("1월")) return 1;
+        if (name.includes("2월")) return 2;
+        if (name.includes("3월")) return 3;
+        return 99; // Default to end
+      };
+      
       const topLevelGroups = groups
         .filter(g => !g.parentId || !groupIdSet.has(g.parentId))
-        .sort((a, b) => a.id - b.id);
+        .sort((a, b) => {
+          const monthA = getMonthOrder(a);
+          const monthB = getMonthOrder(b);
+          // Normalize: 12 comes before 1, 2, 3 (year wrap)
+          const normalizedA = monthA >= 12 ? monthA - 12 : monthA;
+          const normalizedB = monthB >= 12 ? monthB - 12 : monthB;
+          return normalizedA - normalizedB;
+        });
 
       // Layout constants - simple grid arrangement
       const GRID_COLS = 3; // Number of columns in the grid
