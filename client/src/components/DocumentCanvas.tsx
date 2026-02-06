@@ -1137,7 +1137,7 @@ export function DocumentCanvas({
         onNavigate={handleMinimapNavigate}
       />
 
-      <div className="absolute bottom-14 left-4 bg-card/90 backdrop-blur-sm border rounded-md px-3 py-2 shadow-sm" data-testid="edge-legend">
+      <div className="absolute bottom-4 left-4 bg-card/90 backdrop-blur-sm border rounded-md px-3 py-2 shadow-sm" data-testid="edge-legend">
         <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 tracking-wide">연결선 의미</p>
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
@@ -1159,7 +1159,7 @@ export function DocumentCanvas({
         </div>
       </div>
 
-      <div className="absolute bottom-4 left-4 flex items-center gap-1 bg-card/90 backdrop-blur-sm border rounded-lg p-1 shadow-lg">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-card/90 backdrop-blur-sm border rounded-lg p-1 shadow-lg">
         <Button
           variant="ghost"
           size="sm"
