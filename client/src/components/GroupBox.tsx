@@ -23,6 +23,7 @@ type Props = {
   docPositions?: Record<number, { x: number; y: number }>;
   x: number;
   y: number;
+  zoom?: number;
   isSelected: boolean;
   isExpanded: boolean;
   isTopLevel?: boolean;
@@ -43,6 +44,7 @@ export function GroupBox({
   docPositions = {},
   x,
   y,
+  zoom = 1,
   isSelected,
   isExpanded,
   isTopLevel = true,
@@ -60,11 +62,16 @@ export function GroupBox({
   const originalPosRef = useRef({ x, y });
   const [currentPos, setCurrentPos] = useState({ x, y });
   const boxRef = useRef<HTMLDivElement>(null);
+  const hasDraggedRef = useRef(false);
+  const currentPosRef = useRef({ x, y });
 
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDir, setResizeDir] = useState<"r" | "b" | "rb" | null>(null);
   const resizeStartRef = useRef({ mouseX: 0, mouseY: 0, width: 0, height: 0 });
   const [resizeSize, setResizeSize] = useState<{ w: number; h: number } | null>(null);
+  const resizeSizeRef = useRef<{ w: number; h: number } | null>(null);
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
 
   useEffect(() => {
     setCurrentPos({ x, y });
@@ -178,6 +185,11 @@ export function GroupBox({
   const effectiveCenterX = (documents || []).length > 0 || (childGroups || []).length > 0 ? computedCenterX : x;
   const effectiveCenterY = (documents || []).length > 0 || (childGroups || []).length > 0 ? computedCenterY : y;
 
+  const onDragEndRef = useRef(onDragEnd);
+  onDragEndRef.current = onDragEnd;
+  const groupIdRef = useRef(group.id);
+  groupIdRef.current = group.id;
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (isSpacePressed || isResizing) return;
@@ -187,12 +199,14 @@ export function GroupBox({
       e.stopPropagation();
       onSelect(group.id, e.shiftKey);
       setIsDragging(true);
+      hasDraggedRef.current = false;
       setHasDragged(false);
       const startX = effectiveCenterX;
       const startY = effectiveCenterY;
       setCurrentPos({ x: startX, y: startY });
+      currentPosRef.current = { x: startX, y: startY };
       originalPosRef.current = { x: startX, y: startY };
-      dragStartRef.current = { x: e.clientX - startX, y: e.clientY - startY };
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
     },
     [group.id, effectiveCenterX, effectiveCenterY, onSelect, isSpacePressed, isResizing]
   );
@@ -201,19 +215,24 @@ export function GroupBox({
     if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const newX = e.clientX - dragStartRef.current.x;
-      const newY = e.clientY - dragStartRef.current.y;
+      const z = zoomRef.current;
+      const dx = (e.clientX - dragStartRef.current.x) / z;
+      const dy = (e.clientY - dragStartRef.current.y) / z;
+      const newX = originalPosRef.current.x + dx;
+      const newY = originalPosRef.current.y + dy;
       setCurrentPos({ x: newX, y: newY });
+      currentPosRef.current = { x: newX, y: newY };
+      hasDraggedRef.current = true;
       setHasDragged(true);
     };
 
     const handleMouseUp = () => {
       setIsDragging(false);
-      if (hasDragged) {
-        onDragEnd(
-          group.id,
-          currentPos.x,
-          currentPos.y,
+      if (hasDraggedRef.current) {
+        onDragEndRef.current(
+          groupIdRef.current,
+          currentPosRef.current.x,
+          currentPosRef.current.y,
           originalPosRef.current.x,
           originalPosRef.current.y
         );
@@ -227,16 +246,25 @@ export function GroupBox({
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isDragging, hasDragged, group.id, currentPos, onDragEnd]);
+  }, [isDragging]);
 
   const minW = DOC_WIDTH + GROUP_PADDING * 2;
   const minH = DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING;
+
+  const onResizeRef = useRef(onResize);
+  onResizeRef.current = onResize;
+  const resizeDirRef = useRef<"r" | "b" | "rb" | null>(null);
+  const minWRef = useRef(minW);
+  minWRef.current = minW;
+  const minHRef = useRef(minH);
+  minHRef.current = minH;
 
   const handleResizeMouseDown = useCallback((e: React.MouseEvent, dir: "r" | "b" | "rb") => {
     e.preventDefault();
     e.stopPropagation();
     setIsResizing(true);
     setResizeDir(dir);
+    resizeDirRef.current = dir;
     resizeStartRef.current = {
       mouseX: e.clientX,
       mouseY: e.clientY,
@@ -246,30 +274,37 @@ export function GroupBox({
   }, [groupWidth, groupHeight]);
 
   useEffect(() => {
-    if (!isResizing || !resizeDir) return;
+    if (!isResizing) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const dx = e.clientX - resizeStartRef.current.mouseX;
-      const dy = e.clientY - resizeStartRef.current.mouseY;
+      const z = zoomRef.current;
+      const dx = (e.clientX - resizeStartRef.current.mouseX) / z;
+      const dy = (e.clientY - resizeStartRef.current.mouseY) / z;
+      const dir = resizeDirRef.current;
       let newW = resizeStartRef.current.width;
       let newH = resizeStartRef.current.height;
 
-      if (resizeDir === "r" || resizeDir === "rb") {
-        newW = Math.max(minW, resizeStartRef.current.width + dx);
+      if (dir === "r" || dir === "rb") {
+        newW = Math.max(minWRef.current, resizeStartRef.current.width + dx);
       }
-      if (resizeDir === "b" || resizeDir === "rb") {
-        newH = Math.max(minH, resizeStartRef.current.height + dy);
+      if (dir === "b" || dir === "rb") {
+        newH = Math.max(minHRef.current, resizeStartRef.current.height + dy);
       }
-      setResizeSize({ w: Math.round(newW), h: Math.round(newH) });
+      const rounded = { w: Math.round(newW), h: Math.round(newH) };
+      setResizeSize(rounded);
+      resizeSizeRef.current = rounded;
     };
 
     const handleMouseUp = () => {
       setIsResizing(false);
       setResizeDir(null);
-      if (resizeSize && onResize) {
-        onResize(group.id, resizeSize.w, resizeSize.h);
+      resizeDirRef.current = null;
+      const size = resizeSizeRef.current;
+      if (size && onResizeRef.current) {
+        onResizeRef.current(groupIdRef.current, size.w, size.h);
       }
       setResizeSize(null);
+      resizeSizeRef.current = null;
     };
 
     window.addEventListener("mousemove", handleMouseMove);
@@ -278,7 +313,7 @@ export function GroupBox({
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isResizing, resizeDir, resizeSize, group.id, onResize, minW, minH]);
+  }, [isResizing]);
 
   const handleResetSize = useCallback(() => {
     if (onResize) {

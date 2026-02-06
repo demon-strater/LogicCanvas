@@ -1038,6 +1038,7 @@ export function DocumentCanvas({
               docPositions={docPositions}
               x={pos.x}
               y={pos.y + TIMELINE_GAP}
+              zoom={zoom}
               isSelected={selectedGroupId === group.id || selectedGroupIds.has(group.id)}
               isExpanded={true}
               isTopLevel={true}
@@ -1068,6 +1069,7 @@ export function DocumentCanvas({
               docPositions={docPositions}
               x={pos.x}
               y={pos.y + TIMELINE_GAP}
+              zoom={zoom}
               isSelected={selectedGroupId === group.id || selectedGroupIds.has(group.id)}
               isExpanded={false}
               isTopLevel={false}
