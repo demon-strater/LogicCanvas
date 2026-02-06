@@ -684,8 +684,8 @@ export function DocumentCanvas({
             </marker>
           </defs>
 
-          {/* Document-to-document edges */}
-          {edges.filter(e => e.edgeType === "depends").map((edge) => {
+          {/* Document-to-document edges - render all types with proper colors/styles */}
+          {edges.map((edge) => {
             const sourcePos = docPositions[edge.sourceDocId];
             const targetPos = docPositions[edge.targetDocId];
             if (!sourcePos || !targetPos) return null;
@@ -735,6 +735,7 @@ export function DocumentCanvas({
 
             const edgeColor = getEdgeColor(edge.edgeType);
             const markerId = `arrow-${edge.edgeType}`;
+            const isRelated = edge.edgeType === "related";
 
             return (
               <g key={edge.id}>
@@ -751,7 +752,8 @@ export function DocumentCanvas({
                   stroke={edgeColor}
                   strokeWidth="1.5"
                   strokeLinecap="round"
-                  strokeOpacity="0.7"
+                  strokeOpacity={isRelated ? 0.5 : 0.7}
+                  strokeDasharray={isRelated ? "6,4" : undefined}
                   markerEnd={`url(#${markerId})`}
                 />
               </g>
@@ -904,6 +906,8 @@ export function DocumentCanvas({
             
             const edgeColor = edge.edgeType === "depends" 
               ? "hsl(var(--destructive))" 
+              : edge.edgeType === "related"
+              ? "hsl(var(--muted-foreground))"
               : "hsl(var(--primary))";
             const markerId = edge.edgeType === "depends" ? "arrow-group-depends" : "arrow-group-flow";
             
