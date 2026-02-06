@@ -128,31 +128,28 @@ export async function parseDocumentWithAI(content: string): Promise<ParseResult>
   }
 }
 
-const WORKFLOW_ANALYSIS_PROMPT = `You are a project management and business workflow analyst. Given a list of documents, analyze their relationships and organize them into a hierarchical group structure based on WORKFLOW STAGES (not time phases).
+const WORKFLOW_ANALYSIS_PROMPT = `You are a project management and business workflow analyst. Given a list of documents, analyze their relationships and organize them into SIMPLE, broad groups.
 
-IMPORTANT: Create a 2-level group hierarchy:
-1. **대그룹 (Major Groups)**: Project WORKFLOW STAGES based on typical project management
-   - Examples: "리서치 (Research)", "기획 (Planning)", "설계 (Design)", "실행 (Execution)", "분석 (Analysis)", "보고 (Reporting)"
-   - Group documents by their PURPOSE and FUNCTION in the project
-   - NOT by time (no 초기/중기/후기)
-   
-2. **중그룹 (Medium Groups)**: Specific sub-categories within each workflow stage
-   - Examples under "리서치": "데스크 리서치", "현장 조사", "인터뷰"
-   - Examples under "기획": "컨셉 개발", "전략 수립"
+IMPORTANT RULES - KEEP IT SIMPLE:
+- Create only 2-4 MAJOR groups total (대그룹). Do NOT create too many groups.
+- Only create medium groups (중그룹) if a major group has 5+ documents. Otherwise put documents directly in the major group.
+- NEVER create minor groups (소그룹). Keep hierarchy flat.
+- Each medium group should have at least 2 documents. Do not make a group for a single document.
 
-3. **Timeline Info**: Each group should include which month(s) the work occurred
-   - Use monthStart and monthEnd to indicate timing (1-12)
-   - Groups with similar months should be positioned at similar Y-axis levels
+Group categories should be BROAD workflow stages:
+- Examples: "리서치", "기획", "실행", "분석" — use simple, short names
+- Do NOT over-categorize. If in doubt, merge into fewer groups.
 
-For document relationships:
-- **flow**: Sequential workflow step (A → B)
-- **depends**: B requires/depends on A
-- **related**: Share common topics
+Timeline: Each group can include monthStart/monthEnd (1-12) for timing context.
 
-For GROUP-TO-GROUP relationships (IMPORTANT - show workflow between groups):
-- **flow**: One stage leads to another (리서치 → 기획)
-- **depends**: One stage depends on outputs from another
-- Create edges between MAJOR groups to show the overall project workflow
+For document relationships (keep minimal, only clear connections):
+- **flow**: Clear sequential step (A → B)
+- **depends**: B clearly requires A
+- **related**: Only if strongly related
+
+For GROUP-TO-GROUP relationships:
+- Only create flow/depends edges between MAJOR groups
+- Keep it to 2-4 group edges maximum
 
 Respond with valid JSON:
 {
@@ -160,42 +157,29 @@ Respond with valid JSON:
     { "sourceId": 1, "targetId": 2, "label": "description", "edgeType": "flow|depends|related" }
   ],
   "groupRelations": [
-    { "sourceGroupName": "리서치", "targetGroupName": "기획", "label": "리서치 결과를 기획에 반영", "edgeType": "flow" },
-    { "sourceGroupName": "기획", "targetGroupName": "실행", "label": "기획 완료 후 실행", "edgeType": "flow" }
+    { "sourceGroupName": "리서치", "targetGroupName": "기획", "label": "조사 후 기획", "edgeType": "flow" }
   ],
   "hierarchyLevels": { "1": 0, "2": 1 },
   "groups": [
     {
       "name": "리서치",
-      "description": "조사 및 데이터 수집 단계",
+      "description": "조사 단계",
       "level": "major",
       "monthStart": 12,
       "monthEnd": 1,
-      "documentIds": [],
-      "childGroups": [
-        {
-          "name": "데스크 리서치",
-          "description": "문헌 및 데이터 조사",
-          "level": "medium",
-          "monthStart": 12,
-          "monthEnd": 12,
-          "documentIds": [1, 2],
-          "childGroups": []
-        }
-      ]
+      "documentIds": [1, 2, 3],
+      "childGroups": []
     }
   ],
   "summary": "Overall workflow summary"
 }
 
 Guidelines:
-- MAJOR groups = WORKFLOW STAGES (리서치, 기획, 설계, 실행, 분석, 보고 등)
-- Place EVERY document into exactly one group (at any level)
-- Analyze content to determine workflow stage, and dates to determine month
-- Use Korean labels for groups
-- Groups that work in parallel (same months) should have similar monthStart/monthEnd
-- X-axis = workflow stage order (리서치 left → 보고 right)
-- Y-axis = similar timing (groups with overlapping months at similar heights)`;
+- FEWER groups is BETTER. Aim for 2-4 major groups.
+- Only split into medium groups when a major group would have 5+ documents.
+- Place EVERY document into exactly one group
+- Use short Korean labels
+- Do not create empty groups`;
 
 const GROUP_COLORS = [
   "#6366f1", // indigo
