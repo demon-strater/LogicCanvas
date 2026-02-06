@@ -314,41 +314,41 @@ export default function Canvas() {
           />
         )}
 
-        <div className="fixed bottom-6 right-6 flex items-center gap-2">
+        <div className="fixed bottom-4 right-4 flex items-center gap-2 z-50">
           {(documents.length >= 1 || (groups || []).length >= 1) && (
             <Button
               variant="outline"
-              size="default"
-              className="shadow-lg bg-card/95 backdrop-blur-sm"
+              size="sm"
+              className="shadow-lg bg-card/90 backdrop-blur-sm"
               onClick={() => relayoutMutation.mutate()}
               disabled={relayoutMutation.isPending}
               data-testid="button-relayout"
             >
-              <LayoutGrid className="h-4 w-4 mr-2" />
+              <LayoutGrid className="h-3.5 w-3.5 mr-1.5" />
               {relayoutMutation.isPending ? "정렬 중..." : "재정렬"}
             </Button>
           )}
           {documents.length >= 2 && (
             <Button
               variant="outline"
-              size="default"
-              className="shadow-lg bg-card/95 backdrop-blur-sm"
+              size="sm"
+              className="shadow-lg bg-card/90 backdrop-blur-sm"
               onClick={() => analyzeWorkflowMutation.mutate()}
               disabled={analyzeWorkflowMutation.isPending}
               data-testid="button-analyze-workflow"
             >
-              <Wand2 className="h-4 w-4 mr-2" />
+              <Wand2 className="h-3.5 w-3.5 mr-1.5" />
               {analyzeWorkflowMutation.isPending ? "분석 중..." : "자동 정렬"}
             </Button>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                size="lg"
-                className="shadow-lg h-12 w-12 rounded-full p-0"
+                size="icon"
+                className="shadow-lg rounded-full"
                 data-testid="button-add-menu"
               >
-                <Plus className="h-6 w-6" />
+                <Plus className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">

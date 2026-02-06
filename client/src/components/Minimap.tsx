@@ -215,10 +215,11 @@ export function Minimap({
   return (
     <div
       ref={minimapRef}
-      className="absolute bottom-4 right-4 border rounded-lg bg-card/90 backdrop-blur-sm shadow-lg overflow-hidden select-none"
+      className="absolute right-4 border rounded-lg bg-card/90 backdrop-blur-sm shadow-lg overflow-hidden select-none"
       style={{
         width: MINIMAP_WIDTH,
         height: MINIMAP_HEIGHT,
+        bottom: 68,
         zIndex: 50,
         cursor: isDragging ? 'grabbing' : 'pointer',
       }}
