@@ -634,6 +634,7 @@ export function DocumentCanvas({
         zoom={zoom}
         panX={pan.x}
         viewportHeight={dimensions.height}
+        activeDate={viewingDocumentId ? documents.find(d => d.id === viewingDocumentId)?.createdAt : null}
       />
 
       <div
