@@ -685,6 +685,67 @@ export function DocumentCanvas({
           </defs>
 
           {/* Document-to-document edges - render all types with proper colors/styles */}
+          {/* Layer 1: Background outlines (drawn first so they don't cover colored lines) */}
+          {edges.map((edge) => {
+            const sourcePos = docPositions[edge.sourceDocId];
+            const targetPos = docPositions[edge.targetDocId];
+            if (!sourcePos || !targetPos) return null;
+
+            const HALF_W = DOC_WIDTH / 2;
+            const HALF_H = DOC_HEIGHT / 2;
+            const sx = sourcePos.x, sy = sourcePos.y;
+            const tx = targetPos.x, ty = targetPos.y;
+            const dx = tx - sx, dy = ty - sy;
+            const absDx = Math.abs(dx), absDy = Math.abs(dy);
+
+            let startX: number, startY: number, endX: number, endY: number;
+            let horizontal: boolean;
+
+            if (absDx * DOC_HEIGHT > absDy * DOC_WIDTH) {
+              horizontal = true;
+              if (dx > 0) {
+                startX = sx + HALF_W; startY = sy;
+                endX = tx - HALF_W; endY = ty;
+              } else {
+                startX = sx - HALF_W; startY = sy;
+                endX = tx + HALF_W; endY = ty;
+              }
+            } else {
+              horizontal = false;
+              if (dy > 0) {
+                startX = sx; startY = sy + HALF_H;
+                endX = tx; endY = ty - HALF_H;
+              } else {
+                startX = sx; startY = sy - HALF_H;
+                endX = tx; endY = ty + HALF_H;
+              }
+            }
+
+            const dist = Math.sqrt((endX-startX)**2 + (endY-startY)**2);
+            const t = Math.min(1, dist / 400);
+            const curveStrength = 30 + t * 50;
+
+            let pathD: string;
+            if (horizontal) {
+              const dir = dx > 0 ? 1 : -1;
+              pathD = `M ${startX} ${startY} C ${startX + dir * curveStrength} ${startY}, ${endX - dir * curveStrength} ${endY}, ${endX} ${endY}`;
+            } else {
+              const dir = dy > 0 ? 1 : -1;
+              pathD = `M ${startX} ${startY} C ${startX} ${startY + dir * curveStrength}, ${endX} ${endY - dir * curveStrength}, ${endX} ${endY}`;
+            }
+
+            return (
+              <path
+                key={`bg-${edge.id}`}
+                d={pathD}
+                fill="none"
+                stroke="hsl(var(--background))"
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
+            );
+          })}
+          {/* Layer 2: Colored lines (drawn on top of all backgrounds) */}
           {edges.map((edge) => {
             const sourcePos = docPositions[edge.sourceDocId];
             const targetPos = docPositions[edge.targetDocId];
@@ -738,25 +799,17 @@ export function DocumentCanvas({
             const isRelated = edge.edgeType === "related";
 
             return (
-              <g key={edge.id}>
-                <path
-                  d={pathD}
-                  fill="none"
-                  stroke="hsl(var(--background))"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                />
-                <path
-                  d={pathD}
-                  fill="none"
-                  stroke={edgeColor}
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeOpacity={isRelated ? 0.5 : 0.7}
-                  strokeDasharray={isRelated ? "6,4" : undefined}
-                  markerEnd={`url(#${markerId})`}
-                />
-              </g>
+              <path
+                key={`line-${edge.id}`}
+                d={pathD}
+                fill="none"
+                stroke={edgeColor}
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeOpacity={isRelated ? 0.5 : 0.7}
+                strokeDasharray={isRelated ? "6,4" : undefined}
+                markerEnd={`url(#${markerId})`}
+              />
             );
           })}
 
