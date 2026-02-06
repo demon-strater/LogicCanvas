@@ -975,11 +975,12 @@ export function DocumentCanvas({
           .filter(g => g.parentId !== null)
           .map((group, index) => {
           const pos = groupPositions[group.id] || getGroupPosition(group, index);
+          const groupDocs = documents.filter(d => d.groupId === group.id);
           return (
             <GroupBox
               key={`group-${group.id}`}
               group={group}
-              documents={[]}
+              documents={groupDocs}
               childGroups={[]}
               allDocuments={documents}
               x={pos.x}
@@ -997,7 +998,24 @@ export function DocumentCanvas({
           );
         })}
 
-        {/* Documents will be shown later when we add the detail level */}
+        {/* Render document boxes */}
+        {documents.map((doc) => {
+          const pos = docPositions[doc.id];
+          if (!pos) return null;
+          return (
+            <DocumentBox
+              key={`doc-${doc.id}`}
+              document={doc}
+              x={pos.x}
+              y={pos.y}
+              isSelected={selectedDocumentId === doc.id || selectedDocIds.has(doc.id)}
+              isSpacePressed={isSpacePressed}
+              onSelect={handleDocSelect}
+              onClick={onClickDocument}
+              onDragEnd={handleLocalPositionUpdate}
+            />
+          );
+        })}
 
         {documents.length === 0 && groups.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center">
