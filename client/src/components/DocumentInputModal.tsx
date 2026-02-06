@@ -75,8 +75,14 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, isLoading }: Pro
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "파일 업로드 실패");
+        let errorMessage = "파일 업로드 실패";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          errorMessage = `서버 오류 (${response.status})`;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();

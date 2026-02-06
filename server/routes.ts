@@ -106,15 +106,53 @@ export async function registerRoutes(
         return res.status(400).json({ error: "빈 파일입니다. 내용이 있는 파일을 업로드해 주세요." });
       }
 
+      console.log(`[upload] Processing file: ${file.originalname} (${file.buffer.length} bytes, type: ${file.mimetype})`);
+
       const ext = path.extname(file.originalname).toLowerCase();
       let text = "";
 
       if (ext === ".txt" || ext === ".md" || ext === ".text") {
         text = file.buffer.toString("utf-8");
       } else if (ext === ".pdf") {
-        const parser = new PDFParse({ data: file.buffer });
-        const result = await parser.getText();
-        text = result.text;
+        try {
+          const pdfHeader = file.buffer.slice(0, 5).toString("ascii");
+          if (pdfHeader !== "%PDF-") {
+            return res.status(400).json({ error: "올바른 PDF 파일이 아닙니다. 파일이 손상되었거나 다른 형식일 수 있습니다." });
+          }
+
+          const parser = new PDFParse({ data: file.buffer });
+          const result = await parser.getText();
+
+          text = result.pages
+            .map((p: { text: string }) => p.text)
+            .join("\n\n")
+            .trim();
+
+          if (!text) {
+            text = result.text || "";
+          }
+
+          text = text.replace(/\n-- \d+ of \d+ --\n?/g, "\n").trim();
+
+          try { await parser.destroy(); } catch {}
+
+          if (!text) {
+            return res.status(400).json({
+              error: "PDF에서 텍스트를 추출할 수 없습니다. 스캔된 이미지 PDF일 수 있습니다. 텍스트가 포함된 PDF를 사용하거나, 내용을 직접 붙여넣기 해주세요."
+            });
+          }
+        } catch (pdfError: any) {
+          const errMsg = pdfError?.message || String(pdfError);
+          console.error(`[upload] PDF parsing failed for ${file.originalname}:`, errMsg);
+
+          if (errMsg.includes("password") || errMsg.includes("encrypted") || errMsg.includes("Password")) {
+            return res.status(400).json({ error: "암호가 설정된 PDF입니다. 암호를 해제한 후 다시 업로드해 주세요." });
+          }
+          if (errMsg.includes("Invalid") || errMsg.includes("corrupt") || errMsg.includes("XRef") || errMsg.includes("startxref")) {
+            return res.status(400).json({ error: "손상된 PDF 파일입니다. 다른 PDF 뷰어에서 파일을 열 수 있는지 확인해 주세요." });
+          }
+          return res.status(400).json({ error: `PDF 처리 중 오류가 발생했습니다: ${errMsg.substring(0, 100)}` });
+        }
       } else if (ext === ".docx") {
         const result = await mammoth.extractRawText({ buffer: file.buffer });
         text = result.value;
@@ -169,11 +207,13 @@ export async function registerRoutes(
         return res.status(400).json({ error: "파일에서 텍스트를 추출할 수 없습니다" });
       }
 
+      console.log(`[upload] Successfully extracted ${text.length} chars from ${file.originalname}`);
       const suggestedTitle = file.originalname.replace(/\.[^/.]+$/, "");
       res.json({ text: text.trim(), suggestedTitle });
-    } catch (error) {
-      console.error("File upload error:", error);
-      res.status(500).json({ error: "파일 처리 중 오류가 발생했습니다" });
+    } catch (error: any) {
+      const errMsg = error?.message || String(error);
+      console.error(`[upload] File upload error:`, errMsg, error?.stack?.substring(0, 500));
+      res.status(500).json({ error: `파일 처리 중 오류가 발생했습니다: ${errMsg.substring(0, 150)}` });
     }
   });
 
