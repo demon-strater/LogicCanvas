@@ -438,6 +438,10 @@ export function DocumentCanvas({
     [onSelectDocument, onSelectGroup]
   );
 
+  const handleDocDragMove = useCallback((id: number, x: number, y: number) => {
+    setDocPositions(prev => ({ ...prev, [id]: { x, y } }));
+  }, []);
+
   // Handle multi-drag for documents
   const handleLocalPositionUpdate = (id: number, x: number, y: number, prevX: number, prevY: number) => {
     const deltaX = x - prevX;
@@ -949,6 +953,7 @@ export function DocumentCanvas({
               documents={[]}
               childGroups={childGroups}
               allDocuments={documents}
+              docPositions={docPositions}
               x={pos.x}
               y={pos.y + TIMELINE_GAP}
               isSelected={selectedGroupId === group.id || selectedGroupIds.has(group.id)}
@@ -977,6 +982,7 @@ export function DocumentCanvas({
               documents={groupDocs}
               childGroups={[]}
               allDocuments={documents}
+              docPositions={docPositions}
               x={pos.x}
               y={pos.y + TIMELINE_GAP}
               isSelected={selectedGroupId === group.id || selectedGroupIds.has(group.id)}
@@ -1006,6 +1012,7 @@ export function DocumentCanvas({
               isSpacePressed={isSpacePressed}
               onSelect={handleDocSelect}
               onClick={onClickDocument}
+              onDragMove={handleDocDragMove}
               onDragEnd={handleLocalPositionUpdate}
             />
           );

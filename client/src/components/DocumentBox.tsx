@@ -11,6 +11,7 @@ type Props = {
   isSpacePressed?: boolean;
   onSelect: (id: number, shiftKey?: boolean) => void;
   onClick: (id: number) => void;
+  onDragMove?: (id: number, x: number, y: number) => void;
   onDragEnd: (id: number, x: number, y: number, prevX: number, prevY: number) => void;
 };
 
@@ -22,6 +23,7 @@ export function DocumentBox({
   isSpacePressed = false,
   onSelect,
   onClick,
+  onDragMove,
   onDragEnd,
 }: Props) {
   const [isDragging, setIsDragging] = useState(false);
@@ -76,6 +78,7 @@ export function DocumentBox({
       const newY = e.clientY - dragStartRef.current.y;
       setCurrentPos({ x: newX, y: newY });
       setHasDragged(true);
+      onDragMove?.(document.id, newX, newY);
     };
 
     const handleMouseUp = () => {

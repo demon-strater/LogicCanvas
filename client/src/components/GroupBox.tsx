@@ -20,12 +20,13 @@ type Props = {
   group: DocumentGroup;
   documents: Document[];
   childGroups: DocumentGroup[];
-  allDocuments: Document[]; // All documents to find child group docs
+  allDocuments: Document[];
+  docPositions?: Record<number, { x: number; y: number }>;
   x: number;
   y: number;
   isSelected: boolean;
   isExpanded: boolean;
-  isTopLevel?: boolean; // true for parent groups, false for child groups
+  isTopLevel?: boolean;
   isSpacePressed?: boolean;
   onSelect: (id: number, shiftKey?: boolean) => void;
   onToggleExpand: (id: number) => void;
@@ -39,6 +40,7 @@ export function GroupBox({
   documents,
   childGroups,
   allDocuments,
+  docPositions = {},
   x,
   y,
   isSelected,
@@ -64,7 +66,12 @@ export function GroupBox({
 
   const totalItems = documents.length + childGroups.length;
 
-  // Helper function to calculate child group bounds from its actual documents
+  const getDocPos = useCallback((doc: Document) => {
+    const live = docPositions[doc.id];
+    if (live) return live;
+    return { x: doc.x ?? 0, y: doc.y ?? 0 };
+  }, [docPositions]);
+
   const calculateChildGroupBounds = useCallback((childGroup: DocumentGroup) => {
     const childDocs = (allDocuments || []).filter(d => d.groupId === childGroup.id);
     
@@ -77,15 +84,13 @@ export function GroupBox({
       };
     }
     
-    // Calculate bounds from actual document positions
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const doc of childDocs) {
-      if (doc.x !== null && doc.y !== null) {
-        minX = Math.min(minX, doc.x - DOC_WIDTH / 2);
-        maxX = Math.max(maxX, doc.x + DOC_WIDTH / 2);
-        minY = Math.min(minY, doc.y - DOC_HEIGHT / 2);
-        maxY = Math.max(maxY, doc.y + DOC_HEIGHT / 2);
-      }
+      const pos = getDocPos(doc);
+      minX = Math.min(minX, pos.x - DOC_WIDTH / 2);
+      maxX = Math.max(maxX, pos.x + DOC_WIDTH / 2);
+      minY = Math.min(minY, pos.y - DOC_HEIGHT / 2);
+      maxY = Math.max(maxY, pos.y + DOC_HEIGHT / 2);
     }
     
     if (minX === Infinity) {
@@ -97,30 +102,27 @@ export function GroupBox({
     const width = Math.max(DOC_WIDTH + GROUP_PADDING * 2, contentWidth + GROUP_PADDING * 2);
     const height = Math.max(DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING, contentHeight + GROUP_HEADER + GROUP_PADDING);
     
-    // Calculate center from content bounds
     const topLeftX = minX - GROUP_PADDING;
     const topLeftY = minY - GROUP_HEADER;
     const centerX = topLeftX + width / 2;
     const centerY = topLeftY + height / 2;
     
     return { centerX, centerY, width, height };
-  }, [allDocuments]);
+  }, [allDocuments, getDocPos]);
 
   // Calculate bounding box and correct center from actual document and child group positions
   const { width: groupWidth, height: groupHeight, centerX: computedCenterX, centerY: computedCenterY } = useMemo(() => {
     // Get all items that should be contained in this group
     const allItems: { x: number; y: number; w: number; h: number }[] = [];
     
-    // Add direct documents
     for (const doc of documents || []) {
-      if (doc.x !== null && doc.y !== null) {
-        allItems.push({ 
-          x: doc.x, 
-          y: doc.y, 
-          w: DOC_WIDTH, 
-          h: DOC_HEIGHT 
-        });
-      }
+      const pos = getDocPos(doc);
+      allItems.push({ 
+        x: pos.x, 
+        y: pos.y, 
+        w: DOC_WIDTH, 
+        h: DOC_HEIGHT 
+      });
     }
     
     // Add child groups - calculate their bounds from their actual documents
@@ -169,7 +171,7 @@ export function GroupBox({
       centerX,
       centerY
     };
-  }, [documents, childGroups, calculateChildGroupBounds, x, y]);
+  }, [documents, childGroups, calculateChildGroupBounds, getDocPos, x, y]);
   
   // Use computed center if we have documents, otherwise use stored position
   const effectiveCenterX = (documents || []).length > 0 || (childGroups || []).length > 0 ? computedCenterX : x;
@@ -246,7 +248,7 @@ export function GroupBox({
         left: isDragging ? currentPos.x : effectiveCenterX,
         top: isDragging ? currentPos.y : effectiveCenterY,
         transform: "translate(-50%, -50%)",
-        transition: isDragging ? 'box-shadow 0.2s' : 'left 0.15s ease-out, top 0.15s ease-out, width 0.2s ease-out, height 0.2s ease-out, box-shadow 0.2s',
+        transition: isDragging ? 'box-shadow 0.2s' : 'left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), top 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), width 0.35s cubic-bezier(0.25, 0.1, 0.25, 1), height 0.35s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.2s',
         zIndex: isSelected || isDragging ? 4 : (isTopLevel ? 1 : 2),
         // Top-level groups have more transparent borders (30%), child groups are more opaque (80%)
         borderColor: isSelected ? groupColor : `${groupColor}${isTopLevel ? '30' : '80'}`,
