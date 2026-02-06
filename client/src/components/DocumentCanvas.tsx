@@ -585,9 +585,9 @@ export function DocumentCanvas({
   const getEdgeColor = (edgeType: string) => {
     switch (edgeType) {
       case "flow": return "hsl(var(--primary))";
-      case "depends": return "hsl(var(--destructive))";
-      case "parent": return "hsl(142, 76%, 36%)";
-      default: return "hsl(var(--muted-foreground))";
+      case "depends": return "hsl(var(--destructive) / 0.85)";
+      case "parent": return "hsl(142, 55%, 42%)";
+      default: return "hsl(var(--muted-foreground) / 0.6)";
     }
   };
 
@@ -664,23 +664,23 @@ export function DocumentCanvas({
           style={{ width: canvasWidth, height: canvasHeight, zIndex: 3 }}
         >
           <defs>
-            <marker id="arrow-flow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-              <path d="M 0 0.5 L 7 3 L 0 5.5" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            <marker id="arrow-flow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+              <path d="M 0.5 0.5 L 5 3 L 0.5 5.5 Z" fill="hsl(var(--primary))" fillOpacity="0.7" stroke="none" />
             </marker>
-            <marker id="arrow-depends" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-              <path d="M 0 0.5 L 7 3 L 0 5.5" fill="none" stroke="hsl(var(--destructive))" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            <marker id="arrow-depends" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+              <path d="M 0.5 0.5 L 5 3 L 0.5 5.5 Z" fill="hsl(var(--destructive))" fillOpacity="0.7" stroke="none" />
             </marker>
-            <marker id="arrow-parent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-              <path d="M 0 0.5 L 7 3 L 0 5.5" fill="none" stroke="hsl(142, 60%, 45%)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            <marker id="arrow-parent" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+              <path d="M 0.5 0.5 L 5 3 L 0.5 5.5 Z" fill="hsl(142, 60%, 45%)" fillOpacity="0.7" stroke="none" />
             </marker>
-            <marker id="arrow-related" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-              <path d="M 0 0.5 L 7 3 L 0 5.5" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            <marker id="arrow-related" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto">
+              <circle cx="2.5" cy="2.5" r="2" fill="hsl(var(--muted-foreground))" fillOpacity="0.5" stroke="none" />
             </marker>
-            <marker id="arrow-group-flow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
-              <path d="M 1 0.5 L 9 4 L 1 7.5" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <marker id="arrow-group-flow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M 0.5 0.5 L 7 4 L 0.5 7.5 Z" fill="hsl(var(--primary))" fillOpacity="0.6" stroke="none" />
             </marker>
-            <marker id="arrow-group-depends" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
-              <path d="M 1 0.5 L 9 4 L 1 7.5" fill="none" stroke="hsl(var(--destructive))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <marker id="arrow-group-depends" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M 0.5 0.5 L 7 4 L 0.5 7.5 Z" fill="hsl(var(--destructive))" fillOpacity="0.6" stroke="none" />
             </marker>
           </defs>
 
@@ -958,9 +958,9 @@ export function DocumentCanvas({
             }
             
             const edgeColor = edge.edgeType === "depends" 
-              ? "hsl(var(--destructive))" 
+              ? "hsl(var(--destructive) / 0.85)" 
               : edge.edgeType === "related"
-              ? "hsl(var(--muted-foreground))"
+              ? "hsl(var(--muted-foreground) / 0.6)"
               : "hsl(var(--primary))";
             const markerId = edge.edgeType === "depends" ? "arrow-group-depends" : "arrow-group-flow";
             
@@ -977,9 +977,9 @@ export function DocumentCanvas({
                   d={pathD}
                   fill="none"
                   stroke={edgeColor}
-                  strokeWidth="2"
+                  strokeWidth="1.8"
                   strokeLinecap="round"
-                  strokeOpacity="0.5"
+                  strokeOpacity="0.6"
                   strokeDasharray={edge.edgeType === "related" ? "6,4" : undefined}
                   markerEnd={`url(#${markerId})`}
                 />
@@ -1121,24 +1121,24 @@ export function DocumentCanvas({
         onNavigate={handleMinimapNavigate}
       />
 
-      <div className="absolute bottom-14 left-4 bg-card/90 backdrop-blur-sm border rounded-lg px-3 py-2 shadow-lg" data-testid="edge-legend">
+      <div className="absolute bottom-14 left-4 bg-card/90 backdrop-blur-sm border rounded-md px-3 py-2 shadow-sm" data-testid="edge-legend">
         <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 tracking-wide">연결선 의미</p>
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
-            <svg width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="hsl(var(--primary))" strokeWidth="2" /><path d="M 22 2 L 28 5 L 22 8" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.2" /></svg>
-            <span className="text-[10px] text-foreground/80">흐름 (순차적 진행)</span>
+            <svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="hsl(var(--primary))" strokeWidth="1.5" strokeOpacity="0.7" strokeLinecap="round" /><path d="M 20 2 L 26 5 L 20 8 Z" fill="hsl(var(--primary))" fillOpacity="0.7" stroke="none" /></svg>
+            <span className="text-[10px] text-foreground/70">흐름 (순차적 진행)</span>
           </div>
           <div className="flex items-center gap-2">
-            <svg width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="hsl(var(--destructive))" strokeWidth="2" /><path d="M 22 2 L 28 5 L 22 8" fill="none" stroke="hsl(var(--destructive))" strokeWidth="1.2" /></svg>
-            <span className="text-[10px] text-foreground/80">의존 (선행 필요)</span>
+            <svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="hsl(var(--destructive))" strokeWidth="1.5" strokeOpacity="0.6" strokeLinecap="round" /><path d="M 20 2 L 26 5 L 20 8 Z" fill="hsl(var(--destructive))" fillOpacity="0.6" stroke="none" /></svg>
+            <span className="text-[10px] text-foreground/70">의존 (선행 필요)</span>
           </div>
           <div className="flex items-center gap-2">
-            <svg width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="hsl(142, 76%, 36%)" strokeWidth="2" /><path d="M 22 2 L 28 5 L 22 8" fill="none" stroke="hsl(142, 76%, 36%)" strokeWidth="1.2" /></svg>
-            <span className="text-[10px] text-foreground/80">상위 (계층 관계)</span>
+            <svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="hsl(142, 55%, 42%)" strokeWidth="1.5" strokeOpacity="0.7" strokeLinecap="round" /><path d="M 20 2 L 26 5 L 20 8 Z" fill="hsl(142, 55%, 42%)" fillOpacity="0.7" stroke="none" /></svg>
+            <span className="text-[10px] text-foreground/70">상위 (계층 관계)</span>
           </div>
           <div className="flex items-center gap-2">
-            <svg width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeDasharray="4,3" /><path d="M 22 2 L 28 5 L 22 8" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.2" /></svg>
-            <span className="text-[10px] text-foreground/80">관련 (참고 연관)</span>
+            <svg width="30" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeOpacity="0.45" strokeDasharray="4,3" strokeLinecap="round" /><circle cx="27" cy="5" r="2" fill="hsl(var(--muted-foreground))" fillOpacity="0.5" /></svg>
+            <span className="text-[10px] text-foreground/70">관련 (참고 연관)</span>
           </div>
         </div>
       </div>
