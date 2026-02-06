@@ -49,6 +49,8 @@ const documentUpdateSchema = insertDocumentSchema.pick({
   groupId: true,
   x: true,
   y: true,
+}).extend({
+  createdAt: z.string().optional(),
 }).partial();
 
 const groupUpdateSchema = insertDocumentGroupSchema.pick({
@@ -236,7 +238,11 @@ export async function registerRoutes(
         return res.status(400).json({ error: updateInput.error.errors[0].message });
       }
 
-      const document = await storage.updateDocument(id, updateInput.data);
+      const updates: any = { ...updateInput.data };
+      if (updates.createdAt) {
+        updates.createdAt = new Date(updates.createdAt);
+      }
+      const document = await storage.updateDocument(id, updates);
       if (!document) {
         return res.status(404).json({ error: "Document not found" });
       }

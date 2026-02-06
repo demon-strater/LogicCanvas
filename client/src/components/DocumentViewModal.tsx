@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Calendar, FileText, Trash2, X } from "lucide-react";
+import { Calendar, FileText, Trash2, X, Pencil, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Document } from "@shared/schema";
 
@@ -9,22 +9,33 @@ type Props = {
   isOpen: boolean;
   onClose: () => void;
   onDelete: (id: number) => void;
+  onUpdateDate?: (id: number, date: string) => void;
 };
 
-export function DocumentViewModal({ document, isOpen, onClose, onDelete }: Props) {
+export function DocumentViewModal({ document, isOpen, onClose, onDelete, onUpdateDate }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const [isEditingDate, setIsEditingDate] = useState(false);
+  const [editDate, setEditDate] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        if (isEditingDate) {
+          setIsEditingDate(false);
+        } else {
+          onClose();
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, isEditingDate]);
+
+  useEffect(() => {
+    if (!isOpen) setIsEditingDate(false);
+  }, [isOpen]);
 
   if (!document || !isOpen) return null;
 
@@ -34,9 +45,28 @@ export function DocumentViewModal({ document, isOpen, onClose, onDelete }: Props
       year: "numeric",
       month: "long",
       day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     });
+  };
+
+  const toInputDate = (date: Date | string) => {
+    const d = new Date(date);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const handleStartEditDate = () => {
+    setEditDate(toInputDate(document.createdAt));
+    setIsEditingDate(true);
+  };
+
+  const handleSaveDate = () => {
+    if (editDate && onUpdateDate) {
+      const newDate = new Date(editDate + "T12:00:00");
+      onUpdateDate(document.id, newDate.toISOString());
+    }
+    setIsEditingDate(false);
   };
 
   const handleDelete = () => {
@@ -81,7 +111,39 @@ export function DocumentViewModal({ document, isOpen, onClose, onDelete }: Props
               </h2>
               <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                 <Calendar className="h-3 w-3" />
-                <span>{formatDate(document.createdAt)}</span>
+                {isEditingDate ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="date"
+                      value={editDate}
+                      onChange={(e) => setEditDate(e.target.value)}
+                      className="bg-background border rounded px-1.5 py-0.5 text-xs text-foreground"
+                      data-testid="input-edit-date"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveDate();
+                      }}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5"
+                      onClick={handleSaveDate}
+                      data-testid="button-save-date"
+                    >
+                      <Check className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <span
+                    className="flex items-center gap-1 cursor-pointer hover-elevate rounded px-1 -mx-1"
+                    onClick={handleStartEditDate}
+                    data-testid="button-edit-date"
+                  >
+                    {formatDate(document.createdAt)}
+                    <Pencil className="h-2.5 w-2.5 opacity-50" />
+                  </span>
+                )}
               </div>
             </div>
           </div>

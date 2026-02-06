@@ -398,6 +398,9 @@ export default function Canvas() {
         isOpen={viewingDocumentId !== null}
         onClose={() => setViewingDocumentId(null)}
         onDelete={handleDeleteDocument}
+        onUpdateDate={(id, date) => {
+          updateDocumentMutation.mutate({ id, updates: { createdAt: date } as any });
+        }}
       />
 
       <GroupInputModal
