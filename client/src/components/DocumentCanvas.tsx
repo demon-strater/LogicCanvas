@@ -22,6 +22,7 @@ type Props = {
   onUpdateGroupPosition: (id: number, x: number, y: number, prevX?: number, prevY?: number) => void;
   onEditGroup: (id: number) => void;
   onDeleteGroup: (id: number) => void;
+  viewingDocumentId?: number | null;
 };
 
 const MIN_ZOOM = 0.05;
@@ -50,6 +51,7 @@ export function DocumentCanvas({
   onUpdateGroupPosition,
   onEditGroup,
   onDeleteGroup,
+  viewingDocumentId,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -609,6 +611,8 @@ export function DocumentCanvas({
         offsetX={150}
         zoom={zoom}
         panX={pan.x}
+        activeDate={viewingDocumentId ? documents.find(d => d.id === viewingDocumentId)?.createdAt : null}
+        activeDocTitle={viewingDocumentId ? documents.find(d => d.id === viewingDocumentId)?.title : null}
       />
 
       {/* Timeline grid lines - fixed to viewport, scales with zoom */}

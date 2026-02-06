@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { FileText } from "lucide-react";
 
 type Props = {
   startMonth: number;
@@ -10,6 +11,8 @@ type Props = {
   offsetX: number;
   zoom: number;
   panX: number;
+  activeDate?: Date | string | null;
+  activeDocTitle?: string | null;
 };
 
 export function TimelineHeader({
@@ -22,6 +25,8 @@ export function TimelineHeader({
   offsetX,
   zoom,
   panX,
+  activeDate,
+  activeDocTitle,
 }: Props) {
   const months = useMemo(() => {
     const result = [];
@@ -39,6 +44,26 @@ export function TimelineHeader({
 
   const scaledMonthWidth = monthWidth * zoom;
   const scaledOffsetX = offsetX * zoom + panX;
+
+  const activeDateMarker = useMemo(() => {
+    if (!activeDate) return null;
+    const d = new Date(activeDate);
+    const docMonth = d.getMonth() + 1;
+    const docYear = d.getFullYear();
+    const docDay = d.getDate();
+    const daysInMonth = new Date(docYear, docMonth, 0).getDate();
+    const dayFraction = (docDay - 1) / daysInMonth;
+
+    const monthIndex = months.findIndex(
+      (m) => m.month === docMonth && m.year === docYear
+    );
+    if (monthIndex === -1) return null;
+
+    const x = scaledOffsetX + monthIndex * scaledMonthWidth + dayFraction * scaledMonthWidth;
+    const dateLabel = `${docMonth}월 ${docDay}일`;
+
+    return { x, dateLabel };
+  }, [activeDate, months, scaledMonthWidth, scaledOffsetX]);
 
   return (
     <div
@@ -72,6 +97,27 @@ export function TimelineHeader({
           </div>
         ))}
       </div>
+
+      {activeDateMarker && (
+        <div
+          className="absolute top-0 h-full flex flex-col items-center justify-end pointer-events-none"
+          style={{ left: activeDateMarker.x, zIndex: 10 }}
+        >
+          <div className="absolute -top-0.5 -translate-x-1/2 flex flex-col items-center">
+            <div className="flex items-center gap-1 bg-primary text-primary-foreground px-2 py-0.5 rounded-b-md text-[11px] font-medium shadow-md whitespace-nowrap">
+              <FileText className="h-3 w-3" />
+              <span>{activeDateMarker.dateLabel}</span>
+              {activeDocTitle && (
+                <>
+                  <span className="opacity-50">|</span>
+                  <span className="max-w-[120px] truncate opacity-80">{activeDocTitle}</span>
+                </>
+              )}
+            </div>
+            <div className="w-0.5 h-3 bg-primary rounded-b-full" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -310,6 +310,7 @@ export default function Canvas() {
             onUpdateGroupPosition={handleUpdateGroupPosition}
             onEditGroup={handleEditGroup}
             onDeleteGroup={handleDeleteGroup}
+            viewingDocumentId={viewingDocumentId}
           />
         )}
 
