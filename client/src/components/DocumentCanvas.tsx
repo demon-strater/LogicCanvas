@@ -27,8 +27,10 @@ type Props = {
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.1;
-const DOC_WIDTH = 350;
-const DOC_HEIGHT = 200;
+const DOC_WIDTH = 260;
+const DOC_HEIGHT = 130;
+const GROUP_PADDING = 30;
+const GROUP_HEADER = 100;
 const TIMELINE_HEIGHT = 50;
 const TIMELINE_GAP = 80;
 
@@ -313,10 +315,10 @@ export function DocumentCanvas({
           if (pos) {
             // Calculate actual group bounds from its documents
             const groupDocs = documents.filter(d => d.groupId === group.id);
-            let groupLeft = pos.x - 150;
-            let groupRight = pos.x + 150;
-            let groupTop = pos.y - 100;
-            let groupBottom = pos.y + 100;
+            let groupLeft = pos.x - DOC_WIDTH / 2;
+            let groupRight = pos.x + DOC_WIDTH / 2;
+            let groupTop = pos.y - DOC_HEIGHT / 2;
+            let groupBottom = pos.y + DOC_HEIGHT / 2;
             
             if (groupDocs.length > 0) {
               const docBounds = groupDocs.map(d => {
@@ -330,10 +332,10 @@ export function DocumentCanvas({
               }).filter(Boolean) as { left: number; right: number; top: number; bottom: number }[];
               
               if (docBounds.length > 0) {
-                groupLeft = Math.min(...docBounds.map(b => b.left)) - 50;
-                groupRight = Math.max(...docBounds.map(b => b.right)) + 50;
-                groupTop = Math.min(...docBounds.map(b => b.top)) - 70;
-                groupBottom = Math.max(...docBounds.map(b => b.bottom)) + 50;
+                groupLeft = Math.min(...docBounds.map(b => b.left)) - GROUP_PADDING;
+                groupRight = Math.max(...docBounds.map(b => b.right)) + GROUP_PADDING;
+                groupTop = Math.min(...docBounds.map(b => b.top)) - GROUP_HEADER;
+                groupBottom = Math.max(...docBounds.map(b => b.bottom)) + GROUP_PADDING;
               }
             }
             
@@ -382,12 +384,14 @@ export function DocumentCanvas({
     if (doc.x && doc.y && (doc.x !== 100 || doc.y !== 100)) {
       return { x: doc.x, y: doc.y };
     }
-    const cols = Math.max(1, Math.floor((width - 100) / 320));
+    const colWidth = DOC_WIDTH + 40;
+    const rowHeight = DOC_HEIGHT + 40;
+    const cols = Math.max(1, Math.floor((width - 100) / colWidth));
     const row = Math.floor(index / cols);
     const col = index % cols;
     return {
-      x: 180 + col * 320,
-      y: 120 + row * 200,
+      x: 180 + col * colWidth,
+      y: 120 + row * rowHeight,
     };
   }, []);
 

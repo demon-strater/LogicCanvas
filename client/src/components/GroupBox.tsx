@@ -11,10 +11,10 @@ import {
 import type { DocumentGroup, Document } from "@shared/schema";
 
 // Layout constants
-const DOC_WIDTH = 350;
-const DOC_HEIGHT = 200;
-const GROUP_PADDING = 40;
-const GROUP_HEADER = 50;
+const DOC_WIDTH = 260;
+const DOC_HEIGHT = 130;
+const GROUP_PADDING = 30;
+const GROUP_HEADER = 100;
 
 type Props = {
   group: DocumentGroup;
@@ -69,12 +69,11 @@ export function GroupBox({
     const childDocs = (allDocuments || []).filter(d => d.groupId === childGroup.id);
     
     if (childDocs.length === 0) {
-      // Empty child group - use stored position with default size
       return { 
         centerX: childGroup.x, 
         centerY: childGroup.y, 
-        width: 350, 
-        height: 200 
+        width: DOC_WIDTH + GROUP_PADDING * 2, 
+        height: DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING 
       };
     }
     
@@ -90,13 +89,13 @@ export function GroupBox({
     }
     
     if (minX === Infinity) {
-      return { centerX: childGroup.x, centerY: childGroup.y, width: 350, height: 200 };
+      return { centerX: childGroup.x, centerY: childGroup.y, width: DOC_WIDTH + GROUP_PADDING * 2, height: DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING };
     }
     
     const contentWidth = maxX - minX;
     const contentHeight = maxY - minY;
-    const width = Math.max(350, contentWidth + GROUP_PADDING * 2);
-    const height = Math.max(200, contentHeight + GROUP_HEADER + GROUP_PADDING);
+    const width = Math.max(DOC_WIDTH + GROUP_PADDING * 2, contentWidth + GROUP_PADDING * 2);
+    const height = Math.max(DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING, contentHeight + GROUP_HEADER + GROUP_PADDING);
     
     // Calculate center from content bounds
     const topLeftX = minX - GROUP_PADDING;
@@ -136,8 +135,7 @@ export function GroupBox({
     }
     
     if (allItems.length === 0) {
-      // Empty group - use stored position
-      return { width: 400, height: 220, centerX: x, centerY: y };
+      return { width: DOC_WIDTH + GROUP_PADDING * 2, height: DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING, centerX: x, centerY: y };
     }
     
     // Calculate bounding box of all items (items are positioned at CENTER)
@@ -163,9 +161,11 @@ export function GroupBox({
     const centerX = topLeftX + width / 2;
     const centerY = topLeftY + height / 2;
     
+    const minWidth = DOC_WIDTH + GROUP_PADDING * 2;
+    const minHeight = DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING;
     return { 
-      width: Math.max(400, width), 
-      height: Math.max(220, height),
+      width: Math.max(minWidth, width), 
+      height: Math.max(minHeight, height),
       centerX,
       centerY
     };
@@ -258,51 +258,41 @@ export function GroupBox({
       data-testid={`group-box-${group.id}`}
     >
       <div
-        className="flex items-center justify-between gap-2 p-3 rounded-t-md relative"
-        style={{ backgroundColor: `${groupColor}30`, zIndex: 10 }}
+        className="flex items-center justify-between gap-1 px-2.5 py-1.5 rounded-t-md relative"
+        style={{ backgroundColor: `${groupColor}${isTopLevel ? '20' : '25'}`, zIndex: 10 }}
       >
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div
-            className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
-            style={{ backgroundColor: `${groupColor}30` }}
-          >
-            <Folder className="h-4 w-4" style={{ color: groupColor }} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-sm truncate">{group.name}</h3>
-            <span className="text-xs text-muted-foreground">
-              {totalItems}개 항목
-            </span>
-          </div>
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <Folder className="h-3.5 w-3.5 flex-shrink-0" style={{ color: groupColor }} />
+          <h3 className={cn(
+            "font-semibold truncate",
+            isTopLevel ? "text-sm" : "text-xs"
+          )}>{group.name}</h3>
+          <span className="text-[10px] text-muted-foreground flex-shrink-0">
+            {totalItems}
+          </span>
         </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7">
-              <MoreHorizontal className="h-4 w-4" />
+            <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0">
+              <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => onEdit(group.id)}>
-              <Pencil className="h-4 w-4 mr-2" />
+              <Pencil className="h-3.5 w-3.5 mr-2" />
               수정
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => onDelete(group.id)}
               className="text-destructive"
             >
-              <Trash2 className="h-4 w-4 mr-2" />
+              <Trash2 className="h-3.5 w-3.5 mr-2" />
               삭제
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-
-      {group.description && (
-        <p className="text-xs text-muted-foreground px-3 py-2 border-t">
-          {group.description}
-        </p>
-      )}
     </div>
   );
 }

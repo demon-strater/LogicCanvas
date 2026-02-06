@@ -113,7 +113,7 @@ export function DocumentBox({
     <div
       ref={boxRef}
       className={cn(
-        "absolute w-[350px] min-h-[180px] p-4 rounded-lg border-2 cursor-pointer transition-shadow",
+        "absolute w-[260px] min-h-[130px] p-3 rounded-md border cursor-pointer transition-shadow",
         "bg-card hover:shadow-lg",
         isSelected
           ? "border-primary shadow-md"
@@ -130,28 +130,22 @@ export function DocumentBox({
       onClick={handleClick}
       data-testid={`document-box-${document.id}`}
     >
-      <div className="flex items-start gap-3 mb-3">
-        <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <FileText className="h-5 w-5 text-primary" />
+      <div className="flex items-start gap-2 mb-2">
+        <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0 bg-primary/10">
+          <FileText className="h-3.5 w-3.5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-sm truncate">{document.title}</h3>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-            <Calendar className="h-3 w-3" />
+          <h3 className="font-medium text-xs leading-tight line-clamp-2">{document.title}</h3>
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
+            <Calendar className="h-2.5 w-2.5" />
             <span>{formatDate(document.createdAt)}</span>
           </div>
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+      <p className="text-[10px] text-muted-foreground line-clamp-2 leading-relaxed">
         {getSummary()}
       </p>
-
-      <div className="mt-3 pt-3 border-t border-border">
-        <span className="text-[10px] text-muted-foreground/70">
-          클릭하여 전문 보기
-        </span>
-      </div>
     </div>
   );
 }
