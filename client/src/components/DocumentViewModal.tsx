@@ -5,8 +5,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Calendar, FileText, Trash2, X } from "lucide-react";
+import { Calendar, FileText, Trash2 } from "lucide-react";
 import type { Document } from "@shared/schema";
 
 type Props = {
@@ -75,13 +74,13 @@ export function DocumentViewModal({ document, isOpen, onClose, onDelete }: Props
           </div>
         )}
 
-        <div className="flex-1 mt-4 min-h-0 overflow-hidden">
-          <p className="text-sm font-medium mb-2">원문</p>
-          <ScrollArea className="h-full max-h-[50vh]">
-            <div className="pr-4 text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
+        <div className="flex-1 min-h-0 mt-4 flex flex-col">
+          <p className="text-sm font-medium mb-2 flex-shrink-0">원문</p>
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="pr-4 pb-4 text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
               {document.content}
             </div>
-          </ScrollArea>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
