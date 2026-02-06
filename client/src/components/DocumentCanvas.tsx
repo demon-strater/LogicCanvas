@@ -650,61 +650,27 @@ export function DocumentCanvas({
           style={{ width: canvasWidth, height: canvasHeight, zIndex: 3 }}
         >
           <defs>
-            <marker
-              id="arrowhead-flow"
-              markerWidth="10"
-              markerHeight="7"
-              refX="9"
-              refY="3.5"
-              orient="auto"
-            >
-              <polygon
-                points="0 0, 10 3.5, 0 7"
-                fill="hsl(var(--primary))"
-              />
+            <marker id="arrow-flow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+              <path d="M 0 0.5 L 7 3 L 0 5.5" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
             </marker>
-            <marker
-              id="arrowhead-depends"
-              markerWidth="10"
-              markerHeight="7"
-              refX="9"
-              refY="3.5"
-              orient="auto"
-            >
-              <polygon
-                points="0 0, 10 3.5, 0 7"
-                fill="hsl(var(--destructive))"
-              />
+            <marker id="arrow-depends" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+              <path d="M 0 0.5 L 7 3 L 0 5.5" fill="none" stroke="hsl(var(--destructive))" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
             </marker>
-            <marker
-              id="arrowhead-parent"
-              markerWidth="10"
-              markerHeight="7"
-              refX="9"
-              refY="3.5"
-              orient="auto"
-            >
-              <polygon
-                points="0 0, 10 3.5, 0 7"
-                fill="hsl(142, 76%, 36%)"
-              />
+            <marker id="arrow-parent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+              <path d="M 0 0.5 L 7 3 L 0 5.5" fill="none" stroke="hsl(142, 60%, 45%)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
             </marker>
-            <marker
-              id="arrowhead-related"
-              markerWidth="10"
-              markerHeight="7"
-              refX="9"
-              refY="3.5"
-              orient="auto"
-            >
-              <polygon
-                points="0 0, 10 3.5, 0 7"
-                fill="hsl(var(--muted-foreground))"
-              />
+            <marker id="arrow-related" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+              <path d="M 0 0.5 L 7 3 L 0 5.5" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            </marker>
+            <marker id="arrow-group-flow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M 1 0.5 L 9 4 L 1 7.5" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </marker>
+            <marker id="arrow-group-depends" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M 1 0.5 L 9 4 L 1 7.5" fill="none" stroke="hsl(var(--destructive))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </marker>
           </defs>
 
-          {/* Show only the most important document edges: depends only */}
+          {/* Document-to-document edges */}
           {edges.filter(e => e.edgeType === "depends").map((edge) => {
             const sourcePos = docPositions[edge.sourceDocId];
             const targetPos = docPositions[edge.targetDocId];
@@ -712,94 +678,67 @@ export function DocumentCanvas({
 
             const HALF_W = DOC_WIDTH / 2;
             const HALF_H = DOC_HEIGHT / 2;
-
-            const sourceCenterX = sourcePos.x;
-            const sourceCenterY = sourcePos.y;
-            const targetCenterX = targetPos.x;
-            const targetCenterY = targetPos.y;
-
-            const dx = targetCenterX - sourceCenterX;
-            const dy = targetCenterY - sourceCenterY;
-            const absDx = Math.abs(dx);
-            const absDy = Math.abs(dy);
+            const sx = sourcePos.x, sy = sourcePos.y;
+            const tx = targetPos.x, ty = targetPos.y;
+            const dx = tx - sx, dy = ty - sy;
+            const absDx = Math.abs(dx), absDy = Math.abs(dy);
 
             let startX: number, startY: number, endX: number, endY: number;
-            let sourceAnchor: 'top' | 'bottom' | 'left' | 'right';
-            let targetAnchor: 'top' | 'bottom' | 'left' | 'right';
+            let horizontal: boolean;
 
             if (absDx * DOC_HEIGHT > absDy * DOC_WIDTH) {
+              horizontal = true;
               if (dx > 0) {
-                startX = sourceCenterX + HALF_W;
-                startY = sourceCenterY;
-                endX = targetCenterX - HALF_W;
-                endY = targetCenterY;
-                sourceAnchor = 'right';
-                targetAnchor = 'left';
+                startX = sx + HALF_W; startY = sy;
+                endX = tx - HALF_W; endY = ty;
               } else {
-                startX = sourceCenterX - HALF_W;
-                startY = sourceCenterY;
-                endX = targetCenterX + HALF_W;
-                endY = targetCenterY;
-                sourceAnchor = 'left';
-                targetAnchor = 'right';
+                startX = sx - HALF_W; startY = sy;
+                endX = tx + HALF_W; endY = ty;
               }
             } else {
+              horizontal = false;
               if (dy > 0) {
-                startX = sourceCenterX;
-                startY = sourceCenterY + HALF_H;
-                endX = targetCenterX;
-                endY = targetCenterY - HALF_H;
-                sourceAnchor = 'bottom';
-                targetAnchor = 'top';
+                startX = sx; startY = sy + HALF_H;
+                endX = tx; endY = ty - HALF_H;
               } else {
-                startX = sourceCenterX;
-                startY = sourceCenterY - HALF_H;
-                endX = targetCenterX;
-                endY = targetCenterY + HALF_H;
-                sourceAnchor = 'top';
-                targetAnchor = 'bottom';
+                startX = sx; startY = sy - HALF_H;
+                endX = tx; endY = ty + HALF_H;
               }
             }
 
-            const arrowOffset = 12;
-            const finalDx = endX - startX;
-            const finalDy = endY - startY;
-            const finalDist = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
-            if (finalDist > arrowOffset) {
-              endX = endX - (finalDx / finalDist) * arrowOffset;
-              endY = endY - (finalDy / finalDist) * arrowOffset;
-            }
+            const dist = Math.sqrt((endX-startX)**2 + (endY-startY)**2);
+            const t = Math.min(1, dist / 400);
+            const curveStrength = 30 + t * 50;
 
             let pathD: string;
-            const curveOffset = Math.min(60, Math.max(30, finalDist * 0.3));
-            
-            if ((sourceAnchor === 'right' && targetAnchor === 'left') || 
-                (sourceAnchor === 'left' && targetAnchor === 'right')) {
-              const ctrlX1 = startX + (sourceAnchor === 'right' ? curveOffset : -curveOffset);
-              const ctrlX2 = endX + (targetAnchor === 'left' ? -curveOffset : curveOffset);
-              pathD = `M ${startX} ${startY} C ${ctrlX1} ${startY}, ${ctrlX2} ${endY}, ${endX} ${endY}`;
+            if (horizontal) {
+              const dir = dx > 0 ? 1 : -1;
+              pathD = `M ${startX} ${startY} C ${startX + dir * curveStrength} ${startY}, ${endX - dir * curveStrength} ${endY}, ${endX} ${endY}`;
             } else {
-              const ctrlY1 = startY + (sourceAnchor === 'bottom' ? curveOffset : -curveOffset);
-              const ctrlY2 = endY + (targetAnchor === 'top' ? -curveOffset : curveOffset);
-              pathD = `M ${startX} ${startY} C ${startX} ${ctrlY1}, ${endX} ${ctrlY2}, ${endX} ${endY}`;
+              const dir = dy > 0 ? 1 : -1;
+              pathD = `M ${startX} ${startY} C ${startX} ${startY + dir * curveStrength}, ${endX} ${endY - dir * curveStrength}, ${endX} ${endY}`;
             }
 
             const edgeColor = getEdgeColor(edge.edgeType);
-            const isDashed = edge.edgeType === "related";
-            const markerId = `arrowhead-${edge.edgeType}`;
-            const labelX = (startX + endX) / 2;
-            const labelY = (startY + endY) / 2 - 10;
+            const markerId = `arrow-${edge.edgeType}`;
 
             return (
               <g key={edge.id}>
                 <path
                   d={pathD}
                   fill="none"
+                  stroke="hsl(var(--background))"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                />
+                <path
+                  d={pathD}
+                  fill="none"
                   stroke={edgeColor}
-                  strokeWidth="2"
-                  strokeDasharray={isDashed ? "5,5" : undefined}
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeOpacity="0.7"
                   markerEnd={`url(#${markerId})`}
-                  className="transition-opacity"
                 />
               </g>
             );
@@ -932,50 +871,46 @@ export function DocumentCanvas({
               }
             }
             
-            const arrowOffset = 15;
-            const finalDx = endX - startX;
-            const finalDy = endY - startY;
-            const finalDist = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
-            if (finalDist > arrowOffset) {
-              endX = endX - (finalDx / finalDist) * arrowOffset;
-              endY = endY - (finalDy / finalDist) * arrowOffset;
-            }
-            
-            let pathD: string;
-            const curveOffset = Math.min(80, Math.max(40, finalDist * 0.3));
-            
             const gdx = targetCenter.x - sourceCenter.x;
             const gdy = targetCenter.y - sourceCenter.y;
             const gAbsDx = Math.abs(gdx);
             const gAbsDy = Math.abs(gdy);
+            const gDist = Math.sqrt((endX-startX)**2 + (endY-startY)**2);
+            const gt = Math.min(1, gDist / 600);
+            const gCurve = 50 + gt * 80;
             
+            let pathD: string;
             if (gAbsDx > gAbsDy) {
-              const ctrlX1 = startX + (gdx > 0 ? curveOffset : -curveOffset);
-              const ctrlX2 = endX + (gdx > 0 ? -curveOffset : curveOffset);
-              pathD = `M ${startX} ${startY} C ${ctrlX1} ${startY}, ${ctrlX2} ${endY}, ${endX} ${endY}`;
+              const dir = gdx > 0 ? 1 : -1;
+              pathD = `M ${startX} ${startY} C ${startX + dir * gCurve} ${startY}, ${endX - dir * gCurve} ${endY}, ${endX} ${endY}`;
             } else {
-              const ctrlY1 = startY + (gdy > 0 ? curveOffset : -curveOffset);
-              const ctrlY2 = endY + (gdy > 0 ? -curveOffset : curveOffset);
-              pathD = `M ${startX} ${startY} C ${startX} ${ctrlY1}, ${endX} ${ctrlY2}, ${endX} ${endY}`;
+              const dir = gdy > 0 ? 1 : -1;
+              pathD = `M ${startX} ${startY} C ${startX} ${startY + dir * gCurve}, ${endX} ${endY - dir * gCurve}, ${endX} ${endY}`;
             }
             
             const edgeColor = edge.edgeType === "depends" 
               ? "hsl(var(--destructive))" 
-              : edge.edgeType === "flow"
-              ? "hsl(210, 100%, 50%)"
-              : "hsl(var(--muted-foreground))";
+              : "hsl(var(--primary))";
+            const markerId = edge.edgeType === "depends" ? "arrow-group-depends" : "arrow-group-flow";
             
             return (
               <g key={`group-edge-${edge.id}`}>
                 <path
                   d={pathD}
                   fill="none"
+                  stroke="hsl(var(--background))"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                />
+                <path
+                  d={pathD}
+                  fill="none"
                   stroke={edgeColor}
-                  strokeWidth="4"
-                  strokeOpacity="0.7"
-                  strokeDasharray={edge.edgeType === "related" ? "8,4" : undefined}
-                  markerEnd={`url(#arrowhead-${edge.edgeType === "depends" ? "depends" : "flow"})`}
-                  className="transition-opacity"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeOpacity="0.5"
+                  strokeDasharray={edge.edgeType === "related" ? "6,4" : undefined}
+                  markerEnd={`url(#${markerId})`}
                 />
               </g>
             );
