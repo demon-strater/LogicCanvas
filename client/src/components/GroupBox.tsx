@@ -10,11 +10,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { DocumentGroup, Document } from "@shared/schema";
 
-// Layout constants - must match server exactly
+// Layout constants
 const DOC_WIDTH = 350;
 const DOC_HEIGHT = 200;
-const GROUP_PADDING = 350;
-const GROUP_HEADER = 200;
+const GROUP_PADDING = 40;
+const GROUP_HEADER = 50;
 
 type Props = {
   group: DocumentGroup;
