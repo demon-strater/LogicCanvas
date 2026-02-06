@@ -599,23 +599,7 @@ export function DocumentCanvas({
   const TIMELINE_BASE_MONTH = 12;
 
   const timelineStartMonth = TIMELINE_BASE_MONTH;
-  const timelineEndMonth = (() => {
-    const docDates = documents
-      .map(d => d.createdAt ? new Date(d.createdAt) : null)
-      .filter((d): d is Date => d !== null && !isNaN(d.getTime()));
-
-    const baseAbs = TIMELINE_BASE_YEAR * 12 + TIMELINE_BASE_MONTH;
-
-    if (docDates.length === 0) {
-      const now = new Date();
-      const nowRel = (now.getFullYear() * 12 + (now.getMonth() + 1)) - baseAbs;
-      return TIMELINE_BASE_MONTH + Math.max(2, nowRel + 1);
-    }
-
-    const absMonths = docDates.map(d => d.getFullYear() * 12 + (d.getMonth() + 1));
-    const maxRel = Math.max(...absMonths) - baseAbs;
-    return TIMELINE_BASE_MONTH + maxRel + 2;
-  })();
+  const timelineEndMonth = 24;
 
   const allPositions = [...Object.values(docPositions), ...Object.values(groupPositions)];
   const timelineRightEdge = TIMELINE_OFFSET_X + (timelineEndMonth - TIMELINE_BASE_MONTH + 1) * TIMELINE_MONTH_WIDTH;
