@@ -1009,11 +1009,13 @@ export function DocumentCanvas({
           const pos = groupPositions[group.id] || getGroupPosition(group, index);
           // Get direct child groups (중분류) for this top-level group
           const childGroups = groups.filter(g => g.parentId === group.id);
+          // Include documents directly assigned to this top-level group
+          const directDocs = documents.filter(d => d.groupId === group.id);
           return (
             <GroupBox
               key={`group-${group.id}`}
               group={group}
-              documents={[]}
+              documents={directDocs}
               childGroups={childGroups}
               allDocuments={documents}
               docPositions={docPositions}
