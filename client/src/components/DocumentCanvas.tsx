@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DocumentBox } from "./DocumentBox";
 import { GroupBox } from "./GroupBox";
+import { Minimap } from "./Minimap";
 import { TimelineHeader, TimelineGridLines } from "./TimelineHeader";
 import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -188,6 +189,10 @@ export function DocumentCanvas({
   const handleResetZoom = useCallback(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
+  }, []);
+
+  const handleMinimapNavigate = useCallback((newPan: { x: number; y: number }) => {
+    setPan(newPan);
   }, []);
 
   // Spacebar press detection for pan mode
@@ -1044,6 +1049,19 @@ export function DocumentCanvas({
           </div>
         )}
       </div>
+
+      <Minimap
+        documents={documents}
+        groups={groups}
+        docPositions={docPositions}
+        groupPositions={groupPositions}
+        allDocuments={documents}
+        zoom={zoom}
+        pan={pan}
+        viewportWidth={dimensions.width}
+        viewportHeight={dimensions.height}
+        onNavigate={handleMinimapNavigate}
+      />
 
       <div className="absolute bottom-4 left-4 flex items-center gap-1 bg-card/90 backdrop-blur-sm border rounded-lg p-1 shadow-lg">
         <Button
