@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import type { Server } from "http";
+import path from "path";
 import { storage } from "./storage";
 import { parseDocumentWithAI, analyzeDocumentWorkflow } from "./ai";
 import { insertDocumentSchema, insertNodeSchema, insertEdgeSchema, insertTaskSchema, insertDocumentGroupSchema } from "@shared/schema";
@@ -56,6 +57,16 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  app.get("/api/download/planning-doc", (req, res) => {
+    const filePath = path.resolve("LogicCanvas_기획서.docx");
+    res.download(filePath, "LogicCanvas_기획서.docx", (err) => {
+      if (err) {
+        console.error("Download error:", err);
+        res.status(500).json({ error: "파일 다운로드에 실패했습니다" });
+      }
+    });
+  });
 
   // Documents
   app.get("/api/documents", async (req, res) => {
