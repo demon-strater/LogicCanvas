@@ -789,22 +789,22 @@ export async function registerRoutes(
       }
 
       // Timeline constants (must match frontend DocumentCanvas)
-      const MONTH_WIDTH = 2000;
+      const MONTH_WIDTH = 800;
       const OFFSET_X = 150;
       const TIMELINE_START_YEAR = 2025;
       const TIMELINE_START_MONTH = 12;
 
       // Layout constants
-      const DOC_WIDTH = 350;
-      const DOC_HEIGHT = 200;
-      const DOC_GAP_X = 80;
-      const DOC_GAP_Y = 80;
-      const GROUP_PADDING = 60;
-      const GROUP_HEADER = 80;
-      const CHILD_GROUP_GAP_Y = 120;
-      const TOP_GROUP_GAP_Y = 200;
+      const DOC_WIDTH = 260;
+      const DOC_HEIGHT = 140;
+      const DOC_GAP_X = 30;
+      const DOC_GAP_Y = 40;
+      const GROUP_PADDING = 40;
+      const GROUP_HEADER = 60;
+      const CHILD_GROUP_GAP_Y = 80;
+      const TOP_GROUP_GAP_Y = 120;
       const CANVAS_START_Y = 200;
-      const MAX_DOCS_PER_ROW = 4;
+      const MAX_DOCS_PER_ROW = 2;
 
       function getMonthCenterX(year: number, month: number): number {
         const monthIndex = (year - TIMELINE_START_YEAR) * 12 + month - TIMELINE_START_MONTH;
@@ -1050,20 +1050,20 @@ function calculateGroupedLayout(
   const documentPositions: Record<number, { x: number; y: number; groupId?: number }> = {};
 
   // Timeline constants (must match frontend)
-  const MONTH_WIDTH = 2000;
+  const MONTH_WIDTH = 800;
   const OFFSET_X = 150;
   const TIMELINE_START_YEAR = 2025;
   const TIMELINE_START_MONTH = 12;
 
-  const DOC_WIDTH = 350;
-  const DOC_HEIGHT = 200;
-  const DOC_GAP_X = 80;
-  const DOC_GAP_Y = 80;
-  const GROUP_HEADER = 80;
-  const CHILD_GROUP_GAP_Y = 120;
-  const TOP_GROUP_GAP_Y = 200;
+  const DOC_WIDTH = 260;
+  const DOC_HEIGHT = 140;
+  const DOC_GAP_X = 30;
+  const DOC_GAP_Y = 40;
+  const GROUP_HEADER = 60;
+  const CHILD_GROUP_GAP_Y = 80;
+  const TOP_GROUP_GAP_Y = 120;
   const CANVAS_START_Y = 200;
-  const MAX_DOCS_PER_ROW = 4;
+  const MAX_DOCS_PER_ROW = 2;
 
   function getMonthCenterX(year: number, month: number): number {
     const monthIndex = (year - TIMELINE_START_YEAR) * 12 + month - TIMELINE_START_MONTH;

@@ -593,13 +593,34 @@ export function DocumentCanvas({
     }
   };
 
-  const allPositions = [...Object.values(docPositions), ...Object.values(groupPositions)];
-  const canvasWidth = Math.max(dimensions.width / zoom, ...allPositions.map(p => p.x + 400), 1200);
-  const canvasHeight = Math.max(dimensions.height / zoom, ...allPositions.map(p => p.y + 300), 800);
+  const TIMELINE_MONTH_WIDTH = 800;
+  const TIMELINE_OFFSET_X = 150;
+  const TIMELINE_BASE_YEAR = 2025;
+  const TIMELINE_BASE_MONTH = 12;
 
-  // Calculate month range for timeline (2025년 12월 to 2026년 12월 = 13 months)
-  const timelineStartMonth = 12;
-  const timelineEndMonth = 24; // 24 = December of next year
+  const timelineStartMonth = TIMELINE_BASE_MONTH;
+  const timelineEndMonth = (() => {
+    const docDates = documents
+      .map(d => d.createdAt ? new Date(d.createdAt) : null)
+      .filter((d): d is Date => d !== null && !isNaN(d.getTime()));
+
+    const baseAbs = TIMELINE_BASE_YEAR * 12 + TIMELINE_BASE_MONTH;
+
+    if (docDates.length === 0) {
+      const now = new Date();
+      const nowRel = (now.getFullYear() * 12 + (now.getMonth() + 1)) - baseAbs;
+      return TIMELINE_BASE_MONTH + Math.max(2, nowRel + 1);
+    }
+
+    const absMonths = docDates.map(d => d.getFullYear() * 12 + (d.getMonth() + 1));
+    const maxRel = Math.max(...absMonths) - baseAbs;
+    return TIMELINE_BASE_MONTH + maxRel + 2;
+  })();
+
+  const allPositions = [...Object.values(docPositions), ...Object.values(groupPositions)];
+  const timelineRightEdge = TIMELINE_OFFSET_X + (timelineEndMonth - TIMELINE_BASE_MONTH + 1) * TIMELINE_MONTH_WIDTH;
+  const canvasWidth = Math.max(dimensions.width / zoom, ...allPositions.map(p => p.x + 400), timelineRightEdge + 200, 1200);
+  const canvasHeight = Math.max(dimensions.height / zoom, ...allPositions.map(p => p.y + 300), 800);
 
   return (
     <div
@@ -615,11 +636,11 @@ export function DocumentCanvas({
       <TimelineHeader
         startMonth={timelineStartMonth}
         endMonth={timelineEndMonth}
-        year={2025}
+        year={TIMELINE_BASE_YEAR}
         canvasWidth={canvasWidth}
         canvasHeight={canvasHeight}
-        monthWidth={2000}
-        offsetX={150}
+        monthWidth={TIMELINE_MONTH_WIDTH}
+        offsetX={TIMELINE_OFFSET_X}
         zoom={zoom}
         panX={pan.x}
         activeDate={viewingDocumentId ? documents.find(d => d.id === viewingDocumentId)?.createdAt : null}
@@ -630,9 +651,9 @@ export function DocumentCanvas({
       <TimelineGridLines
         startMonth={timelineStartMonth}
         endMonth={timelineEndMonth}
-        year={2025}
-        monthWidth={2000}
-        offsetX={150}
+        year={TIMELINE_BASE_YEAR}
+        monthWidth={TIMELINE_MONTH_WIDTH}
+        offsetX={TIMELINE_OFFSET_X}
         zoom={zoom}
         panX={pan.x}
         viewportHeight={dimensions.height}

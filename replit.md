@@ -75,13 +75,17 @@ Documents can be organized into hierarchical groups:
 The AI returns structured JSON matching the `ParseResult` type for document parsing, or workflow analysis data with positions, edges, and group definitions for document layout. Groups are automatically created and documents are assigned based on content analysis and business flow. Results are stored in the database.
 
 ### Document Canvas Features
-- **Auto-layout**: AI analyzes documents to determine optimal positions based on workflow/dependencies
+- **Timeline Layout**: Documents positioned on X axis by createdAt date, each month column = 800px wide
+  - Formula: X = 150 + monthIndex * 800 + 400, where monthIndex = (year - 2025) * 12 + month - 12
+  - Timeline starts Dec 2025 (month 12), extends dynamically based on document dates
+  - Within same month, docs arrange in 2-column grid to prevent overlap
+  - Top-level groups stack vertically as swim lanes
 - **Connection Lines**: SVG-based arrows connecting related documents with color-coded edge types:
   - Flow (primary): Sequential workflow steps
   - Depends (red): Dependency relationships  
   - Parent (green): Hierarchical relationships
   - Related (muted dashed): General associations
-- **Hierarchical Layout**: Documents arranged in layers to prevent overlap
+- **Dynamic Timeline**: Month range auto-expands when new documents are added to future months
 
 ### Build and Development
 - **Development**: `tsx` for direct TypeScript execution with Vite dev server
