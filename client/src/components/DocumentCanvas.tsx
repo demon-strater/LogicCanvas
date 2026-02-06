@@ -710,15 +710,13 @@ export function DocumentCanvas({
             const targetPos = docPositions[edge.targetDocId];
             if (!sourcePos || !targetPos) return null;
 
-            const BOX_WIDTH = 280;
-            const BOX_HEIGHT = 140;
-            const HALF_W = BOX_WIDTH / 2;
-            const HALF_H = BOX_HEIGHT / 2;
+            const HALF_W = DOC_WIDTH / 2;
+            const HALF_H = DOC_HEIGHT / 2;
 
             const sourceCenterX = sourcePos.x;
-            const sourceCenterY = sourcePos.y + TIMELINE_GAP;
+            const sourceCenterY = sourcePos.y;
             const targetCenterX = targetPos.x;
-            const targetCenterY = targetPos.y + TIMELINE_GAP;
+            const targetCenterY = targetPos.y;
 
             const dx = targetCenterX - sourceCenterX;
             const dy = targetCenterY - sourceCenterY;
@@ -729,7 +727,7 @@ export function DocumentCanvas({
             let sourceAnchor: 'top' | 'bottom' | 'left' | 'right';
             let targetAnchor: 'top' | 'bottom' | 'left' | 'right';
 
-            if (absDx * BOX_HEIGHT > absDy * BOX_WIDTH) {
+            if (absDx * DOC_HEIGHT > absDy * DOC_WIDTH) {
               if (dx > 0) {
                 startX = sourceCenterX + HALF_W;
                 startY = sourceCenterY;
@@ -813,42 +811,82 @@ export function DocumentCanvas({
             const targetGroup = groups.find(g => g.id === edge.targetGroupId);
             if (!sourceGroup || !targetGroup) return null;
             
-            // Calculate group centers based on child groups or stored position
+            const getChildGroupBounds = (childGroup: typeof sourceGroup) => {
+              const childDocs = documents.filter(d => d.groupId === childGroup.id);
+              if (childDocs.length === 0) {
+                const cgPos = groupPositions[childGroup.id];
+                const cx = cgPos ? cgPos.x : childGroup.x;
+                const cy = cgPos ? cgPos.y + TIMELINE_GAP : (childGroup.y ?? 0) + TIMELINE_GAP;
+                const w = DOC_WIDTH + GROUP_PADDING * 2;
+                const h = DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING;
+                return { centerX: cx, centerY: cy, width: w, height: h };
+              }
+              let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
+              for (const d of childDocs) {
+                if (d.x != null && d.y != null) {
+                  mnX = Math.min(mnX, d.x - DOC_WIDTH / 2);
+                  mxX = Math.max(mxX, d.x + DOC_WIDTH / 2);
+                  mnY = Math.min(mnY, d.y - DOC_HEIGHT / 2);
+                  mxY = Math.max(mxY, d.y + DOC_HEIGHT / 2);
+                }
+              }
+              if (mnX === Infinity) {
+                const cgPos = groupPositions[childGroup.id];
+                const cx = cgPos ? cgPos.x : childGroup.x;
+                const cy = cgPos ? cgPos.y + TIMELINE_GAP : (childGroup.y ?? 0) + TIMELINE_GAP;
+                return { centerX: cx, centerY: cy, width: DOC_WIDTH + GROUP_PADDING * 2, height: DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING };
+              }
+              const w = Math.max(DOC_WIDTH + GROUP_PADDING * 2, (mxX - mnX) + GROUP_PADDING * 2);
+              const h = Math.max(DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING, (mxY - mnY) + GROUP_HEADER + GROUP_PADDING);
+              const topLeftX = mnX - GROUP_PADDING;
+              const topLeftY = mnY - GROUP_HEADER;
+              return { centerX: topLeftX + w / 2, centerY: topLeftY + h / 2, width: w, height: h };
+            };
+
             const getGroupCenter = (group: typeof sourceGroup) => {
               const pos = groupPositions[group.id];
               if (!pos) return null;
               
-              // Check if this is a top-level group (has child groups)
-              const childGroups = groups.filter(g => g.parentId === group.id);
+              const childGrps = groups.filter(g => g.parentId === group.id);
               
-              if (childGroups.length > 0) {
-                // Top-level group: calculate center based on child group positions
-                const childBounds = childGroups.map(cg => {
-                  const cgPos = groupPositions[cg.id];
-                  return cgPos ? { x: cgPos.x, y: cgPos.y + TIMELINE_GAP } : null;
-                }).filter(Boolean) as { x: number; y: number }[];
-                
-                if (childBounds.length > 0) {
-                  const minX = Math.min(...childBounds.map(b => b.x)) - 200;
-                  const maxX = Math.max(...childBounds.map(b => b.x)) + 200;
-                  const minY = Math.min(...childBounds.map(b => b.y)) - 100;
-                  const maxY = Math.max(...childBounds.map(b => b.y)) + 200;
-                  
+              if (childGrps.length > 0) {
+                const allItems: { x: number; y: number; w: number; h: number }[] = [];
+                for (const cg of childGrps) {
+                  const cb = getChildGroupBounds(cg);
+                  allItems.push({ x: cb.centerX, y: cb.centerY, w: cb.width, h: cb.height });
+                }
+                if (allItems.length > 0) {
+                  let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
+                  for (const item of allItems) {
+                    mnX = Math.min(mnX, item.x - item.w / 2);
+                    mxX = Math.max(mxX, item.x + item.w / 2);
+                    mnY = Math.min(mnY, item.y - item.h / 2);
+                    mxY = Math.max(mxY, item.y + item.h / 2);
+                  }
+                  const w = (mxX - mnX) + GROUP_PADDING * 2;
+                  const h = (mxY - mnY) + GROUP_HEADER + GROUP_PADDING;
+                  const topLeftX = mnX - GROUP_PADDING;
+                  const topLeftY = mnY - GROUP_HEADER;
                   return {
-                    x: (minX + maxX) / 2,
-                    y: (minY + maxY) / 2,
-                    width: maxX - minX,
-                    height: maxY - minY
+                    x: topLeftX + w / 2,
+                    y: topLeftY + h / 2,
+                    width: w,
+                    height: h
                   };
                 }
               }
               
-              // Child group or empty group: use stored position with TIMELINE_GAP
+              const directDocs = documents.filter(d => d.groupId === group.id);
+              if (directDocs.length > 0) {
+                const cb = getChildGroupBounds(group);
+                return { x: cb.centerX, y: cb.centerY, width: cb.width, height: cb.height };
+              }
+              
               return { 
                 x: pos.x, 
                 y: pos.y + TIMELINE_GAP, 
-                width: 350, 
-                height: 200 
+                width: DOC_WIDTH + GROUP_PADDING * 2, 
+                height: DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING 
               };
             };
             
@@ -903,10 +941,23 @@ export function DocumentCanvas({
               endY = endY - (finalDy / finalDist) * arrowOffset;
             }
             
-            const curveOffset = Math.min(100, Math.max(50, finalDist * 0.25));
-            const midX = (startX + endX) / 2;
-            const midY = (startY + endY) / 2;
-            const pathD = `M ${startX} ${startY} Q ${midX} ${midY - curveOffset}, ${endX} ${endY}`;
+            let pathD: string;
+            const curveOffset = Math.min(80, Math.max(40, finalDist * 0.3));
+            
+            const gdx = targetCenter.x - sourceCenter.x;
+            const gdy = targetCenter.y - sourceCenter.y;
+            const gAbsDx = Math.abs(gdx);
+            const gAbsDy = Math.abs(gdy);
+            
+            if (gAbsDx > gAbsDy) {
+              const ctrlX1 = startX + (gdx > 0 ? curveOffset : -curveOffset);
+              const ctrlX2 = endX + (gdx > 0 ? -curveOffset : curveOffset);
+              pathD = `M ${startX} ${startY} C ${ctrlX1} ${startY}, ${ctrlX2} ${endY}, ${endX} ${endY}`;
+            } else {
+              const ctrlY1 = startY + (gdy > 0 ? curveOffset : -curveOffset);
+              const ctrlY2 = endY + (gdy > 0 ? -curveOffset : curveOffset);
+              pathD = `M ${startX} ${startY} C ${startX} ${ctrlY1}, ${endX} ${ctrlY2}, ${endX} ${endY}`;
+            }
             
             const edgeColor = edge.edgeType === "depends" 
               ? "hsl(var(--destructive))" 
