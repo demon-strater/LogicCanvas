@@ -1,10 +1,17 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import path from "path";
+import fs from "fs";
+import multer from "multer";
+import { PDFParse } from "pdf-parse";
+import mammoth from "mammoth";
+import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { parseDocumentWithAI, analyzeDocumentWorkflow } from "./ai";
 import { insertDocumentSchema, insertNodeSchema, insertEdgeSchema, insertTaskSchema, insertDocumentGroupSchema } from "@shared/schema";
 import { z } from "zod";
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 // Update schemas using insert schemas as base, omitting immutable fields
 const nodeUpdateSchema = insertNodeSchema.pick({
@@ -66,6 +73,84 @@ export async function registerRoutes(
         res.status(500).json({ error: "파일 다운로드에 실패했습니다" });
       }
     });
+  });
+
+  app.post("/api/upload-file", upload.single("file"), async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "파일이 없습니다" });
+      }
+
+      const ext = path.extname(file.originalname).toLowerCase();
+      let text = "";
+
+      if (ext === ".txt" || ext === ".md" || ext === ".text") {
+        text = file.buffer.toString("utf-8");
+      } else if (ext === ".pdf") {
+        const parser = new PDFParse({ data: file.buffer });
+        const result = await parser.getText();
+        text = result.text;
+      } else if (ext === ".docx") {
+        const result = await mammoth.extractRawText({ buffer: file.buffer });
+        text = result.value;
+      } else if (ext === ".xlsx" || ext === ".xls") {
+        const workbook = XLSX.read(file.buffer, { type: "buffer" });
+        const sheets: string[] = [];
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName];
+          sheets.push(`[${sheetName}]\n${XLSX.utils.sheet_to_csv(sheet)}`);
+        }
+        text = sheets.join("\n\n");
+      } else if (ext === ".csv") {
+        text = file.buffer.toString("utf-8");
+      } else if (ext === ".pptx") {
+        const JSZip = (await import("jszip")).default;
+        const zip = await JSZip.loadAsync(file.buffer);
+        const slideTexts: string[] = [];
+        const slideFiles = Object.keys(zip.files)
+          .filter(name => name.match(/^ppt\/slides\/slide\d+\.xml$/))
+          .sort((a, b) => {
+            const numA = parseInt(a.match(/slide(\d+)/)?.[1] || "0");
+            const numB = parseInt(b.match(/slide(\d+)/)?.[1] || "0");
+            return numA - numB;
+          });
+        for (const slideFile of slideFiles) {
+          const xml = await zip.files[slideFile].async("string");
+          const textContent = xml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+          if (textContent) slideTexts.push(textContent);
+        }
+        text = slideTexts.join("\n\n");
+      } else if (ext === ".hwp" || ext === ".hwpx") {
+        return res.status(400).json({ error: "한글(HWP) 파일은 현재 지원되지 않습니다. PDF 또는 DOCX로 변환하여 다시 업로드해 주세요." });
+      } else if (ext === ".json") {
+        try {
+          const jsonContent = JSON.parse(file.buffer.toString("utf-8"));
+          text = JSON.stringify(jsonContent, null, 2);
+        } catch {
+          return res.status(400).json({ error: "올바른 JSON 형식이 아닙니다" });
+        }
+      } else if (ext === ".html" || ext === ".htm") {
+        const html = file.buffer.toString("utf-8");
+        text = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      } else {
+        return res.status(400).json({ error: `지원되지 않는 파일 형식입니다: ${ext}` });
+      }
+
+      if (!text.trim()) {
+        return res.status(400).json({ error: "파일에서 텍스트를 추출할 수 없습니다" });
+      }
+
+      const suggestedTitle = file.originalname.replace(/\.[^/.]+$/, "");
+      res.json({ text: text.trim(), suggestedTitle });
+    } catch (error) {
+      console.error("File upload error:", error);
+      res.status(500).json({ error: "파일 처리 중 오류가 발생했습니다" });
+    }
   });
 
   // Documents
