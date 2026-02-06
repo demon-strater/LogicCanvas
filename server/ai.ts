@@ -128,6 +128,85 @@ export async function parseDocumentWithAI(content: string): Promise<ParseResult>
   }
 }
 
+export type GroupAssignmentResult = {
+  action: "existing" | "new";
+  existingGroupId?: number;
+  newGroup?: {
+    name: string;
+    description: string;
+    color: string;
+    level: "major";
+  };
+};
+
+const GROUP_ASSIGNMENT_PROMPT = `You are a document organization assistant. Given a new document and existing groups, decide where the document belongs.
+
+RULES:
+- If an existing group clearly fits the document's topic/purpose, assign it to that group.
+- If no existing group fits well, create a NEW group for it.
+- New groups should use short Korean names (2-4 characters). Examples: "리서치", "기획", "실행", "분석", "보고서", "회의록", "자료조사", "전략", "마케팅"
+- Be generous about matching - if a document is even loosely related to an existing group's purpose, use that group.
+- Only create a new group if the document's topic is genuinely different from all existing groups.
+
+Respond with valid JSON:
+{
+  "action": "existing" or "new",
+  "existingGroupId": <id if action is "existing">,
+  "newGroup": { "name": "그룹명", "description": "간단 설명", "color": "#hex" } (only if action is "new")
+}`;
+
+export async function assignDocumentToGroup(
+  docTitle: string,
+  docContent: string,
+  existingGroups: { id: number; name: string; description: string | null; parentId: number | null; color: string | null }[]
+): Promise<GroupAssignmentResult> {
+  const contentPreview = docContent.substring(0, 2000);
+  
+  const groupList = existingGroups.length > 0
+    ? existingGroups.map(g => `- ID: ${g.id}, Name: "${g.name}", Description: "${g.description || ""}", ParentId: ${g.parentId || "null"}`).join("\n")
+    : "(그룹이 없습니다)";
+
+  const usedColors = new Set(existingGroups.map(g => g.color).filter(Boolean));
+  const availableColors = GROUP_COLORS.filter(c => !usedColors.has(c));
+  const suggestedColor = availableColors.length > 0 ? availableColors[0] : GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)];
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4.1-mini",
+    messages: [
+      { role: "system", content: GROUP_ASSIGNMENT_PROMPT },
+      { role: "user", content: `New document:\nTitle: ${docTitle}\nContent preview:\n${contentPreview}\n\nExisting groups:\n${groupList}\n\nIf creating a new group, suggest a color from these available colors: ${availableColors.join(", ")}. If none available, use: ${suggestedColor}` },
+    ],
+    response_format: { type: "json_object" },
+    max_completion_tokens: 512,
+  });
+
+  const result = response.choices[0]?.message?.content;
+  if (!result) {
+    return { action: "new", newGroup: { name: "기타", description: "미분류 문서", color: suggestedColor, level: "major" } };
+  }
+
+  try {
+    const parsed = JSON.parse(result) as GroupAssignmentResult;
+    
+    if (parsed.action === "existing" && parsed.existingGroupId) {
+      const validGroup = existingGroups.find(g => g.id === parsed.existingGroupId);
+      if (validGroup) return parsed;
+    }
+    
+    if (parsed.action === "new" && parsed.newGroup) {
+      parsed.newGroup.level = "major";
+      if (!parsed.newGroup.name || parsed.newGroup.name.trim().length === 0) parsed.newGroup.name = "기타";
+      if (!parsed.newGroup.description || parsed.newGroup.description.trim().length === 0) parsed.newGroup.description = "미분류 문서";
+      if (!parsed.newGroup.color || !parsed.newGroup.color.startsWith("#")) parsed.newGroup.color = suggestedColor;
+      return parsed;
+    }
+
+    return { action: "new", newGroup: { name: "기타", description: "미분류 문서", color: suggestedColor, level: "major" } };
+  } catch {
+    return { action: "new", newGroup: { name: "기타", description: "미분류 문서", color: suggestedColor, level: "major" } };
+  }
+}
+
 const WORKFLOW_ANALYSIS_PROMPT = `You are a project management and business workflow analyst. Given a list of documents, analyze their relationships and organize them into SIMPLE, broad groups.
 
 IMPORTANT RULES - KEEP IT SIMPLE:

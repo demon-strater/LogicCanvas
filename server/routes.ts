@@ -7,7 +7,7 @@ import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import { storage } from "./storage";
-import { parseDocumentWithAI, analyzeDocumentWorkflow } from "./ai";
+import { parseDocumentWithAI, analyzeDocumentWorkflow, assignDocumentToGroup } from "./ai";
 import { insertDocumentSchema, insertNodeSchema, insertEdgeSchema, insertTaskSchema, insertDocumentGroupSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -282,6 +282,35 @@ export async function registerRoutes(
           edgeType: relation.edgeType,
         }))
       );
+
+      // Auto-assign document to a group
+      try {
+        const existingGroups = await storage.getAllGroups();
+        const groupAssignment = await assignDocumentToGroup(title, content, existingGroups);
+
+        let groupId: number | null = null;
+        if (groupAssignment.action === "existing" && groupAssignment.existingGroupId) {
+          groupId = groupAssignment.existingGroupId;
+        } else if (groupAssignment.action === "new" && groupAssignment.newGroup) {
+          const newGroup = await storage.createGroup({
+            name: groupAssignment.newGroup.name,
+            description: groupAssignment.newGroup.description,
+            color: groupAssignment.newGroup.color,
+            x: 100,
+            y: 100,
+          });
+          groupId = newGroup.id;
+        }
+
+        if (groupId) {
+          const updatedDoc = await storage.updateDocument(document.id, { groupId });
+          if (updatedDoc) {
+            return res.json(updatedDoc);
+          }
+        }
+      } catch (groupError) {
+        console.error("Auto group assignment failed (non-critical):", groupError);
+      }
 
       res.json(document);
     } catch (error) {

@@ -60,6 +60,7 @@ Documents can be organized into hierarchical groups:
 - Documents can belong to a group via groupId field
 - Ungrouped documents are displayed directly on the canvas root level
 - Groups support drag-and-drop positioning with Ctrl+Z undo support
+- **Auto Group Assignment**: When a new document is created via `/api/documents/parse`, AI automatically assigns it to the most suitable existing group, or creates a new group if none fits. Uses GPT-4.1-mini for lightweight classification. Falls back gracefully if AI fails (document is created without a group).
 
 ### AI Integration
 - **Provider**: OpenAI API (via Replit AI Integrations)
