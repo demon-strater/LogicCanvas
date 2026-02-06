@@ -260,7 +260,7 @@ export function GroupBox({
       if (resizeDir === "b" || resizeDir === "rb") {
         newH = Math.max(minH, resizeStartRef.current.height + dy);
       }
-      setResizeSize({ w: newW, h: newH });
+      setResizeSize({ w: Math.round(newW), h: Math.round(newH) });
     };
 
     const handleMouseUp = () => {

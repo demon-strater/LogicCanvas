@@ -53,7 +53,7 @@ const documentUpdateSchema = insertDocumentSchema.pick({
   createdAt: z.string().optional(),
 }).partial();
 
-const groupUpdateSchema = insertDocumentGroupSchema.pick({
+const rawGroupUpdateSchema = insertDocumentGroupSchema.pick({
   name: true,
   description: true,
   parentId: true,
@@ -63,6 +63,18 @@ const groupUpdateSchema = insertDocumentGroupSchema.pick({
   manualHeight: true,
   color: true,
 }).partial();
+
+const groupUpdateSchema = z.preprocess((data: any) => {
+  if (data && typeof data === 'object') {
+    const result = { ...data };
+    if (typeof result.x === 'number') result.x = Math.round(result.x);
+    if (typeof result.y === 'number') result.y = Math.round(result.y);
+    if (typeof result.manualWidth === 'number') result.manualWidth = Math.round(result.manualWidth);
+    if (typeof result.manualHeight === 'number') result.manualHeight = Math.round(result.manualHeight);
+    return result;
+  }
+  return data;
+}, rawGroupUpdateSchema);
 
 export async function registerRoutes(
   httpServer: Server,

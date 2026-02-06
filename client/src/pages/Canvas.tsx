@@ -204,7 +204,7 @@ export default function Canvas() {
           positionHistoryRef.current.shift();
         }
       }
-      updateGroupMutation.mutate({ id, updates: { x, y } });
+      updateGroupMutation.mutate({ id, updates: { x: Math.round(x), y: Math.round(y) } });
     },
     [updateGroupMutation]
   );
