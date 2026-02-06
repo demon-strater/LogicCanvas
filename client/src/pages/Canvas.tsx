@@ -102,6 +102,7 @@ export default function Canvas() {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
       queryClient.invalidateQueries({ queryKey: ["/api/document-edges"] });
       queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/group-edges"] });
       const groupCount = data.groups?.length || 0;
       toast({ 
         title: "워크플로우 분석 완료", 

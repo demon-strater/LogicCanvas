@@ -390,7 +390,7 @@ export function DocumentCanvas({
   }, [isPanning]);
 
   const getDocumentPosition = useCallback((doc: Document, index: number, width: number) => {
-    if (doc.x && doc.y && (doc.x !== 100 || doc.y !== 100)) {
+    if (doc.x != null && doc.y != null && (doc.x !== 100 || doc.y !== 100)) {
       return { x: doc.x, y: doc.y };
     }
     const colWidth = DOC_WIDTH + 40;
@@ -413,7 +413,7 @@ export function DocumentCanvas({
   }, [documents, dimensions.width, getDocumentPosition]);
 
   const getGroupPosition = useCallback((group: DocumentGroup, index: number) => {
-    if (group.x && group.y && (group.x !== 100 || group.y !== 100)) {
+    if (group.x != null && group.y != null && (group.x !== 100 || group.y !== 100)) {
       return { x: group.x, y: group.y };
     }
     return {

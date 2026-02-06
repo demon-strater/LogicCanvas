@@ -76,6 +76,11 @@ const groupUpdateSchema = z.preprocess((data: any) => {
   return data;
 }, rawGroupUpdateSchema);
 
+function parseIdParam(idStr: string): number | null {
+  const id = parseInt(idStr, 10);
+  return isNaN(id) ? null : id;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -96,6 +101,9 @@ export async function registerRoutes(
       const file = req.file;
       if (!file) {
         return res.status(400).json({ error: "파일이 없습니다" });
+      }
+      if (file.buffer.length === 0) {
+        return res.status(400).json({ error: "빈 파일입니다. 내용이 있는 파일을 업로드해 주세요." });
       }
 
       const ext = path.extname(file.originalname).toLowerCase();
@@ -182,7 +190,8 @@ export async function registerRoutes(
 
   app.get("/api/documents/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
+      if (id === null) return res.status(400).json({ error: "유효하지 않은 문서 ID입니다" });
       const document = await storage.getDocument(id);
       if (!document) {
         return res.status(404).json({ error: "Document not found" });
@@ -243,7 +252,8 @@ export async function registerRoutes(
 
   app.patch("/api/documents/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
+      if (id === null) return res.status(400).json({ error: "유효하지 않은 문서 ID입니다" });
       const updateInput = documentUpdateSchema.safeParse(req.body);
       
       if (!updateInput.success) {
@@ -267,7 +277,8 @@ export async function registerRoutes(
 
   app.delete("/api/documents/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
+      if (id === null) return res.status(400).json({ error: "유효하지 않은 문서 ID입니다" });
       await storage.deleteDocument(id);
       res.status(204).send();
     } catch (error) {
@@ -279,7 +290,8 @@ export async function registerRoutes(
   // Graph data (nodes and edges for a document)
   app.get("/api/documents/:id/graph", async (req, res) => {
     try {
-      const documentId = parseInt(req.params.id);
+      const documentId = parseIdParam(req.params.id);
+      if (documentId === null) return res.status(400).json({ error: "유효하지 않은 문서 ID입니다" });
       const [nodes, edges] = await Promise.all([
         storage.getNodesByDocument(documentId),
         storage.getEdgesByDocument(documentId),
@@ -294,7 +306,8 @@ export async function registerRoutes(
   // Nodes
   app.post("/api/documents/:id/nodes", async (req, res) => {
     try {
-      const documentId = parseInt(req.params.id);
+      const documentId = parseIdParam(req.params.id);
+      if (documentId === null) return res.status(400).json({ error: "유효하지 않은 문서 ID입니다" });
       const nodeInput = insertNodeSchema.omit({ documentId: true }).safeParse(req.body);
       
       if (!nodeInput.success) {
@@ -314,7 +327,8 @@ export async function registerRoutes(
 
   app.patch("/api/nodes/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
+      if (id === null) return res.status(400).json({ error: "유효하지 않은 노드 ID입니다" });
       const updateInput = nodeUpdateSchema.safeParse(req.body);
       
       if (!updateInput.success) {
@@ -334,7 +348,8 @@ export async function registerRoutes(
 
   app.patch("/api/nodes/:id/toggle-tag", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
+      if (id === null) return res.status(400).json({ error: "유효하지 않은 노드 ID입니다" });
       const tagNoteInput = z.object({ tagNote: z.string().optional() }).safeParse(req.body);
       
       if (!tagNoteInput.success) {
@@ -359,7 +374,8 @@ export async function registerRoutes(
 
   app.delete("/api/nodes/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
+      if (id === null) return res.status(400).json({ error: "유효하지 않은 노드 ID입니다" });
       await storage.deleteNode(id);
       res.status(204).send();
     } catch (error) {
@@ -371,7 +387,8 @@ export async function registerRoutes(
   // Edges
   app.get("/api/documents/:id/edges", async (req, res) => {
     try {
-      const documentId = parseInt(req.params.id);
+      const documentId = parseIdParam(req.params.id);
+      if (documentId === null) return res.status(400).json({ error: "유효하지 않은 문서 ID입니다" });
       const edges = await storage.getEdgesByDocument(documentId);
       res.json(edges);
     } catch (error) {
@@ -382,7 +399,8 @@ export async function registerRoutes(
 
   app.post("/api/documents/:id/edges", async (req, res) => {
     try {
-      const documentId = parseInt(req.params.id);
+      const documentId = parseIdParam(req.params.id);
+      if (documentId === null) return res.status(400).json({ error: "유효하지 않은 문서 ID입니다" });
       const edgeInput = insertEdgeSchema.omit({ documentId: true }).safeParse(req.body);
       
       if (!edgeInput.success) {
@@ -402,7 +420,8 @@ export async function registerRoutes(
 
   app.patch("/api/edges/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
+      if (id === null) return res.status(400).json({ error: "유효하지 않은 엣지 ID입니다" });
       const updateInput = edgeUpdateSchema.safeParse(req.body);
       
       if (!updateInput.success) {
@@ -422,7 +441,8 @@ export async function registerRoutes(
 
   app.delete("/api/edges/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
+      if (id === null) return res.status(400).json({ error: "유효하지 않은 엣지 ID입니다" });
       await storage.deleteEdge(id);
       res.status(204).send();
     } catch (error) {
@@ -434,7 +454,8 @@ export async function registerRoutes(
   // Tasks
   app.get("/api/documents/:id/tasks", async (req, res) => {
     try {
-      const documentId = parseInt(req.params.id);
+      const documentId = parseIdParam(req.params.id);
+      if (documentId === null) return res.status(400).json({ error: "유효하지 않은 문서 ID입니다" });
       const tasks = await storage.getTasksByDocument(documentId);
       res.json(tasks);
     } catch (error) {
@@ -445,7 +466,8 @@ export async function registerRoutes(
 
   app.post("/api/documents/:id/tasks", async (req, res) => {
     try {
-      const documentId = parseInt(req.params.id);
+      const documentId = parseIdParam(req.params.id);
+      if (documentId === null) return res.status(400).json({ error: "유효하지 않은 문서 ID입니다" });
       const taskInput = insertTaskSchema.omit({ documentId: true, status: true }).safeParse(req.body);
       
       if (!taskInput.success) {
@@ -466,7 +488,8 @@ export async function registerRoutes(
 
   app.patch("/api/tasks/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
+      if (id === null) return res.status(400).json({ error: "유효하지 않은 할일 ID입니다" });
       const updateInput = taskUpdateSchema.safeParse(req.body);
       
       if (!updateInput.success) {
@@ -495,7 +518,8 @@ export async function registerRoutes(
 
   app.delete("/api/tasks/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
+      if (id === null) return res.status(400).json({ error: "유효하지 않은 할일 ID입니다" });
       await storage.deleteTask(id);
       res.status(204).send();
     } catch (error) {
@@ -528,7 +552,8 @@ export async function registerRoutes(
 
   app.get("/api/groups/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
+      if (id === null) return res.status(400).json({ error: "유효하지 않은 그룹 ID입니다" });
       const group = await storage.getGroup(id);
       if (!group) {
         return res.status(404).json({ error: "Group not found" });
@@ -558,7 +583,8 @@ export async function registerRoutes(
 
   app.patch("/api/groups/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
+      if (id === null) return res.status(400).json({ error: "유효하지 않은 그룹 ID입니다" });
       const updateInput = groupUpdateSchema.safeParse(req.body);
       
       if (!updateInput.success) {
@@ -578,7 +604,8 @@ export async function registerRoutes(
 
   app.delete("/api/groups/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
+      if (id === null) return res.status(400).json({ error: "유효하지 않은 그룹 ID입니다" });
       await storage.deleteGroup(id);
       res.status(204).send();
     } catch (error) {
