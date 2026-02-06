@@ -21,6 +21,7 @@ type Props = {
   onClickDocument: (id: number) => void;
   onUpdateDocumentPosition: (id: number, x: number, y: number, prevX?: number, prevY?: number) => void;
   onUpdateGroupPosition: (id: number, x: number, y: number, prevX?: number, prevY?: number) => void;
+  onResizeGroup?: (id: number, width: number, height: number) => void;
   onEditGroup: (id: number) => void;
   onDeleteGroup: (id: number) => void;
   viewingDocumentId?: number | null;
@@ -50,6 +51,7 @@ export function DocumentCanvas({
   onClickDocument,
   onUpdateDocumentPosition,
   onUpdateGroupPosition,
+  onResizeGroup,
   onEditGroup,
   onDeleteGroup,
   viewingDocumentId,
@@ -856,6 +858,7 @@ export function DocumentCanvas({
               if (!pos) return null;
               
               const childGrps = groups.filter(g => g.parentId === group.id);
+              let autoW: number, autoH: number, cx: number, cy: number;
               
               if (childGrps.length > 0) {
                 const allItems: { x: number; y: number; w: number; h: number }[] = [];
@@ -871,30 +874,39 @@ export function DocumentCanvas({
                     mnY = Math.min(mnY, item.y - item.h / 2);
                     mxY = Math.max(mxY, item.y + item.h / 2);
                   }
-                  const w = (mxX - mnX) + GROUP_PADDING * 2;
-                  const h = (mxY - mnY) + GROUP_HEADER + GROUP_PADDING;
+                  autoW = (mxX - mnX) + GROUP_PADDING * 2;
+                  autoH = (mxY - mnY) + GROUP_HEADER + GROUP_PADDING;
                   const topLeftX = mnX - GROUP_PADDING;
                   const topLeftY = mnY - GROUP_HEADER;
-                  return {
-                    x: topLeftX + w / 2,
-                    y: topLeftY + h / 2,
-                    width: w,
-                    height: h
-                  };
+                  cx = topLeftX + autoW / 2;
+                  cy = topLeftY + autoH / 2;
+                } else {
+                  autoW = DOC_WIDTH + GROUP_PADDING * 2;
+                  autoH = DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING;
+                  cx = pos.x;
+                  cy = pos.y + TIMELINE_GAP;
+                }
+              } else {
+                const directDocs = documents.filter(d => d.groupId === group.id);
+                if (directDocs.length > 0) {
+                  const cb = getChildGroupBounds(group);
+                  autoW = cb.width;
+                  autoH = cb.height;
+                  cx = cb.centerX;
+                  cy = cb.centerY;
+                } else {
+                  autoW = DOC_WIDTH + GROUP_PADDING * 2;
+                  autoH = DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING;
+                  cx = pos.x;
+                  cy = pos.y + TIMELINE_GAP;
                 }
               }
               
-              const directDocs = documents.filter(d => d.groupId === group.id);
-              if (directDocs.length > 0) {
-                const cb = getChildGroupBounds(group);
-                return { x: cb.centerX, y: cb.centerY, width: cb.width, height: cb.height };
-              }
-              
-              return { 
-                x: pos.x, 
-                y: pos.y + TIMELINE_GAP, 
-                width: DOC_WIDTH + GROUP_PADDING * 2, 
-                height: DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING 
+              return {
+                x: cx,
+                y: cy,
+                width: group.manualWidth ?? autoW,
+                height: group.manualHeight ?? autoH
               };
             };
             
@@ -1028,6 +1040,7 @@ export function DocumentCanvas({
               onSelect={handleGroupSelect}
               onToggleExpand={onToggleGroupExpand}
               onDragEnd={handleGroupPositionUpdate}
+              onResize={onResizeGroup}
               onEdit={onEditGroup}
               onDelete={onDeleteGroup}
             />
@@ -1057,6 +1070,7 @@ export function DocumentCanvas({
               onSelect={handleGroupSelect}
               onToggleExpand={onToggleGroupExpand}
               onDragEnd={handleGroupPositionUpdate}
+              onResize={onResizeGroup}
               onEdit={onEditGroup}
               onDelete={onDeleteGroup}
             />

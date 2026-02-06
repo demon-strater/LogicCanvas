@@ -57,6 +57,8 @@ const groupUpdateSchema = insertDocumentGroupSchema.pick({
   parentId: true,
   x: true,
   y: true,
+  manualWidth: true,
+  manualHeight: true,
   color: true,
 }).partial();
 

@@ -111,6 +111,8 @@ export const documentGroups = pgTable("document_groups", {
   parentId: integer("parent_id"), // Self-reference for hierarchy
   x: integer("x").notNull().default(100),
   y: integer("y").notNull().default(100),
+  manualWidth: integer("manual_width"), // User-set width override (null = auto)
+  manualHeight: integer("manual_height"), // User-set height override (null = auto)
   color: text("color").default("#6366f1"), // Group color for visual distinction
   monthStart: integer("month_start"), // 1-12, for timeline positioning
   monthEnd: integer("month_end"), // 1-12, for timeline positioning

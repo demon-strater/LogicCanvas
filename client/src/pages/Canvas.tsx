@@ -209,6 +209,17 @@ export default function Canvas() {
     [updateGroupMutation]
   );
 
+  const handleResizeGroup = useCallback(
+    (id: number, width: number, height: number) => {
+      if (width === 0 && height === 0) {
+        updateGroupMutation.mutate({ id, updates: { manualWidth: null, manualHeight: null } });
+      } else {
+        updateGroupMutation.mutate({ id, updates: { manualWidth: Math.round(width), manualHeight: Math.round(height) } });
+      }
+    },
+    [updateGroupMutation]
+  );
+
   const handleToggleGroupExpand = useCallback((id: number) => {
     setExpandedGroups(prev => {
       const next = new Set(prev);
@@ -308,6 +319,7 @@ export default function Canvas() {
             onClickDocument={handleClickDocument}
             onUpdateDocumentPosition={handleUpdateDocumentPosition}
             onUpdateGroupPosition={handleUpdateGroupPosition}
+            onResizeGroup={handleResizeGroup}
             onEditGroup={handleEditGroup}
             onDeleteGroup={handleDeleteGroup}
             viewingDocumentId={viewingDocumentId}
