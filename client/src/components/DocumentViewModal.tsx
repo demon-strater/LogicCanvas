@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Calendar, FileText, Trash2, X, Pencil, Check } from "lucide-react";
+import { Calendar, FileText, Trash2, X, Pencil, Check, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Document } from "@shared/schema";
 
@@ -176,6 +176,35 @@ export function DocumentViewModal({ document, isOpen, onClose, onDelete, onUpdat
         )}
 
         <div className="flex-1 min-h-0 flex flex-col px-4 pt-3 pb-4">
+          {document.images && document.images.length > 0 && (
+            <div className="flex-shrink-0 mb-3">
+              <p className="text-xs font-medium mb-2 text-muted-foreground flex items-center gap-1">
+                <ImageIcon className="h-3 w-3" />
+                이미지 ({document.images.length})
+              </p>
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {document.images.map((url, idx) => (
+                  <a
+                    key={idx}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-shrink-0 rounded-md overflow-hidden border hover-elevate"
+                    data-testid={`image-thumbnail-${idx}`}
+                  >
+                    <img
+                      src={url}
+                      alt={`이미지 ${idx + 1}`}
+                      className="h-24 w-auto max-w-[200px] object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
           <p className="text-xs font-medium mb-2 text-muted-foreground flex-shrink-0">원문</p>
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90 pr-2 pb-4">

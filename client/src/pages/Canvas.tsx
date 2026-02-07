@@ -64,11 +64,30 @@ export default function Canvas() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
       setIsDocumentModalOpen(false);
       toast({ title: "문서가 추가되었습니다" });
     },
     onError: () => {
       toast({ title: "오류", description: "문서 추가에 실패했습니다.", variant: "destructive" });
+    },
+  });
+
+  const importNotionMutation = useMutation({
+    mutationFn: async (pageIds: string[]) => {
+      const response = await apiRequest("POST", "/api/notion/import", { pageIds });
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/document-edges"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/group-edges"] });
+      setIsDocumentModalOpen(false);
+      toast({ title: `${data.imported}개의 노션 페이지를 가져왔습니다` });
+    },
+    onError: () => {
+      toast({ title: "오류", description: "노션에서 가져오기에 실패했습니다.", variant: "destructive" });
     },
   });
 
@@ -391,7 +410,9 @@ export default function Canvas() {
         isOpen={isDocumentModalOpen}
         onClose={() => setIsDocumentModalOpen(false)}
         onSubmit={(title, content) => createDocumentMutation.mutate({ title, content })}
+        onNotionImport={(pageIds) => importNotionMutation.mutate(pageIds)}
         isLoading={createDocumentMutation.isPending}
+        isNotionImporting={importNotionMutation.isPending}
       />
 
       <DocumentViewModal

@@ -24,7 +24,9 @@ export const documents = pgTable("documents", {
   title: text("title").notNull(),
   content: text("content").notNull(),
   summary: text("summary"),
-  groupId: integer("group_id"), // Reference to document group (nullable)
+  images: text("images").array(),
+  notionPageId: text("notion_page_id"),
+  groupId: integer("group_id"),
   x: integer("x").notNull().default(100),
   y: integer("y").notNull().default(100),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),

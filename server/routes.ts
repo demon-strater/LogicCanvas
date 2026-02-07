@@ -8,6 +8,7 @@ import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { parseDocumentWithAI, analyzeDocumentWorkflow, assignDocumentToGroup } from "./ai";
+import { listNotionPages, fetchNotionPageContent } from "./notion";
 import { insertDocumentSchema, insertNodeSchema, insertEdgeSchema, insertTaskSchema, insertDocumentGroupSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -691,6 +692,131 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching group edges:", error);
       res.status(500).json({ error: "Failed to fetch group edges" });
+    }
+  });
+
+  // Notion integration routes
+  app.get("/api/notion/pages", async (_req, res) => {
+    try {
+      const pages = await listNotionPages();
+      res.json(pages);
+    } catch (error: any) {
+      console.error("Error fetching Notion pages:", error);
+      if (error.message?.includes("not connected")) {
+        return res.status(401).json({ error: "노션이 연결되지 않았습니다. 노션 연동을 먼저 설정해 주세요." });
+      }
+      res.status(500).json({ error: "노션 페이지 목록을 가져오는데 실패했습니다." });
+    }
+  });
+
+  app.get("/api/notion/pages/:pageId", async (req, res) => {
+    try {
+      const pageContent = await fetchNotionPageContent(req.params.pageId);
+      res.json(pageContent);
+    } catch (error: any) {
+      console.error("Error fetching Notion page content:", error);
+      res.status(500).json({ error: "노션 페이지 내용을 가져오는데 실패했습니다." });
+    }
+  });
+
+  app.post("/api/notion/import", async (req, res) => {
+    try {
+      const { pageIds } = req.body;
+      if (!Array.isArray(pageIds) || pageIds.length === 0) {
+        return res.status(400).json({ error: "가져올 노션 페이지를 선택해 주세요." });
+      }
+
+      const importedDocs = [];
+
+      for (const pageId of pageIds) {
+        try {
+          const existingDoc = await storage.getAllDocuments();
+          const alreadyImported = existingDoc.find((d: any) => d.notionPageId === pageId);
+          if (alreadyImported) {
+            importedDocs.push(alreadyImported);
+            continue;
+          }
+
+          const pageContent = await fetchNotionPageContent(pageId);
+          
+          if (!pageContent.content.trim()) {
+            continue;
+          }
+
+          const parseResult = await parseDocumentWithAI(pageContent.content);
+
+          const document = await storage.createDocument({
+            title: pageContent.title,
+            content: pageContent.content,
+            images: pageContent.images.length > 0 ? pageContent.images : null,
+            notionPageId: pageId,
+          });
+
+          if (parseResult.concepts.length > 0) {
+            const createdNodes = await storage.createNodes(
+              parseResult.concepts.map((concept) => ({
+                documentId: document.id,
+                label: concept.label,
+                content: concept.content,
+                nodeType: concept.nodeType,
+                x: 0,
+                y: 0,
+                isTagged: false,
+              }))
+            );
+
+            if (parseResult.relations.length > 0) {
+              await storage.createEdges(
+                parseResult.relations
+                  .filter(r => r.sourceIndex < createdNodes.length && r.targetIndex < createdNodes.length)
+                  .map((relation) => ({
+                    documentId: document.id,
+                    sourceId: createdNodes[relation.sourceIndex].id,
+                    targetId: createdNodes[relation.targetIndex].id,
+                    label: relation.label,
+                    edgeType: relation.edgeType,
+                  }))
+              );
+            }
+          }
+
+          // Auto-assign to group
+          try {
+            const existingGroups = await storage.getAllGroups();
+            const groupAssignment = await assignDocumentToGroup(pageContent.title, pageContent.content, existingGroups);
+
+            let groupId: number | null = null;
+            if (groupAssignment.action === "existing" && groupAssignment.existingGroupId) {
+              groupId = groupAssignment.existingGroupId;
+            } else if (groupAssignment.action === "new" && groupAssignment.newGroup) {
+              const newGroup = await storage.createGroup({
+                name: groupAssignment.newGroup.name,
+                description: groupAssignment.newGroup.description,
+                color: groupAssignment.newGroup.color,
+                x: 100,
+                y: 100,
+              });
+              groupId = newGroup.id;
+            }
+
+            if (groupId) {
+              const updatedDoc = await storage.updateDocument(document.id, { groupId });
+              importedDocs.push(updatedDoc || document);
+            } else {
+              importedDocs.push(document);
+            }
+          } catch {
+            importedDocs.push(document);
+          }
+        } catch (pageError) {
+          console.error(`Error importing Notion page ${pageId}:`, pageError);
+        }
+      }
+
+      res.json({ imported: importedDocs.length, documents: importedDocs });
+    } catch (error: any) {
+      console.error("Error importing from Notion:", error);
+      res.status(500).json({ error: "노션에서 가져오기에 실패했습니다." });
     }
   });
 
