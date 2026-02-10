@@ -21,6 +21,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY package*.json ./
 RUN npm ci --omit=dev
+COPY drizzle.config.ts ./
+COPY shared ./shared
 COPY --from=builder /app/dist ./dist
 EXPOSE 5000
 CMD ["node", "dist/index.cjs"]

@@ -6,3 +6,4 @@ healthcheckPath = "/api/documents"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
+preDeployCommand = "npm run db:push"
