@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Flag, FlagOff, Save, Trash2, Lightbulb, FileText, HelpCircle } from "lucide-react";
+import { X, Flag, FlagOff, Save, Trash2, Lightbulb, FileText, HelpCircle } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

@@ -3,7 +3,7 @@ import { DocumentBox } from "./DocumentBox";
 import { GroupBox } from "./GroupBox";
 import { Minimap } from "./Minimap";
 import { TimelineHeader, TimelineGridLines } from "./TimelineHeader";
-import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import type { Document, DocumentEdge, DocumentGroup, GroupEdge } from "@shared/schema";
 

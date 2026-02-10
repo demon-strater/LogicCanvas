@@ -1,45 +1,10 @@
-// Notion integration via Replit connector
+// Notion integration via standard Notion SDK
 import { Client } from '@notionhq/client';
 
-let connectionSettings: any;
+const notion = new Client({ auth: process.env.NOTION_API_KEY });
 
-async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return connectionSettings.settings.access_token;
-  }
-  
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
-
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
-  }
-
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=notion',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
-    }
-  ).then(res => res.json()).then(data => data.items?.[0]);
-
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
-
-  if (!connectionSettings || !accessToken) {
-    throw new Error('Notion not connected');
-  }
-  return accessToken;
-}
-
-export async function getUncachableNotionClient() {
-  const accessToken = await getAccessToken();
-  return new Client({ auth: accessToken });
+export function getNotionClient() {
+  return notion;
 }
 
 export type NotionPageSummary = {
@@ -50,8 +15,6 @@ export type NotionPageSummary = {
 };
 
 export async function listNotionPages(): Promise<NotionPageSummary[]> {
-  const notion = await getUncachableNotionClient();
-  
   const response = await notion.search({
     filter: { property: "object", value: "page" },
     sort: { direction: "descending", timestamp: "last_edited_time" },
@@ -74,7 +37,7 @@ export async function listNotionPages(): Promise<NotionPageSummary[]> {
           }
         }
       }
-      
+
       let icon: string | undefined;
       if (page.icon?.type === "emoji") {
         icon = page.icon.emoji;
@@ -96,10 +59,8 @@ export type NotionPageContent = {
 };
 
 export async function fetchNotionPageContent(pageId: string): Promise<NotionPageContent> {
-  const notion = await getUncachableNotionClient();
-  
   const page = await notion.pages.retrieve({ page_id: pageId }) as any;
-  
+
   let title = "Untitled";
   if (page.properties) {
     for (const key of Object.keys(page.properties)) {
@@ -111,13 +72,13 @@ export async function fetchNotionPageContent(pageId: string): Promise<NotionPage
     }
   }
 
-  const blocks = await getAllBlocks(notion, pageId);
+  const blocks = await getAllBlocks(pageId);
   const { text, images } = convertBlocksToText(blocks);
 
   return { title, content: text, images };
 }
 
-async function getAllBlocks(notion: Client, blockId: string): Promise<any[]> {
+async function getAllBlocks(blockId: string): Promise<any[]> {
   const blocks: any[] = [];
   let cursor: string | undefined = undefined;
 
@@ -127,14 +88,14 @@ async function getAllBlocks(notion: Client, blockId: string): Promise<any[]> {
       start_cursor: cursor,
       page_size: 100,
     });
-    
+
     blocks.push(...response.results);
     cursor = response.has_more ? response.next_cursor : undefined;
   } while (cursor);
 
   for (const block of blocks) {
     if (block.has_children && block.type !== "child_page" && block.type !== "child_database") {
-      block.children = await getAllBlocks(notion, block.id);
+      block.children = await getAllBlocks(block.id);
     }
   }
 

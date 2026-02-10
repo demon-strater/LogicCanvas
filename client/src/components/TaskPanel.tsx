@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Clock, Flag, Plus, ArrowUpRight } from "lucide-react";
+import { CheckCircle2, Circle, Clock, Flag, Plus, ArrowUpRight } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";

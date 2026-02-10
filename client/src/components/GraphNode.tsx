@@ -1,5 +1,5 @@
 import { memo, useCallback, useState, useRef } from "react";
-import { Flag, Lightbulb, HelpCircle, FileText, AlertTriangle } from "lucide-react";
+import { Flag, Lightbulb, HelpCircle, FileText, AlertTriangle } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import type { Node } from "@shared/schema";
 

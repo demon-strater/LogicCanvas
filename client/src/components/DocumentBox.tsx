@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FileText, Calendar } from "lucide-react";
+import { FileText, Calendar } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import type { Document } from "@shared/schema";
 

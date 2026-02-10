@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { FileText, Upload, Loader2, Sparkles, Check, ExternalLink } from "lucide-react";
+import { FileText, Upload, Loader2, Sparkles, Check, ExternalLink } from "@/lib/icons";
 import { SiNotion } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

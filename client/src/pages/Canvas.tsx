@@ -10,7 +10,7 @@ import { DocumentViewModal } from "@/components/DocumentViewModal";
 import { GroupInputModal } from "@/components/GroupInputModal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Wand2, FolderPlus, FileText, LayoutGrid } from "lucide-react";
+import { Plus, Wand2, FolderPlus, FileText, LayoutGrid } from "@/lib/icons";
 import {
   DropdownMenu,
   DropdownMenuContent,

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Calendar, FileText, Trash2, X, Pencil, Check, ImageIcon } from "lucide-react";
+import { Calendar, FileText, Trash2, X, Pencil, Check, ImageIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import type { Document } from "@shared/schema";
 
