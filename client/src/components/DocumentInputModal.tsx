@@ -93,6 +93,14 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
     });
   };
 
+  const toggleAllNotionPages = () => {
+    if (selectedNotionPages.size === notionPages.length) {
+      setSelectedNotionPages(new Set());
+    } else {
+      setSelectedNotionPages(new Set(notionPages.map(p => p.id)));
+    }
+  };
+
   const handleNotionImport = () => {
     if (selectedNotionPages.size === 0 || !onNotionImport) return;
     onNotionImport(Array.from(selectedNotionPages));
@@ -318,10 +326,21 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-muted-foreground">
-                          가져올 페이지를 선택하세요 ({selectedNotionPages.size}개 선택됨)
-                        </p>
+                      <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="select-all-notion"
+                            checked={notionPages.length > 0 && selectedNotionPages.size === notionPages.length}
+                            onCheckedChange={toggleAllNotionPages}
+                            disabled={busy}
+                          />
+                          <label
+                            htmlFor="select-all-notion"
+                            className="text-sm font-medium cursor-pointer select-none"
+                          >
+                            전체 선택 ({selectedNotionPages.size}/{notionPages.length})
+                          </label>
+                        </div>
                         <Button
                           variant="ghost"
                           size="sm"
