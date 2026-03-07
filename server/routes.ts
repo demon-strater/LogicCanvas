@@ -1046,21 +1046,21 @@ export async function registerRoutes(
       const CANVAS_START_Y = 200;
       const MAX_DOCS_PER_ROW = 2;
 
-      function getMonthCenterX(year: number, month: number): number {
+      const getMonthCenterX = (year: number, month: number): number => {
         const monthIndex = (year - TIMELINE_START_YEAR) * 12 + month - TIMELINE_START_MONTH;
         return OFFSET_X + monthIndex * MONTH_WIDTH + MONTH_WIDTH / 2;
-      }
+      };
 
-      function getYearMonth(date: Date | string | null): { year: number; month: number } {
+      const getYearMonth = (date: Date | string | null): { year: number; month: number } => {
         if (!date) return { year: 2026, month: 2 };
         const d = new Date(date);
         return { year: d.getFullYear(), month: d.getMonth() + 1 };
-      }
+      };
 
-      function getMonthKey(date: Date | string | null): string {
+      const getMonthKey = (date: Date | string | null): string => {
         const ym = getYearMonth(date);
         return `${ym.year}-${ym.month}`;
-      }
+      };
 
       // Build parent-child relationships
       const groupIdSet = new Set(groups.map(g => g.id));
@@ -1086,10 +1086,10 @@ export async function registerRoutes(
 
       // Position docs in a group at their timeline month X, stacking within the same month
       // Returns { maxRows, allDocPositions } so we know the height consumed
-      function positionDocsInMonthColumns(
+      const positionDocsInMonthColumns = (
         docs: typeof documents,
         baseY: number
-      ): { maxRows: number; positions: Record<number, { x: number; y: number }> } {
+      ): { maxRows: number; positions: Record<number, { x: number; y: number }> } => {
         if (docs.length === 0) return { maxRows: 0, positions: {} };
 
         const byMonth: Record<string, typeof docs> = {};
@@ -1120,15 +1120,15 @@ export async function registerRoutes(
         }
 
         return { maxRows, positions };
-      }
+      };
 
       // Get all descendant document IDs for a group (including nested child groups)
-      function getDescendantDocs(groupId: number): typeof documents {
+      const getDescendantDocs = (groupId: number): typeof documents => {
         const direct = documents.filter(d => d.groupId === groupId);
         const children = childrenOf[groupId] || [];
         const childDocs = children.flatMap(c => getDescendantDocs(c.id));
         return [...direct, ...childDocs];
-      }
+      };
 
       // Top-level groups sorted by workflow order (stacked vertically as swim lanes)
       const topLevelGroups = groups
