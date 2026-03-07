@@ -330,6 +330,8 @@ export function GroupBox({
 
   const groupColor = group.color || "#6366f1";
   const hasManualSize = group.manualWidth != null || group.manualHeight != null;
+  const compactWidth = Math.max(180, Math.min(300, Math.round(groupWidth * 0.35)));
+  const compactHeight = Math.max(110, Math.min(180, Math.round(groupHeight * 0.32)));
 
   return (
     <div
@@ -350,9 +352,9 @@ export function GroupBox({
         transition: isDragging || isResizing ? 'box-shadow 0.2s' : 'left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), top 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), width 0.35s cubic-bezier(0.25, 0.1, 0.25, 1), height 0.35s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.2s',
         zIndex: isSelected || isDragging ? 4 : (isTopLevel ? 1 : 2),
         borderColor: isSelected ? groupColor : `${groupColor}${isTopLevel ? '30' : '80'}`,
-        backgroundColor: isTopLevel ? 'transparent' : undefined,
-        width: groupWidth,
-        height: groupHeight,
+        backgroundColor: compactMode ? "hsl(var(--card) / 0.95)" : (isTopLevel ? 'transparent' : undefined),
+        width: compactMode ? compactWidth : groupWidth,
+        height: compactMode ? compactHeight : groupHeight,
       }}
       onMouseDown={handleMouseDown}
       data-testid={`group-box-${group.id}`}
