@@ -30,6 +30,7 @@ type Props = {
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.1;
+const OVERVIEW_ZOOM_THRESHOLD = 0.35;
 const DOC_WIDTH = 260;
 const DOC_HEIGHT = 130;
 const GROUP_PADDING = 30;
@@ -73,6 +74,7 @@ export function DocumentCanvas({
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionRect, setSelectionRect] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
   const selectionStartRef = useRef({ x: 0, y: 0 });
+  const isOverviewMode = zoom <= OVERVIEW_ZOOM_THRESHOLD;
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -1049,6 +1051,7 @@ export function DocumentCanvas({
               onResize={onResizeGroup}
               onEdit={onEditGroup}
               onDelete={onDeleteGroup}
+              compactMode={isOverviewMode}
             />
           );
         })}
@@ -1080,12 +1083,13 @@ export function DocumentCanvas({
               onResize={onResizeGroup}
               onEdit={onEditGroup}
               onDelete={onDeleteGroup}
+              compactMode={isOverviewMode}
             />
           );
         })}
 
         {/* Render document boxes */}
-        {documents.map((doc) => {
+        {!isOverviewMode && documents.map((doc) => {
           const pos = docPositions[doc.id];
           if (!pos) return null;
           return (

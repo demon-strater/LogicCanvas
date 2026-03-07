@@ -24,6 +24,7 @@ type Props = {
   x: number;
   y: number;
   zoom?: number;
+  compactMode?: boolean;
   isSelected: boolean;
   isExpanded: boolean;
   isTopLevel?: boolean;
@@ -45,6 +46,7 @@ export function GroupBox({
   x,
   y,
   zoom = 1,
+  compactMode = false,
   isSelected,
   isExpanded,
   isTopLevel = true,
@@ -78,6 +80,11 @@ export function GroupBox({
   }, [x, y]);
 
   const totalItems = documents.length + childGroups.length;
+  const compactSummary = (group.description || "").trim();
+  const compactText = compactSummary.length > 0
+    ? compactSummary
+    : `${documents.length} docs, ${childGroups.length} groups`;
+  const compactDots = Math.min(totalItems, 40);
 
   const getDocPos = useCallback((doc: Document) => {
     const live = docPositions[doc.id];
@@ -365,6 +372,7 @@ export function GroupBox({
           </span>
         </div>
 
+        {!compactMode && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0">
@@ -391,7 +399,28 @@ export function GroupBox({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        )}
       </div>
+
+      {compactMode && (
+        <div className="absolute inset-x-3 top-10 bottom-4 pointer-events-none">
+          <p className="text-[10px] leading-relaxed text-foreground/75 line-clamp-3 mb-2">
+            {compactText}
+          </p>
+          <div className="flex flex-wrap gap-1 content-start">
+            {Array.from({ length: compactDots }).map((_, idx) => (
+              <span
+                key={`compact-dot-${group.id}-${idx}`}
+                className="inline-block w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: `${groupColor}cc` }}
+              />
+            ))}
+            {totalItems > compactDots && (
+              <span className="text-[10px] text-muted-foreground">+{totalItems - compactDots}</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Right resize handle */}
       <div
@@ -400,6 +429,7 @@ export function GroupBox({
         style={{ zIndex: 20 }}
         onMouseDown={(e) => handleResizeMouseDown(e, "r")}
         data-testid={`resize-right-${group.id}`}
+        hidden={compactMode}
       >
         <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full" style={{ backgroundColor: `${groupColor}60` }} />
       </div>
@@ -411,6 +441,7 @@ export function GroupBox({
         style={{ zIndex: 20 }}
         onMouseDown={(e) => handleResizeMouseDown(e, "b")}
         data-testid={`resize-bottom-${group.id}`}
+        hidden={compactMode}
       >
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-1 w-8 rounded-full" style={{ backgroundColor: `${groupColor}60` }} />
       </div>
@@ -422,6 +453,7 @@ export function GroupBox({
         style={{ zIndex: 21 }}
         onMouseDown={(e) => handleResizeMouseDown(e, "rb")}
         data-testid={`resize-corner-${group.id}`}
+        hidden={compactMode}
       >
         <div className="absolute bottom-1 right-1 w-2 h-2 rounded-sm" style={{ backgroundColor: `${groupColor}80` }} />
       </div>
