@@ -192,6 +192,8 @@ export function GroupBox({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      if (e.button === 1) return;
+      if (e.button !== 0) return;
       if (isSpacePressed || isResizing) return;
       const target = e.target as HTMLElement;
       if (target.closest('button') || target.closest('[role="menuitem"]') || target.closest('[data-radix-collection-item]') || target.closest('[data-resize-handle]')) return;
@@ -328,11 +330,12 @@ export function GroupBox({
     <div
       ref={boxRef}
       className={cn(
-        "absolute rounded-lg border-2 cursor-pointer group/groupbox",
-        "bg-card/80 backdrop-blur-sm hover:shadow-lg",
+        "absolute rounded-lg cursor-pointer group/groupbox",
+        isTopLevel ? "border-[3px]" : "border-2",
+        "backdrop-blur-sm",
         isSelected
-          ? "shadow-md"
-          : "hover:border-primary/50",
+          ? "shadow-lg"
+          : "hover:shadow-md",
         isDragging && "shadow-xl cursor-grabbing",
         isResizing && "cursor-nwse-resize"
       )}
@@ -342,8 +345,8 @@ export function GroupBox({
         transform: "translate(-50%, -50%)",
         transition: isDragging || isResizing ? 'box-shadow 0.2s' : 'left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), top 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), width 0.35s cubic-bezier(0.25, 0.1, 0.25, 1), height 0.35s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.2s',
         zIndex: isSelected || isDragging ? 4 : (isTopLevel ? 1 : 2),
-        borderColor: isSelected ? groupColor : `${groupColor}${isTopLevel ? '30' : '80'}`,
-        backgroundColor: isTopLevel ? 'transparent' : undefined,
+        borderColor: isSelected ? groupColor : `${groupColor}${isTopLevel ? '50' : '90'}`,
+        backgroundColor: isTopLevel ? `${groupColor}08` : `${groupColor}12`,
         width: groupWidth,
         height: groupHeight,
       }}
@@ -357,9 +360,9 @@ export function GroupBox({
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <Folder className="h-3.5 w-3.5 flex-shrink-0" style={{ color: groupColor }} />
           <h3 className={cn(
-            "font-semibold truncate",
-            isTopLevel ? "text-sm" : "text-xs"
-          )}>{group.name}</h3>
+            "font-semibold",
+            isTopLevel ? "text-base" : "text-xs"
+          )} style={{ wordBreak: "keep-all", overflowWrap: "break-word" }}>{group.name}</h3>
           <span className="text-[10px] text-muted-foreground flex-shrink-0">
             {totalItems}
           </span>

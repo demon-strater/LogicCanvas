@@ -9,6 +9,7 @@ import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { parseDocumentWithAI, analyzeDocumentWorkflow, assignDocumentToGroup } from "./ai";
 import { listNotionPages, fetchNotionPageContent } from "./notion";
+import { syncNotionPages, getSyncStatus, setSyncEnabled, importSingleNotionPage } from "./notionSync";
 import { insertDocumentSchema, insertNodeSchema, insertEdgeSchema, insertTaskSchema, insertDocumentGroupSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -219,6 +220,16 @@ export async function registerRoutes(
   });
 
   // Documents
+  app.delete("/api/documents/deduplicate", async (req, res) => {
+    try {
+      const result = await storage.deduplicateDocuments();
+      res.json(result);
+    } catch (error) {
+      console.error("Error deduplicating documents:", error);
+      res.status(500).json({ error: "Failed to deduplicate documents" });
+    }
+  });
+
   app.get("/api/documents", async (req, res) => {
     try {
       const documents = await storage.getAllDocuments();
@@ -737,76 +748,9 @@ export async function registerRoutes(
             continue;
           }
 
-          const pageContent = await fetchNotionPageContent(pageId);
-          
-          if (!pageContent.content.trim()) {
-            continue;
-          }
-
-          const parseResult = await parseDocumentWithAI(pageContent.content);
-
-          const document = await storage.createDocument({
-            title: pageContent.title,
-            content: pageContent.content,
-            images: pageContent.images.length > 0 ? pageContent.images : null,
-            notionPageId: pageId,
-          });
-
-          if (parseResult.concepts.length > 0) {
-            const createdNodes = await storage.createNodes(
-              parseResult.concepts.map((concept) => ({
-                documentId: document.id,
-                label: concept.label,
-                content: concept.content,
-                nodeType: concept.nodeType,
-                x: 0,
-                y: 0,
-                isTagged: false,
-              }))
-            );
-
-            if (parseResult.relations.length > 0) {
-              await storage.createEdges(
-                parseResult.relations
-                  .filter(r => r.sourceIndex < createdNodes.length && r.targetIndex < createdNodes.length)
-                  .map((relation) => ({
-                    documentId: document.id,
-                    sourceId: createdNodes[relation.sourceIndex].id,
-                    targetId: createdNodes[relation.targetIndex].id,
-                    label: relation.label,
-                    edgeType: relation.edgeType,
-                  }))
-              );
-            }
-          }
-
-          // Auto-assign to group
-          try {
-            const existingGroups = await storage.getAllGroups();
-            const groupAssignment = await assignDocumentToGroup(pageContent.title, pageContent.content, existingGroups);
-
-            let groupId: number | null = null;
-            if (groupAssignment.action === "existing" && groupAssignment.existingGroupId) {
-              groupId = groupAssignment.existingGroupId;
-            } else if (groupAssignment.action === "new" && groupAssignment.newGroup) {
-              const newGroup = await storage.createGroup({
-                name: groupAssignment.newGroup.name,
-                description: groupAssignment.newGroup.description,
-                color: groupAssignment.newGroup.color,
-                x: 100,
-                y: 100,
-              });
-              groupId = newGroup.id;
-            }
-
-            if (groupId) {
-              const updatedDoc = await storage.updateDocument(document.id, { groupId });
-              importedDocs.push(updatedDoc || document);
-            } else {
-              importedDocs.push(document);
-            }
-          } catch {
-            importedDocs.push(document);
+          const doc = await importSingleNotionPage(pageId);
+          if (doc) {
+            importedDocs.push(doc);
           }
         } catch (pageError) {
           console.error(`Error importing Notion page ${pageId}:`, pageError);
@@ -818,6 +762,32 @@ export async function registerRoutes(
       console.error("Error importing from Notion:", error);
       res.status(500).json({ error: "노션에서 가져오기에 실패했습니다." });
     }
+  });
+
+  app.get("/api/notion/sync-status", async (_req, res) => {
+    res.json(getSyncStatus());
+  });
+
+  app.post("/api/notion/sync", async (_req, res) => {
+    try {
+      const result = await syncNotionPages();
+      if (result.busy) {
+        return res.status(409).json({ error: "이미 동기화가 진행 중입니다.", busy: true });
+      }
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error syncing Notion:", error);
+      res.status(500).json({ error: "노션 동기화에 실패했습니다." });
+    }
+  });
+
+  app.post("/api/notion/sync-toggle", async (req, res) => {
+    const { enabled } = req.body;
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ error: "enabled 값이 필요합니다." });
+    }
+    setSyncEnabled(enabled);
+    res.json(getSyncStatus());
   });
 
   // Analyze workflow and auto-layout documents

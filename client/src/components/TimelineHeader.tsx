@@ -68,7 +68,7 @@ export function TimelineHeader({
   return (
     <div
       className="absolute top-0 left-0 right-0 h-12 border-b border-border bg-background/95 backdrop-blur-sm overflow-hidden"
-      style={{ zIndex: 100 }}
+      style={{ zIndex: 20 }}
     >
       <div
         className="flex h-full"
@@ -185,7 +185,7 @@ export function TimelineGridLines({
         left: 0,
         width: "100%", 
         height: viewportHeight - 48,
-        zIndex: 1 
+        zIndex: 0 
       }}
     >
       {months.map((m, monthIndex) => {

@@ -220,7 +220,7 @@ export function Minimap({
         width: MINIMAP_WIDTH,
         height: MINIMAP_HEIGHT,
         bottom: 68,
-        zIndex: 50,
+        zIndex: 20,
         cursor: isDragging ? 'grabbing' : 'pointer',
       }}
       onMouseDown={handleMouseDown}

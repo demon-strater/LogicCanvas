@@ -80,7 +80,7 @@ export function DocumentViewModal({ document, isOpen, onClose, onDelete, onUpdat
     <>
       <div
         className="fixed inset-0 bg-black/30 backdrop-blur-[2px]"
-        style={{ top: "calc(3.5rem + 48px)", zIndex: 150 }}
+        style={{ top: "calc(3.5rem + 48px)", zIndex: 40 }}
         onClick={onClose}
         data-testid="document-view-backdrop"
       />
@@ -96,7 +96,7 @@ export function DocumentViewModal({ document, isOpen, onClose, onDelete, onUpdat
         style={{
           top: "calc(3.5rem + 48px + 12px)",
           bottom: 16,
-          zIndex: 200,
+          zIndex: 45,
         }}
         data-testid="document-view-panel"
       >

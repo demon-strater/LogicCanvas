@@ -7,6 +7,7 @@ type Props = {
   document: Document;
   x: number;
   y: number;
+  zoom?: number;
   isSelected: boolean;
   isSpacePressed?: boolean;
   onSelect: (id: number, shiftKey?: boolean) => void;
@@ -19,6 +20,7 @@ export function DocumentBox({
   document,
   x,
   y,
+  zoom = 1,
   isSelected,
   isSpacePressed = false,
   onSelect,
@@ -32,6 +34,8 @@ export function DocumentBox({
   const originalPosRef = useRef({ x, y });
   const [currentPos, setCurrentPos] = useState({ x, y });
   const boxRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
 
   useEffect(() => {
     setCurrentPos({ x, y });
@@ -57,15 +61,17 @@ export function DocumentBox({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      // Don't start drag if spacebar is pressed (canvas is panning)
+      if (e.button === 1) return;
+      if (e.button !== 0) return;
       if (isSpacePressed) return;
       
       e.preventDefault();
+      e.stopPropagation();
       onSelect(document.id, e.shiftKey);
       setIsDragging(true);
       setHasDragged(false);
       originalPosRef.current = { x: currentPos.x, y: currentPos.y };
-      dragStartRef.current = { x: e.clientX - currentPos.x, y: e.clientY - currentPos.y };
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
     },
     [document.id, currentPos, onSelect, isSpacePressed]
   );
@@ -74,8 +80,11 @@ export function DocumentBox({
     if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const newX = e.clientX - dragStartRef.current.x;
-      const newY = e.clientY - dragStartRef.current.y;
+      const z = zoomRef.current;
+      const dx = (e.clientX - dragStartRef.current.x) / z;
+      const dy = (e.clientY - dragStartRef.current.y) / z;
+      const newX = originalPosRef.current.x + dx;
+      const newY = originalPosRef.current.y + dy;
       setCurrentPos({ x: newX, y: newY });
       setHasDragged(true);
       onDragMove?.(document.id, newX, newY);
@@ -112,15 +121,49 @@ export function DocumentBox({
     [hasDragged, document.id, onClick]
   );
 
+  const isOverviewZoom = zoom < 0.3;
+  const isMidZoom = zoom >= 0.3 && zoom < 0.6;
+
+  if (isOverviewZoom) {
+    return (
+      <div
+        ref={boxRef}
+        className={cn(
+          "absolute w-[260px] rounded-md border-2 cursor-pointer transition-shadow",
+          "bg-card",
+          isSelected
+            ? "border-primary shadow-md"
+            : "border-border/80",
+          isDragging && "shadow-xl cursor-grabbing"
+        )}
+        style={{
+          left: currentPos.x,
+          top: currentPos.y,
+          transform: "translate(-50%, -50%)",
+          zIndex: isSelected || isDragging ? 10 : 3,
+          height: 40,
+        }}
+        onMouseDown={handleMouseDown}
+        onClick={handleClick}
+        data-testid={`document-box-${document.id}`}
+      >
+        <div className="px-2 py-1.5 flex items-center gap-1.5 overflow-hidden">
+          <FileText className="h-3 w-3 text-primary flex-shrink-0" />
+          <span className="font-medium text-xs whitespace-nowrap overflow-hidden text-ellipsis">{document.title}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={boxRef}
       className={cn(
-        "absolute w-[260px] min-h-[130px] p-3 rounded-md border cursor-pointer transition-shadow",
+        "absolute w-[260px] h-auto p-3 rounded-md border-2 cursor-pointer transition-shadow",
         "bg-card hover:shadow-lg",
         isSelected
           ? "border-primary shadow-md"
-          : "border-border hover:border-primary/50",
+          : "border-border/60 hover:border-primary/50",
         isDragging && "shadow-xl cursor-grabbing"
       )}
       style={{
@@ -138,7 +181,7 @@ export function DocumentBox({
           <FileText className="h-3.5 w-3.5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-xs leading-tight line-clamp-2">{document.title}</h3>
+          <h3 className="font-medium text-xs leading-tight" style={{ wordBreak: "keep-all", overflowWrap: "break-word" }}>{document.title}</h3>
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
             <Calendar className="h-2.5 w-2.5" />
             <span>{formatDate(document.createdAt)}</span>
@@ -146,9 +189,11 @@ export function DocumentBox({
         </div>
       </div>
 
-      <p className="text-[10px] text-muted-foreground line-clamp-2 leading-relaxed">
-        {getSummary()}
-      </p>
+      {!isMidZoom && (
+        <p className="text-[10px] text-muted-foreground leading-relaxed overflow-hidden" style={{ wordBreak: "keep-all", overflowWrap: "break-word" }}>
+          {getSummary()}
+        </p>
+      )}
     </div>
   );
 }

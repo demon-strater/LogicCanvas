@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { seedDatabase } from "./seed";
+import { startSyncLoop } from "./notionSync";
 
 const app = express();
 const httpServer = createServer(app);
@@ -102,6 +103,7 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
+      startSyncLoop();
     },
   );
 })();

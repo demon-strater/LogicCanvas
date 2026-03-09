@@ -193,7 +193,7 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+      <DialogContent className={`max-h-[85vh] flex flex-col ${content.length > 500 ? 'sm:max-w-4xl' : 'sm:max-w-2xl'}`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />

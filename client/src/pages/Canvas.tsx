@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+import { cn } from "@/lib/utils";
 import { Header } from "@/components/Header";
 import { DocumentCanvas } from "@/components/DocumentCanvas";
 import { DocumentInputModal } from "@/components/DocumentInputModal";
@@ -10,7 +11,7 @@ import { DocumentViewModal } from "@/components/DocumentViewModal";
 import { GroupInputModal } from "@/components/GroupInputModal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Wand2, FolderPlus, FileText, LayoutGrid } from "lucide-react";
+import { Plus, Wand2, FolderPlus, FileText, LayoutGrid, RefreshCw, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -148,6 +149,58 @@ export default function Canvas() {
     },
     onError: () => {
       toast({ title: "오류", description: "재정렬에 실패했습니다.", variant: "destructive" });
+    },
+  });
+
+  const { data: syncStatus } = useQuery<{
+    enabled: boolean;
+    lastSyncTime: string | null;
+    isSyncing: boolean;
+    lastSyncResult: { imported: number; skipped: number; errors: number } | null;
+  }>({
+    queryKey: ["/api/notion/sync-status"],
+    refetchInterval: 30000,
+  });
+
+  const syncNotionMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/notion/sync");
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/document-edges"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/group-edges"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notion/sync-status"] });
+      if (data.imported > 0) {
+        toast({ title: `노션 동기화 완료: ${data.imported}개 새 문서 가져옴` });
+      } else {
+        toast({ title: "노션 동기화 완료: 새 문서 없음" });
+      }
+    },
+    onError: () => {
+      toast({ title: "오류", description: "노션 동기화에 실패했습니다.", variant: "destructive" });
+    },
+  });
+
+  const deduplicateMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("DELETE", "/api/documents/deduplicate");
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/document-edges"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      if (data.deletedCount > 0) {
+        toast({ title: `중복 문서 ${data.deletedCount}개를 정리했습니다` });
+      } else {
+        toast({ title: "중복 문서가 없습니다" });
+      }
+    },
+    onError: () => {
+      toast({ title: "오류", description: "중복 제거에 실패했습니다.", variant: "destructive" });
     },
   });
 
@@ -346,7 +399,44 @@ export default function Canvas() {
           />
         )}
 
-        <div className="fixed bottom-4 right-4 flex items-center gap-2 z-50">
+        {syncStatus && (
+          <div className="fixed top-4 right-4 z-30 flex items-center gap-2 bg-card/90 backdrop-blur-sm border rounded-md px-3 py-1.5 shadow-sm">
+            <div className={cn("w-2 h-2 rounded-full", syncStatus.enabled ? "bg-green-500" : "bg-muted-foreground/40")} />
+            <span className="text-[11px] text-muted-foreground">
+              {syncStatus.isSyncing ? "동기화 중..." : syncStatus.enabled ? "노션 자동 동기화" : "동기화 꺼짐"}
+            </span>
+            {syncStatus.lastSyncTime && (
+              <span className="text-[10px] text-muted-foreground/60">
+                {new Date(syncStatus.lastSyncTime).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => syncNotionMutation.mutate()}
+              disabled={syncNotionMutation.isPending || syncStatus.isSyncing}
+              data-testid="button-sync-notion"
+            >
+              <RefreshCw className={cn("h-3 w-3", (syncNotionMutation.isPending || syncStatus.isSyncing) && "animate-spin")} />
+            </Button>
+          </div>
+        )}
+
+        <div className="fixed bottom-4 right-4 flex items-center gap-2 z-30">
+          {documents.length >= 2 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="shadow-lg bg-card/90 backdrop-blur-sm"
+              onClick={() => deduplicateMutation.mutate()}
+              disabled={deduplicateMutation.isPending}
+              data-testid="button-deduplicate"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              {deduplicateMutation.isPending ? "정리 중..." : "중복 제거"}
+            </Button>
+          )}
           {(documents.length >= 1 || (groups || []).length >= 1) && (
             <Button
               variant="outline"

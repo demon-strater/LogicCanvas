@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { documents, nodes, edges, tasks, users, documentEdges, documentGroups, groupEdges } from "@shared/schema";
-import { eq, desc, or, isNull } from "drizzle-orm";
+import { eq, desc, or, isNull, and, inArray, asc } from "drizzle-orm";
 import type { Document, InsertDocument, Node, InsertNode, Edge, InsertEdge, Task, InsertTask, User, InsertUser, DocumentEdge, InsertDocumentEdge, DocumentGroup, InsertDocumentGroup, GroupEdge, InsertGroupEdge } from "@shared/schema";
 
 export interface IStorage {
@@ -51,6 +51,8 @@ export interface IStorage {
   createGroupEdge(edge: InsertGroupEdge): Promise<GroupEdge>;
   createGroupEdges(edgesData: InsertGroupEdge[]): Promise<GroupEdge[]>;
   clearAllGroupEdges(): Promise<void>;
+
+  deduplicateDocuments(): Promise<{ deletedCount: number; deletedIds: number[] }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -242,6 +244,46 @@ export class DatabaseStorage implements IStorage {
 
   async clearAllGroupEdges(): Promise<void> {
     await db.delete(groupEdges);
+  }
+
+  async deduplicateDocuments(): Promise<{ deletedCount: number; deletedIds: number[] }> {
+    const allDocs = await db.select().from(documents).orderBy(asc(documents.createdAt));
+    const idsToDelete: number[] = [];
+
+    const notionPageMap = new Map<string, number>();
+    for (const doc of allDocs) {
+      if (doc.notionPageId) {
+        if (notionPageMap.has(doc.notionPageId)) {
+          idsToDelete.push(doc.id);
+        } else {
+          notionPageMap.set(doc.notionPageId, doc.id);
+        }
+      }
+    }
+
+    const contentMap = new Map<string, number>();
+    for (const doc of allDocs) {
+      if (!doc.notionPageId && !idsToDelete.includes(doc.id)) {
+        const key = `${doc.title}|||${doc.content}`;
+        if (contentMap.has(key)) {
+          idsToDelete.push(doc.id);
+        } else {
+          contentMap.set(key, doc.id);
+        }
+      }
+    }
+
+    if (idsToDelete.length > 0) {
+      await db.delete(documentEdges).where(
+        or(
+          inArray(documentEdges.sourceDocId, idsToDelete),
+          inArray(documentEdges.targetDocId, idsToDelete)
+        )
+      );
+      await db.delete(documents).where(inArray(documents.id, idsToDelete));
+    }
+
+    return { deletedCount: idsToDelete.length, deletedIds: idsToDelete };
   }
 }
 

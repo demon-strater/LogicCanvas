@@ -36,6 +36,182 @@ const GROUP_PADDING = 30;
 const GROUP_HEADER = 100;
 const TIMELINE_HEIGHT = 50;
 const TIMELINE_GAP = 80;
+const OBSTACLE_MARGIN = 25;
+
+type ObstacleRect = { left: number; top: number; right: number; bottom: number; id?: number };
+
+function lineSegIntersectsRect(
+  x1: number, y1: number, x2: number, y2: number,
+  r: ObstacleRect
+): boolean {
+  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
+  const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
+  if (maxX < r.left || minX > r.right || maxY < r.top || minY > r.bottom) return false;
+  if (x1 >= r.left && x1 <= r.right && y1 >= r.top && y1 <= r.bottom) return true;
+  if (x2 >= r.left && x2 <= r.right && y2 >= r.top && y2 <= r.bottom) return true;
+  const dx = x2 - x1, dy = y2 - y1;
+  const edges: [number, number, number, number][] = [
+    [r.left, r.top, r.right, r.top],
+    [r.right, r.top, r.right, r.bottom],
+    [r.left, r.bottom, r.right, r.bottom],
+    [r.left, r.top, r.left, r.bottom],
+  ];
+  for (const [ex1, ey1, ex2, ey2] of edges) {
+    const edx = ex2 - ex1, edy = ey2 - ey1;
+    const denom = dx * edy - dy * edx;
+    if (Math.abs(denom) < 0.001) continue;
+    const t = ((ex1 - x1) * edy - (ey1 - y1) * edx) / denom;
+    const u = ((ex1 - x1) * dy - (ey1 - y1) * dx) / denom;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return true;
+  }
+  return false;
+}
+
+function pointInRect(px: number, py: number, r: ObstacleRect): boolean {
+  return px >= r.left && px <= r.right && py >= r.top && py <= r.bottom;
+}
+
+function computeBypassWaypoints(
+  startX: number, startY: number,
+  endX: number, endY: number,
+  obstacles: ObstacleRect[],
+  depth: number = 0
+): { x: number; y: number }[] {
+  if (depth > 4) return [];
+
+  const blocking = obstacles.filter(obs =>
+    lineSegIntersectsRect(startX, startY, endX, endY, obs)
+  );
+
+  if (blocking.length === 0) return [];
+
+  const isHoriz = Math.abs(endX - startX) >= Math.abs(endY - startY);
+  blocking.sort((a, b) => {
+    const aCx = (a.left + a.right) / 2, aCy = (a.top + a.bottom) / 2;
+    const bCx = (b.left + b.right) / 2, bCy = (b.top + b.bottom) / 2;
+    if (isHoriz) {
+      const dir = endX > startX ? 1 : -1;
+      return dir * (aCx - bCx);
+    }
+    const dir = endY > startY ? 1 : -1;
+    return dir * (aCy - bCy);
+  });
+
+  const obs = blocking[0];
+  const obsCx = (obs.left + obs.right) / 2;
+  const obsCy = (obs.top + obs.bottom) / 2;
+
+  const candidates: { x: number; y: number; cost: number }[] = [];
+
+  const topWp = { x: obsCx, y: obs.top - OBSTACLE_MARGIN };
+  const bottomWp = { x: obsCx, y: obs.bottom + OBSTACLE_MARGIN };
+  const leftWp = { x: obs.left - OBSTACLE_MARGIN, y: obsCy };
+  const rightWp = { x: obs.right + OBSTACLE_MARGIN, y: obsCy };
+
+  for (const wp of [topWp, bottomWp, leftWp, rightWp]) {
+    const isInsideAnother = obstacles.some(o => o !== obs && pointInRect(wp.x, wp.y, o));
+    if (isInsideAnother) continue;
+    const cost = Math.hypot(wp.x - startX, wp.y - startY) + Math.hypot(endX - wp.x, endY - wp.y);
+    candidates.push({ ...wp, cost });
+  }
+
+  if (candidates.length === 0) {
+    const fallbackY = (startY < obsCy) ? obs.top - OBSTACLE_MARGIN * 2 : obs.bottom + OBSTACLE_MARGIN * 2;
+    return [{ x: obsCx, y: fallbackY }];
+  }
+
+  candidates.sort((a, b) => a.cost - b.cost);
+  const best = candidates[0];
+  const wp = { x: best.x, y: best.y };
+
+  const remainingObs = obstacles.filter(o => o !== obs);
+  const beforeWps = computeBypassWaypoints(startX, startY, wp.x, wp.y, remainingObs, depth + 1);
+  const afterWps = computeBypassWaypoints(wp.x, wp.y, endX, endY, remainingObs, depth + 1);
+
+  return [...beforeWps, wp, ...afterWps];
+}
+
+function buildSmoothPath(
+  startX: number, startY: number,
+  endX: number, endY: number,
+  waypoints: { x: number; y: number }[],
+  curveStrength: number,
+  horizontal: boolean,
+  dirSign: number
+): string {
+  if (waypoints.length === 0) {
+    if (horizontal) {
+      return `M ${startX} ${startY} C ${startX + dirSign * curveStrength} ${startY}, ${endX - dirSign * curveStrength} ${endY}, ${endX} ${endY}`;
+    } else {
+      return `M ${startX} ${startY} C ${startX} ${startY + dirSign * curveStrength}, ${endX} ${endY - dirSign * curveStrength}, ${endX} ${endY}`;
+    }
+  }
+
+  const allPts = [{ x: startX, y: startY }, ...waypoints, { x: endX, y: endY }];
+  let path = `M ${allPts[0].x} ${allPts[0].y}`;
+
+  for (let i = 0; i < allPts.length - 1; i++) {
+    const p0 = allPts[i];
+    const p1 = allPts[i + 1];
+    const segDist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+    const segCurve = Math.min(curveStrength, segDist * 0.4);
+    const sdx = p1.x - p0.x, sdy = p1.y - p0.y;
+    const segHoriz = Math.abs(sdx) >= Math.abs(sdy);
+
+    if (segHoriz) {
+      const d = sdx > 0 ? 1 : -1;
+      path += ` C ${p0.x + d * segCurve} ${p0.y}, ${p1.x - d * segCurve} ${p1.y}, ${p1.x} ${p1.y}`;
+    } else {
+      const d = sdy > 0 ? 1 : -1;
+      path += ` C ${p0.x} ${p0.y + d * segCurve}, ${p1.x} ${p1.y - d * segCurve}, ${p1.x} ${p1.y}`;
+    }
+  }
+
+  return path;
+}
+
+function computeEdgePath(
+  sourceX: number, sourceY: number,
+  targetX: number, targetY: number,
+  halfW: number, halfH: number,
+  targetHalfW: number, targetHalfH: number,
+  obstacles: ObstacleRect[],
+  baseCurveDist: number = 400
+): string {
+  const dx = targetX - sourceX, dy = targetY - sourceY;
+  const absDx = Math.abs(dx), absDy = Math.abs(dy);
+
+  let startX: number, startY: number, endX: number, endY: number;
+  let horizontal: boolean;
+
+  if (absDx * (halfH * 2) > absDy * (halfW * 2)) {
+    horizontal = true;
+    if (dx > 0) {
+      startX = sourceX + halfW; startY = sourceY;
+      endX = targetX - targetHalfW; endY = targetY;
+    } else {
+      startX = sourceX - halfW; startY = sourceY;
+      endX = targetX + targetHalfW; endY = targetY;
+    }
+  } else {
+    horizontal = false;
+    if (dy > 0) {
+      startX = sourceX; startY = sourceY + halfH;
+      endX = targetX; endY = targetY - targetHalfH;
+    } else {
+      startX = sourceX; startY = sourceY - halfH;
+      endX = targetX; endY = targetY + targetHalfH;
+    }
+  }
+
+  const dist = Math.hypot(endX - startX, endY - startY);
+  const t = Math.min(1, dist / baseCurveDist);
+  const curveStrength = 30 + t * 50;
+  const dirSign = horizontal ? (dx > 0 ? 1 : -1) : (dy > 0 ? 1 : -1);
+
+  const waypoints = computeBypassWaypoints(startX, startY, endX, endY, obstacles);
+  return buildSmoothPath(startX, startY, endX, endY, waypoints, curveStrength, horizontal, dirSign);
+}
 
 export function DocumentCanvas({
   documents,
@@ -691,134 +867,64 @@ export function DocumentCanvas({
             </marker>
           </defs>
 
-          {/* Document-to-document edges - render all types with proper colors/styles */}
-          {/* Layer 1: Background outlines (drawn first so they don't cover colored lines) */}
-          {edges.map((edge) => {
-            const sourcePos = docPositions[edge.sourceDocId];
-            const targetPos = docPositions[edge.targetDocId];
-            if (!sourcePos || !targetPos) return null;
+          {/* Document-to-document edges with obstacle avoidance routing */}
+          {(() => {
+            const docObstacles: ObstacleRect[] = Object.entries(docPositions).map(([idStr, pos]) => {
+              const id = Number(idStr);
+              return {
+                id,
+                left: pos.x - DOC_WIDTH / 2 - 5,
+                top: pos.y - DOC_HEIGHT / 2 - 5,
+                right: pos.x + DOC_WIDTH / 2 + 5,
+                bottom: pos.y + DOC_HEIGHT / 2 + 5,
+              };
+            });
 
-            const HALF_W = DOC_WIDTH / 2;
-            const HALF_H = DOC_HEIGHT / 2;
-            const sx = sourcePos.x, sy = sourcePos.y;
-            const tx = targetPos.x, ty = targetPos.y;
-            const dx = tx - sx, dy = ty - sy;
-            const absDx = Math.abs(dx), absDy = Math.abs(dy);
+            return edges.map((edge) => {
+              const sourcePos = docPositions[edge.sourceDocId];
+              const targetPos = docPositions[edge.targetDocId];
+              if (!sourcePos || !targetPos) return null;
 
-            let startX: number, startY: number, endX: number, endY: number;
-            let horizontal: boolean;
+              const obstacles = docObstacles.filter(
+                o => o.id !== edge.sourceDocId && o.id !== edge.targetDocId
+              );
 
-            if (absDx * DOC_HEIGHT > absDy * DOC_WIDTH) {
-              horizontal = true;
-              if (dx > 0) {
-                startX = sx + HALF_W; startY = sy;
-                endX = tx - HALF_W; endY = ty;
-              } else {
-                startX = sx - HALF_W; startY = sy;
-                endX = tx + HALF_W; endY = ty;
-              }
-            } else {
-              horizontal = false;
-              if (dy > 0) {
-                startX = sx; startY = sy + HALF_H;
-                endX = tx; endY = ty - HALF_H;
-              } else {
-                startX = sx; startY = sy - HALF_H;
-                endX = tx; endY = ty + HALF_H;
-              }
-            }
+              const HALF_W = DOC_WIDTH / 2;
+              const HALF_H = DOC_HEIGHT / 2;
+              const pathD = computeEdgePath(
+                sourcePos.x, sourcePos.y,
+                targetPos.x, targetPos.y,
+                HALF_W, HALF_H, HALF_W, HALF_H,
+                obstacles, 400
+              );
 
-            const dist = Math.sqrt((endX-startX)**2 + (endY-startY)**2);
-            const t = Math.min(1, dist / 400);
-            const curveStrength = 30 + t * 50;
+              const edgeColor = getEdgeColor(edge.edgeType);
+              const markerId = `arrow-${edge.edgeType}`;
+              const isRelated = edge.edgeType === "related";
 
-            let pathD: string;
-            if (horizontal) {
-              const dir = dx > 0 ? 1 : -1;
-              pathD = `M ${startX} ${startY} C ${startX + dir * curveStrength} ${startY}, ${endX - dir * curveStrength} ${endY}, ${endX} ${endY}`;
-            } else {
-              const dir = dy > 0 ? 1 : -1;
-              pathD = `M ${startX} ${startY} C ${startX} ${startY + dir * curveStrength}, ${endX} ${endY - dir * curveStrength}, ${endX} ${endY}`;
-            }
-
-            return (
-              <path
-                key={`bg-${edge.id}`}
-                d={pathD}
-                fill="none"
-                stroke="hsl(var(--background))"
-                strokeWidth="4"
-                strokeLinecap="round"
-              />
-            );
-          })}
-          {/* Layer 2: Colored lines (drawn on top of all backgrounds) */}
-          {edges.map((edge) => {
-            const sourcePos = docPositions[edge.sourceDocId];
-            const targetPos = docPositions[edge.targetDocId];
-            if (!sourcePos || !targetPos) return null;
-
-            const HALF_W = DOC_WIDTH / 2;
-            const HALF_H = DOC_HEIGHT / 2;
-            const sx = sourcePos.x, sy = sourcePos.y;
-            const tx = targetPos.x, ty = targetPos.y;
-            const dx = tx - sx, dy = ty - sy;
-            const absDx = Math.abs(dx), absDy = Math.abs(dy);
-
-            let startX: number, startY: number, endX: number, endY: number;
-            let horizontal: boolean;
-
-            if (absDx * DOC_HEIGHT > absDy * DOC_WIDTH) {
-              horizontal = true;
-              if (dx > 0) {
-                startX = sx + HALF_W; startY = sy;
-                endX = tx - HALF_W; endY = ty;
-              } else {
-                startX = sx - HALF_W; startY = sy;
-                endX = tx + HALF_W; endY = ty;
-              }
-            } else {
-              horizontal = false;
-              if (dy > 0) {
-                startX = sx; startY = sy + HALF_H;
-                endX = tx; endY = ty - HALF_H;
-              } else {
-                startX = sx; startY = sy - HALF_H;
-                endX = tx; endY = ty + HALF_H;
-              }
-            }
-
-            const dist = Math.sqrt((endX-startX)**2 + (endY-startY)**2);
-            const t = Math.min(1, dist / 400);
-            const curveStrength = 30 + t * 50;
-
-            let pathD: string;
-            if (horizontal) {
-              const dir = dx > 0 ? 1 : -1;
-              pathD = `M ${startX} ${startY} C ${startX + dir * curveStrength} ${startY}, ${endX - dir * curveStrength} ${endY}, ${endX} ${endY}`;
-            } else {
-              const dir = dy > 0 ? 1 : -1;
-              pathD = `M ${startX} ${startY} C ${startX} ${startY + dir * curveStrength}, ${endX} ${endY - dir * curveStrength}, ${endX} ${endY}`;
-            }
-
-            const edgeColor = getEdgeColor(edge.edgeType);
-            const markerId = `arrow-${edge.edgeType}`;
-            const isRelated = edge.edgeType === "related";
-
-            return (
-              <path
-                key={`line-${edge.id}`}
-                d={pathD}
-                fill="none"
-                stroke={edgeColor}
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeOpacity={isRelated ? 0.5 : 0.7}
-                strokeDasharray={isRelated ? "6,4" : undefined}
-                markerEnd={`url(#${markerId})`}
-              />
-            );
-          })}
+              return (
+                <g key={`edge-${edge.id}`}>
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke="hsl(var(--background))"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke={edgeColor}
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeOpacity={isRelated ? 0.5 : 0.7}
+                    strokeDasharray={isRelated ? "6,4" : undefined}
+                    markerEnd={`url(#${markerId})`}
+                  />
+                </g>
+              );
+            });
+          })()}
 
           {/* Group-to-group edges (workflow connections between groups) */}
           {groupEdges.map((edge) => {
@@ -918,61 +1024,29 @@ export function DocumentCanvas({
             const sourceCenter = getGroupCenter(sourceGroup);
             const targetCenter = getGroupCenter(targetGroup);
             if (!sourceCenter || !targetCenter) return null;
-            
-            const HALF_W = sourceCenter.width / 2;
-            const HALF_H = sourceCenter.height / 2;
-            const TARGET_HALF_W = targetCenter.width / 2;
-            const TARGET_HALF_H = targetCenter.height / 2;
-            
-            const dx = targetCenter.x - sourceCenter.x;
-            const dy = targetCenter.y - sourceCenter.y;
-            const absDx = Math.abs(dx);
-            const absDy = Math.abs(dy);
-            
-            let startX: number, startY: number, endX: number, endY: number;
-            
-            if (absDx * sourceCenter.height > absDy * sourceCenter.width) {
-              if (dx > 0) {
-                startX = sourceCenter.x + HALF_W;
-                startY = sourceCenter.y;
-                endX = targetCenter.x - TARGET_HALF_W;
-                endY = targetCenter.y;
-              } else {
-                startX = sourceCenter.x - HALF_W;
-                startY = sourceCenter.y;
-                endX = targetCenter.x + TARGET_HALF_W;
-                endY = targetCenter.y;
-              }
-            } else {
-              if (dy > 0) {
-                startX = sourceCenter.x;
-                startY = sourceCenter.y + HALF_H;
-                endX = targetCenter.x;
-                endY = targetCenter.y - TARGET_HALF_H;
-              } else {
-                startX = sourceCenter.x;
-                startY = sourceCenter.y - HALF_H;
-                endX = targetCenter.x;
-                endY = targetCenter.y + TARGET_HALF_H;
-              }
-            }
-            
-            const gdx = targetCenter.x - sourceCenter.x;
-            const gdy = targetCenter.y - sourceCenter.y;
-            const gAbsDx = Math.abs(gdx);
-            const gAbsDy = Math.abs(gdy);
-            const gDist = Math.sqrt((endX-startX)**2 + (endY-startY)**2);
-            const gt = Math.min(1, gDist / 600);
-            const gCurve = 50 + gt * 80;
-            
-            let pathD: string;
-            if (gAbsDx > gAbsDy) {
-              const dir = gdx > 0 ? 1 : -1;
-              pathD = `M ${startX} ${startY} C ${startX + dir * gCurve} ${startY}, ${endX - dir * gCurve} ${endY}, ${endX} ${endY}`;
-            } else {
-              const dir = gdy > 0 ? 1 : -1;
-              pathD = `M ${startX} ${startY} C ${startX} ${startY + dir * gCurve}, ${endX} ${endY - dir * gCurve}, ${endX} ${endY}`;
-            }
+
+            const groupObstacles: ObstacleRect[] = groups
+              .filter(g => g.id !== edge.sourceGroupId && g.id !== edge.targetGroupId)
+              .map(g => {
+                const gc = getGroupCenter(g);
+                if (!gc) return null;
+                return {
+                  id: g.id,
+                  left: gc.x - gc.width / 2 - 10,
+                  top: gc.y - gc.height / 2 - 10,
+                  right: gc.x + gc.width / 2 + 10,
+                  bottom: gc.y + gc.height / 2 + 10,
+                };
+              })
+              .filter(Boolean) as ObstacleRect[];
+
+            const pathD = computeEdgePath(
+              sourceCenter.x, sourceCenter.y,
+              targetCenter.x, targetCenter.y,
+              sourceCenter.width / 2, sourceCenter.height / 2,
+              targetCenter.width / 2, targetCenter.height / 2,
+              groupObstacles, 600
+            );
             
             const edgeColor = edge.edgeType === "depends" 
               ? "hsl(var(--destructive) / 0.85)" 
@@ -1014,7 +1088,7 @@ export function DocumentCanvas({
               top: Math.min(selectionRect.startY, selectionRect.endY),
               width: Math.abs(selectionRect.endX - selectionRect.startX),
               height: Math.abs(selectionRect.endY - selectionRect.startY),
-              zIndex: 1000,
+              zIndex: 15,
             }}
           />
         )}
@@ -1094,6 +1168,7 @@ export function DocumentCanvas({
               document={doc}
               x={pos.x}
               y={pos.y}
+              zoom={zoom}
               isSelected={selectedDocumentId === doc.id || selectedDocIds.has(doc.id)}
               isSpacePressed={isSpacePressed}
               onSelect={handleDocSelect}
@@ -1144,7 +1219,7 @@ export function DocumentCanvas({
         onNavigate={handleMinimapNavigate}
       />
 
-      <div className="absolute bottom-4 left-4 bg-card/90 backdrop-blur-sm border rounded-md px-3 py-2 shadow-sm" data-testid="edge-legend">
+      <div className="absolute bottom-4 left-4 bg-card/90 backdrop-blur-sm border rounded-md px-3 py-2 shadow-sm" style={{ zIndex: 20 }} data-testid="edge-legend">
         <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 tracking-wide">연결선 의미</p>
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
@@ -1166,7 +1241,7 @@ export function DocumentCanvas({
         </div>
       </div>
 
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-card/90 backdrop-blur-sm border rounded-lg p-1 shadow-lg">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-card/90 backdrop-blur-sm border rounded-lg p-1 shadow-lg" style={{ zIndex: 20 }}>
         <Button
           variant="ghost"
           size="sm"
@@ -1204,7 +1279,7 @@ export function DocumentCanvas({
         </Button>
       </div>
 
-      <div className="absolute top-4 left-4 text-xs text-muted-foreground bg-card/80 backdrop-blur-sm px-2 py-1 rounded">
+      <div className="absolute top-4 left-4 text-xs text-muted-foreground bg-card/80 backdrop-blur-sm px-2 py-1 rounded" style={{ zIndex: 20 }}>
         스크롤: 확대/축소 (커서 중심) | 스페이스+드래그: 화면이동
       </div>
     </div>
