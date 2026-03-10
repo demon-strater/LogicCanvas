@@ -326,14 +326,16 @@ export function GroupBox({
   const groupColor = group.color || "#6366f1";
   const hasManualSize = group.manualWidth != null || group.manualHeight != null;
 
-  const isOverviewZoom = zoom < 0.3;
-  const isMidZoom = zoom >= 0.3 && zoom < 0.6;
+  const isTimelineZoom = zoom < 0.08;
+  const isMajorZoom = zoom >= 0.08 && zoom < 0.15;
+  const isMidZoom = zoom >= 0.15 && zoom < 0.3;
+  const isDocZoom = zoom >= 0.3 && zoom < 0.6;
 
   const titleFontSize = isTopLevel
-    ? (isOverviewZoom ? 18 : isMidZoom ? 16 : 16)
-    : (isOverviewZoom ? 13 : 12);
+    ? (isTimelineZoom ? 24 : isMajorZoom ? 20 : isMidZoom ? 16 : 16)
+    : (isTimelineZoom ? 16 : isMajorZoom ? 14 : 12);
 
-  const headerPadding = isOverviewZoom ? "px-3 py-2" : "px-2.5 py-1.5";
+  const headerPadding = isTimelineZoom || isMajorZoom ? "px-4 py-3" : "px-2.5 py-1.5";
 
   return (
     <div
@@ -369,7 +371,7 @@ export function GroupBox({
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <Folder
             className="flex-shrink-0"
-            style={{ color: groupColor, width: isOverviewZoom ? 18 : 14, height: isOverviewZoom ? 18 : 14 }}
+            style={{ color: groupColor, width: isTimelineZoom || isMajorZoom ? 20 : 14, height: isTimelineZoom || isMajorZoom ? 20 : 14 }}
           />
           <h3
             className="font-semibold leading-snug"
@@ -382,12 +384,12 @@ export function GroupBox({
           >
             {group.name}
           </h3>
-          <span className="text-muted-foreground flex-shrink-0" style={{ fontSize: isOverviewZoom ? 12 : 10 }}>
+          <span className="text-muted-foreground flex-shrink-0" style={{ fontSize: isTimelineZoom || isMajorZoom ? 14 : 10 }}>
             {totalItems}
           </span>
         </div>
 
-        {!isOverviewZoom && (
+        {!(isTimelineZoom || isMajorZoom) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0">
@@ -417,7 +419,7 @@ export function GroupBox({
         )}
       </div>
 
-      {group.description && !isOverviewZoom && (
+      {group.description && !(isTimelineZoom || isMajorZoom) && (
         <div
           className="px-2.5 py-1 text-muted-foreground leading-relaxed"
           style={{
@@ -431,7 +433,7 @@ export function GroupBox({
         </div>
       )}
 
-      {!isOverviewZoom && (
+      {!(isTimelineZoom || isMajorZoom) && (
         <>
           <div
             data-resize-handle

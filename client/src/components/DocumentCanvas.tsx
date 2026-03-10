@@ -27,9 +27,15 @@ type Props = {
   viewingDocumentId?: number | null;
 };
 
-const MIN_ZOOM = 0.05;
+const MIN_ZOOM = 0.03;
 const MAX_ZOOM = 2;
-const ZOOM_STEP = 0.1;
+const ZOOM_STEP = 0.05;
+
+const ZOOM_L1 = 0.08;
+const ZOOM_L2 = 0.15;
+const ZOOM_L3 = 0.3;
+const ZOOM_L4 = 0.6;
+const PAN_SPEED = 1.5;
 const DOC_WIDTH = 260;
 const DOC_HEIGHT = 130;
 const GROUP_PADDING = 30;
@@ -333,27 +339,31 @@ export function DocumentCanvas({
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
 
-    // Get cursor position relative to container
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    if (e.ctrlKey || e.metaKey) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
 
-    // Calculate world coordinates at cursor position
-    const worldX = (mouseX - pan.x) / zoom;
-    const worldY = (mouseY - pan.y) / zoom;
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
 
-    // Zoom with scroll (no Ctrl needed), centered on cursor
-    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom + delta));
+      const worldX = (mouseX - pan.x) / zoom;
+      const worldY = (mouseY - pan.y) / zoom;
 
-    // Adjust pan to keep cursor position stable
-    const newPanX = mouseX - worldX * newZoom;
-    const newPanY = mouseY - worldY * newZoom;
+      const zoomFactor = zoom < 0.15 ? 0.01 : ZOOM_STEP;
+      const delta = e.deltaY > 0 ? -zoomFactor : zoomFactor;
+      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom + delta));
 
-    setZoom(newZoom);
-    setPan({ x: newPanX, y: newPanY });
+      const newPanX = mouseX - worldX * newZoom;
+      const newPanY = mouseY - worldY * newZoom;
+
+      setZoom(newZoom);
+      setPan({ x: newPanX, y: newPanY });
+    } else {
+      const dy = -e.deltaY * PAN_SPEED;
+      const dx = -e.deltaX * PAN_SPEED;
+      setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+    }
   }, [zoom, pan]);
 
   const handleZoomIn = useCallback(() => {
@@ -867,8 +877,8 @@ export function DocumentCanvas({
             </marker>
           </defs>
 
-          {/* Document-to-document edges with obstacle avoidance routing (hidden at overview zoom) */}
-          {zoom >= 0.3 && (() => {
+          {/* Document-to-document edges (visible at Level 5: zoom >= ZOOM_L4) */}
+          {zoom >= ZOOM_L4 && (() => {
             const docObstacles: ObstacleRect[] = Object.entries(docPositions).map(([idStr, pos]) => {
               const id = Number(idStr);
               return {
@@ -926,8 +936,8 @@ export function DocumentCanvas({
             });
           })()}
 
-          {/* Group-to-group edges (workflow connections between groups) */}
-          {groupEdges.map((edge) => {
+          {/* Group-to-group edges (visible at Level 2+: zoom >= ZOOM_L1) */}
+          {zoom >= ZOOM_L1 && groupEdges.map((edge) => {
             const sourceGroup = groups.find(g => g.id === edge.sourceGroupId);
             const targetGroup = groups.find(g => g.id === edge.targetGroupId);
             if (!sourceGroup || !targetGroup) return null;
@@ -1127,8 +1137,8 @@ export function DocumentCanvas({
           );
         })}
 
-        {/* Render child groups (중분류) separately so they're visible and draggable */}
-        {groups
+        {/* Render child groups (중분류) — visible at Level 3+: zoom >= ZOOM_L2 */}
+        {zoom >= ZOOM_L2 && groups
           .filter(g => g.parentId !== null)
           .map((group, index) => {
           const pos = groupPositions[group.id] || getGroupPosition(group, index);
@@ -1158,8 +1168,8 @@ export function DocumentCanvas({
           );
         })}
 
-        {/* Render document boxes (hidden at overview zoom < 0.3) */}
-        {zoom >= 0.3 && documents.map((doc) => {
+        {/* Render document boxes — visible at Level 4+: zoom >= ZOOM_L3 */}
+        {zoom >= ZOOM_L3 && documents.map((doc) => {
           const pos = docPositions[doc.id];
           if (!pos) return null;
           return (
@@ -1257,6 +1267,9 @@ export function DocumentCanvas({
           data-testid="button-zoom-reset"
         >
           {Math.round(zoom * 100)}%
+          <span className="ml-1 text-[9px] text-muted-foreground">
+            {zoom < ZOOM_L1 ? "전체" : zoom < ZOOM_L2 ? "대" : zoom < ZOOM_L3 ? "중" : zoom < ZOOM_L4 ? "소" : "상세"}
+          </span>
         </button>
         <Button
           variant="ghost"
@@ -1280,7 +1293,7 @@ export function DocumentCanvas({
       </div>
 
       <div className="absolute top-4 left-4 text-xs text-muted-foreground bg-card/80 backdrop-blur-sm px-2 py-1 rounded" style={{ zIndex: 20 }}>
-        스크롤: 확대/축소 (커서 중심) | 스페이스+드래그: 화면이동
+        스크롤: 상하이동 | Ctrl+스크롤: 확대/축소 | 스페이스+드래그: 자유이동
       </div>
     </div>
   );

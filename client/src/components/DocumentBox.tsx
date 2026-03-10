@@ -121,39 +121,7 @@ export function DocumentBox({
     [hasDragged, document.id, onClick]
   );
 
-  const isOverviewZoom = zoom < 0.3;
-  const isMidZoom = zoom >= 0.3 && zoom < 0.6;
-
-  if (isOverviewZoom) {
-    return (
-      <div
-        ref={boxRef}
-        className={cn(
-          "absolute w-[260px] rounded-md border-2 cursor-pointer transition-shadow",
-          "bg-card",
-          isSelected
-            ? "border-primary shadow-md"
-            : "border-border/80",
-          isDragging && "shadow-xl cursor-grabbing"
-        )}
-        style={{
-          left: currentPos.x,
-          top: currentPos.y,
-          transform: "translate(-50%, -50%)",
-          zIndex: isSelected || isDragging ? 10 : 3,
-          minHeight: 36,
-        }}
-        onMouseDown={handleMouseDown}
-        onClick={handleClick}
-        data-testid={`document-box-${document.id}`}
-      >
-        <div className="px-2 py-1.5 flex items-center gap-1.5">
-          <FileText className="h-3 w-3 text-primary flex-shrink-0" />
-          <span className="font-medium text-xs leading-tight" style={{ wordBreak: "keep-all", overflowWrap: "break-word" }}>{document.title}</span>
-        </div>
-      </div>
-    );
-  }
+  const isCompactZoom = zoom < 0.6;
 
   return (
     <div
@@ -189,7 +157,7 @@ export function DocumentBox({
         </div>
       </div>
 
-      {!isMidZoom && (
+      {!isCompactZoom && (
         <p className="text-[10px] text-muted-foreground leading-relaxed overflow-hidden" style={{ wordBreak: "keep-all", overflowWrap: "break-word" }}>
           {getSummary()}
         </p>
