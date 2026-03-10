@@ -867,8 +867,8 @@ export function DocumentCanvas({
             </marker>
           </defs>
 
-          {/* Document-to-document edges with obstacle avoidance routing */}
-          {(() => {
+          {/* Document-to-document edges with obstacle avoidance routing (hidden at overview zoom) */}
+          {zoom >= 0.3 && (() => {
             const docObstacles: ObstacleRect[] = Object.entries(docPositions).map(([idStr, pos]) => {
               const id = Number(idStr);
               return {
@@ -1158,8 +1158,8 @@ export function DocumentCanvas({
           );
         })}
 
-        {/* Render document boxes */}
-        {documents.map((doc) => {
+        {/* Render document boxes (hidden at overview zoom < 0.3) */}
+        {zoom >= 0.3 && documents.map((doc) => {
           const pos = docPositions[doc.id];
           if (!pos) return null;
           return (

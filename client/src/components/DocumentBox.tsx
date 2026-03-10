@@ -141,15 +141,15 @@ export function DocumentBox({
           top: currentPos.y,
           transform: "translate(-50%, -50%)",
           zIndex: isSelected || isDragging ? 10 : 3,
-          height: 40,
+          minHeight: 36,
         }}
         onMouseDown={handleMouseDown}
         onClick={handleClick}
         data-testid={`document-box-${document.id}`}
       >
-        <div className="px-2 py-1.5 flex items-center gap-1.5 overflow-hidden">
+        <div className="px-2 py-1.5 flex items-center gap-1.5">
           <FileText className="h-3 w-3 text-primary flex-shrink-0" />
-          <span className="font-medium text-xs whitespace-nowrap overflow-hidden text-ellipsis">{document.title}</span>
+          <span className="font-medium text-xs leading-tight" style={{ wordBreak: "keep-all", overflowWrap: "break-word" }}>{document.title}</span>
         </div>
       </div>
     );
@@ -181,7 +181,7 @@ export function DocumentBox({
           <FileText className="h-3.5 w-3.5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-xs leading-tight" style={{ wordBreak: "keep-all", overflowWrap: "break-word" }}>{document.title}</h3>
+          <h3 className="font-medium text-xs leading-tight" style={{ wordBreak: "keep-all", overflowWrap: "break-word", maxWidth: "50ch" }}>{document.title}</h3>
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
             <Calendar className="h-2.5 w-2.5" />
             <span>{formatDate(document.createdAt)}</span>

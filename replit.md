@@ -95,10 +95,16 @@ The AI returns structured JSON matching the `ParseResult` type for document pars
   - Related (muted dashed): General associations
 - **Dynamic Timeline**: Month range auto-expands when new documents are added to future months
 - **Zoom-Level Info Policy**:
-  - Overview (< 0.3): Only major group titles and document title bars visible
-  - Mid-level (0.3–0.6): Group structure + document titles, summaries hidden
-  - Detail (> 0.6): Full document details with summaries
-- **UX Improvements**: word-break: keep-all, auto-expanding boxes, border-2 for clear boundaries, z-index hierarchy (canvas 0 → groups 1-2 → docs 3 → selected 10 → UI 20 → modals 40-50), middle-click always pans
+  - Overview (< 0.3): Groups only — documents and doc-to-doc edges hidden, group titles enlarged (18px top-level), description hidden
+  - Mid-level (0.3–0.6): Group structure + document titles visible, document summaries hidden, group descriptions shown at reduced size
+  - Detail (> 0.6): Full document details with summaries, full group descriptions
+- **UX Checklist Compliance**:
+  - Readability: word-break keep-all, no text ellipsis, auto-expanding boxes, group titles prominent at all zoom levels with smooth font-size transition
+  - Text-box alignment: h-auto boxes, maxWidth 50-60ch for readable line lengths
+  - Visual boundaries: border-2 docs, border-[3px] top-level groups, hover/selected/default states distinct
+  - Connection lines: obstacle-avoidance bezier routing, halo under-stroke for legibility
+  - Interaction: middle-click always pans (including over elements), left-click only for drag, zoom-compensated drag coordinates
+  - z-index hierarchy: canvas 0 → groups 1-2 → docs 3 → selected 10 → UI 20-30 → modals 40-50
 
 ### Build and Development
 - **Development**: `tsx` for direct TypeScript execution with Vite dev server

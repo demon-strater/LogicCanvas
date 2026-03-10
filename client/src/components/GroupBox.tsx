@@ -326,6 +326,15 @@ export function GroupBox({
   const groupColor = group.color || "#6366f1";
   const hasManualSize = group.manualWidth != null || group.manualHeight != null;
 
+  const isOverviewZoom = zoom < 0.3;
+  const isMidZoom = zoom >= 0.3 && zoom < 0.6;
+
+  const titleFontSize = isTopLevel
+    ? (isOverviewZoom ? 18 : isMidZoom ? 16 : 16)
+    : (isOverviewZoom ? 13 : 12);
+
+  const headerPadding = isOverviewZoom ? "px-3 py-2" : "px-2.5 py-1.5";
+
   return (
     <div
       ref={boxRef}
@@ -354,80 +363,107 @@ export function GroupBox({
       data-testid={`group-box-${group.id}`}
     >
       <div
-        className="flex items-center justify-between gap-1 px-2.5 py-1.5 rounded-t-md relative"
+        className={cn("flex items-center justify-between gap-1 rounded-t-md relative", headerPadding)}
         style={{ backgroundColor: `${groupColor}${isTopLevel ? '20' : '25'}`, zIndex: 10 }}
       >
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <Folder className="h-3.5 w-3.5 flex-shrink-0" style={{ color: groupColor }} />
-          <h3 className={cn(
-            "font-semibold",
-            isTopLevel ? "text-base" : "text-xs"
-          )} style={{ wordBreak: "keep-all", overflowWrap: "break-word" }}>{group.name}</h3>
-          <span className="text-[10px] text-muted-foreground flex-shrink-0">
+          <Folder
+            className="flex-shrink-0"
+            style={{ color: groupColor, width: isOverviewZoom ? 18 : 14, height: isOverviewZoom ? 18 : 14 }}
+          />
+          <h3
+            className="font-semibold leading-snug"
+            style={{
+              wordBreak: "keep-all",
+              overflowWrap: "break-word",
+              fontSize: titleFontSize,
+              transition: "font-size 0.2s ease",
+            }}
+          >
+            {group.name}
+          </h3>
+          <span className="text-muted-foreground flex-shrink-0" style={{ fontSize: isOverviewZoom ? 12 : 10 }}>
             {totalItems}
           </span>
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0">
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onEdit(group.id)}>
-              <Pencil className="h-3.5 w-3.5 mr-2" />
-              수정
-            </DropdownMenuItem>
-            {hasManualSize && (
-              <DropdownMenuItem onClick={handleResetSize}>
+        {!isOverviewZoom && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0">
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onEdit(group.id)}>
                 <Pencil className="h-3.5 w-3.5 mr-2" />
-                크기 자동으로
+                수정
               </DropdownMenuItem>
-            )}
-            <DropdownMenuItem
-              onClick={() => onDelete(group.id)}
-              className="text-destructive"
-            >
-              <Trash2 className="h-3.5 w-3.5 mr-2" />
-              삭제
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              {hasManualSize && (
+                <DropdownMenuItem onClick={handleResetSize}>
+                  <Pencil className="h-3.5 w-3.5 mr-2" />
+                  크기 자동으로
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={() => onDelete(group.id)}
+                className="text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                삭제
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
-      {/* Right resize handle */}
-      <div
-        data-resize-handle
-        className="absolute top-0 right-0 w-2 h-full cursor-ew-resize opacity-0 group-hover/groupbox:opacity-100 transition-opacity"
-        style={{ zIndex: 20 }}
-        onMouseDown={(e) => handleResizeMouseDown(e, "r")}
-        data-testid={`resize-right-${group.id}`}
-      >
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full" style={{ backgroundColor: `${groupColor}60` }} />
-      </div>
+      {group.description && !isOverviewZoom && (
+        <div
+          className="px-2.5 py-1 text-muted-foreground leading-relaxed"
+          style={{
+            fontSize: isMidZoom ? 10 : 11,
+            wordBreak: "keep-all",
+            overflowWrap: "break-word",
+            maxWidth: "60ch",
+          }}
+        >
+          {group.description}
+        </div>
+      )}
 
-      {/* Bottom resize handle */}
-      <div
-        data-resize-handle
-        className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize opacity-0 group-hover/groupbox:opacity-100 transition-opacity"
-        style={{ zIndex: 20 }}
-        onMouseDown={(e) => handleResizeMouseDown(e, "b")}
-        data-testid={`resize-bottom-${group.id}`}
-      >
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-1 w-8 rounded-full" style={{ backgroundColor: `${groupColor}60` }} />
-      </div>
+      {!isOverviewZoom && (
+        <>
+          <div
+            data-resize-handle
+            className="absolute top-0 right-0 w-2 h-full cursor-ew-resize opacity-0 group-hover/groupbox:opacity-100 transition-opacity"
+            style={{ zIndex: 20 }}
+            onMouseDown={(e) => handleResizeMouseDown(e, "r")}
+            data-testid={`resize-right-${group.id}`}
+          >
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full" style={{ backgroundColor: `${groupColor}60` }} />
+          </div>
 
-      {/* Bottom-right corner resize handle */}
-      <div
-        data-resize-handle
-        className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize opacity-0 group-hover/groupbox:opacity-100 transition-opacity"
-        style={{ zIndex: 21 }}
-        onMouseDown={(e) => handleResizeMouseDown(e, "rb")}
-        data-testid={`resize-corner-${group.id}`}
-      >
-        <div className="absolute bottom-1 right-1 w-2 h-2 rounded-sm" style={{ backgroundColor: `${groupColor}80` }} />
-      </div>
+          <div
+            data-resize-handle
+            className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize opacity-0 group-hover/groupbox:opacity-100 transition-opacity"
+            style={{ zIndex: 20 }}
+            onMouseDown={(e) => handleResizeMouseDown(e, "b")}
+            data-testid={`resize-bottom-${group.id}`}
+          >
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-1 w-8 rounded-full" style={{ backgroundColor: `${groupColor}60` }} />
+          </div>
+
+          <div
+            data-resize-handle
+            className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize opacity-0 group-hover/groupbox:opacity-100 transition-opacity"
+            style={{ zIndex: 21 }}
+            onMouseDown={(e) => handleResizeMouseDown(e, "rb")}
+            data-testid={`resize-corner-${group.id}`}
+          >
+            <div className="absolute bottom-1 right-1 w-2 h-2 rounded-sm" style={{ backgroundColor: `${groupColor}80` }} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
