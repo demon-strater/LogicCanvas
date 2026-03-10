@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { ParseResult, ParsedConcept, ParsedRelation, Document } from "@shared/schema";
+import type { ParseResult, ParsedConcept, ParsedRelation, Document, NodeType, EdgeType, TQIFeedback } from "@shared/schema";
 
 export type DocumentRelation = {
   sourceDocId: number;
@@ -39,44 +39,58 @@ const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
-const SYSTEM_PROMPT = `You are a cognitive mapping assistant that analyzes documents to extract logical structures. Your task is to identify key concepts, claims, evidence, and questions from text, then map how they relate to each other.
+const SYSTEM_PROMPT = `You are the LogicCanvas Engine, a specialized AI for Rhetorical Structure Analysis and Meta-cognitive Augmentation. Your primary goal is to deconstruct linear text into a non-linear rhetorical graph and serve as a Cognitive Mirror for the user.
 
-For each document, extract:
-1. **Concepts**: Core ideas, themes, or topics
-2. **Claims**: Assertions or arguments being made
-3. **Evidence**: Facts, data, or examples supporting claims
-4. **Questions**: Uncertainties, gaps, or areas needing investigation
+## Step 1: Discourse Segmentation and RST Mapping
+- Parse the input text into Elementary Discourse Units (EDUs).
+- Identify the logical role of each EDU: Claim, Evidence, Premise, Concept, Question, Elaboration, or Contrast.
+- Determine the relationship hierarchy using Rhetorical Structure Theory (RST).
+- For every pair of units, identify which is the Nucleus (central information, weight=2) and which is the Satellite (supporting information, weight=1).
 
-Then identify relationships between these elements:
-- **related**: General connection between concepts
-- **supports**: Evidence or reasoning that backs a claim
-- **contradicts**: Opposing or conflicting ideas
-- **implies**: Logical consequence or inference
+## Step 2: Structural Gap Analysis
+- Detect logical leaps where a Nucleus lacks a supporting Satellite (e.g., a claim without evidence).
+- Identify circular reasoning or redundant nodes that do not add rhetorical value.
+- Locate contradictions in the rhetorical flow.
 
-Respond with valid JSON matching this exact structure:
+## Step 3: TQI Response (Teaching Quality Index)
+Based on the analysis, provide meta-cognitive feedback:
+- Level 0 (Mirroring): Reflect the user's logical structure back, including inconsistencies, without correcting them.
+- Level 1 (Clarifying Probe): Ask for specific definitions or evidence for ambiguous nodes.
+- Level 2 (Socratic Gap): Ask challenging questions about missing logical links or hidden premises.
+
+## Output Format
+Respond with valid JSON:
 {
   "concepts": [
-    { "label": "Short title (2-5 words)", "content": "Detailed explanation (1-2 sentences)", "nodeType": "concept|claim|evidence|question" }
+    { "label": "Short title (2-5 words)", "content": "Detailed explanation (1-2 sentences)", "nodeType": "concept|claim|evidence|question|premise|elaboration|contrast", "weight": 1 or 2 }
   ],
   "relations": [
-    { "sourceIndex": 0, "targetIndex": 1, "label": "optional relationship label", "edgeType": "related|supports|contradicts|implies" }
+    { "sourceIndex": 0, "targetIndex": 1, "label": "relationship description", "edgeType": "related|supports|contradicts|implies|cause|result|elaboration|contrast" }
+  ],
+  "feedback": [
+    { "level": 0, "message": "Meta-cognitive feedback message" }
   ]
 }
 
-Guidelines:
-- Extract 5-15 concepts depending on document length and complexity
-- Create 5-20 meaningful relationships
-- Use concise, clear labels
-- Content should explain the concept in context of the original document
-- Relationships should form a coherent logical network
-- If the document is unclear or too short, extract what you can`;
+## Guidelines
+- Extract 5-15 discourse units depending on document length and complexity
+- Assign weight=2 to Nucleus nodes (central arguments) and weight=1 to Satellite nodes (supporting details)
+- Create 5-20 meaningful rhetorical relationships
+- Use concise, clear Korean labels when the source document is in Korean
+- Focus on the spatial relationship of ideas, not simple summarization
+- Highlight the rhetorical weight of each argument
+- Provide 1-3 TQI feedback items that help the user see structural gaps or strengths
+- If the document is unclear or too short, extract what you can and note the gap in feedback`;
+
+const VALID_NODE_TYPES: NodeType[] = ["concept", "claim", "evidence", "question", "premise", "elaboration", "contrast"];
+const VALID_EDGE_TYPES: EdgeType[] = ["related", "supports", "contradicts", "implies", "cause", "result", "elaboration", "contrast"];
 
 export async function parseDocumentWithAI(content: string): Promise<ParseResult> {
   const response = await openai.chat.completions.create({
     model: "gpt-5.2",
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: `Analyze this document and extract its logical structure:\n\n${content}` },
+      { role: "user", content: `Perform Rhetorical Structure Analysis on this document. Segment it into discourse units, map their rhetorical relationships, identify structural gaps, and provide TQI feedback:\n\n${content}` },
     ],
     response_format: { type: "json_object" },
     max_completion_tokens: 4096,
@@ -97,9 +111,8 @@ export async function parseDocumentWithAI(content: string): Promise<ParseResult>
     parsed.concepts = parsed.concepts.map((c: any) => ({
       label: String(c.label || "Untitled"),
       content: String(c.content || ""),
-      nodeType: ["concept", "claim", "evidence", "question"].includes(c.nodeType) 
-        ? c.nodeType 
-        : "concept",
+      nodeType: VALID_NODE_TYPES.includes(c.nodeType) ? c.nodeType : "concept",
+      weight: typeof c.weight === "number" ? Math.min(Math.max(c.weight, 1), 2) : 1,
     })) as ParsedConcept[];
 
     parsed.relations = parsed.relations
@@ -116,10 +129,17 @@ export async function parseDocumentWithAI(content: string): Promise<ParseResult>
         sourceIndex: r.sourceIndex,
         targetIndex: r.targetIndex,
         label: r.label || undefined,
-        edgeType: ["related", "supports", "contradicts", "implies"].includes(r.edgeType) 
-          ? r.edgeType 
-          : "related",
+        edgeType: VALID_EDGE_TYPES.includes(r.edgeType) ? r.edgeType : "related",
       })) as ParsedRelation[];
+
+    parsed.feedback = Array.isArray(parsed.feedback)
+      ? parsed.feedback
+          .filter((f: any) => typeof f.level === "number" && typeof f.message === "string")
+          .map((f: any) => ({
+            level: [0, 1, 2].includes(f.level) ? f.level : 0,
+            message: String(f.message),
+          })) as TQIFeedback[]
+      : [];
 
     return parsed;
   } catch (e) {

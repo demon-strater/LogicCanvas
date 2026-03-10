@@ -1,5 +1,5 @@
 import { memo, useCallback, useState, useRef } from "react";
-import { Flag, Lightbulb, HelpCircle, FileText, AlertTriangle } from "lucide-react";
+import { Flag, Lightbulb, HelpCircle, FileText, AlertTriangle, Layers, GitBranch, ArrowLeftRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Node } from "@shared/schema";
 
@@ -39,6 +39,24 @@ const nodeTypeConfig = {
     bgClass: "bg-chart-5/10 dark:bg-chart-5/20",
     borderClass: "border-chart-5/40",
     iconClass: "text-chart-5",
+  },
+  premise: {
+    icon: Layers,
+    bgClass: "bg-chart-1/10 dark:bg-chart-1/20",
+    borderClass: "border-chart-1/40",
+    iconClass: "text-chart-1",
+  },
+  elaboration: {
+    icon: GitBranch,
+    bgClass: "bg-chart-2/10 dark:bg-chart-2/20",
+    borderClass: "border-chart-2/40",
+    iconClass: "text-chart-2",
+  },
+  contrast: {
+    icon: ArrowLeftRight,
+    bgClass: "bg-chart-4/10 dark:bg-chart-4/20",
+    borderClass: "border-chart-4/40",
+    iconClass: "text-chart-4",
   },
 };
 

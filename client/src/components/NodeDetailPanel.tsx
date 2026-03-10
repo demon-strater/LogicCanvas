@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Flag, FlagOff, Save, Trash2, Lightbulb, FileText, HelpCircle } from "lucide-react";
+import { X, Flag, FlagOff, Save, Trash2, Lightbulb, FileText, HelpCircle, Layers, GitBranch, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +21,9 @@ const nodeTypeOptions = [
   { value: "claim", label: "주장", icon: FileText },
   { value: "evidence", label: "근거", icon: FileText },
   { value: "question", label: "질문", icon: HelpCircle },
+  { value: "premise", label: "전제", icon: Layers },
+  { value: "elaboration", label: "부연", icon: GitBranch },
+  { value: "contrast", label: "대조", icon: ArrowLeftRight },
 ];
 
 export function NodeDetailPanel({ node, onClose, onUpdate, onDelete, onToggleTag }: Props) {

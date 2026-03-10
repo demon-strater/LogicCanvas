@@ -65,15 +65,24 @@ Documents can be organized into hierarchical groups:
 ### AI Integration
 - **Provider**: OpenAI API (via Replit AI Integrations)
 - **Model**: GPT for document parsing and workflow analysis
+- **Engine**: LogicCanvas RST Engine — Rhetorical Structure Analysis and Meta-cognitive Augmentation
 - **Purpose**: 
-  - Extract logical structure (concepts, claims, evidence, questions) and relationships from text
+  - **RST Document Parsing**: Deconstruct text into Elementary Discourse Units (EDUs) using Rhetorical Structure Theory
+    - Node types: concept, claim, evidence, question, premise, elaboration, contrast
+    - Edge types: related, supports, contradicts, implies, cause, result, elaboration, contrast
+    - Nucleus/Satellite weighting (weight=2 for central arguments, weight=1 for supporting details)
+  - **Structural Gap Analysis**: Detect logical leaps, circular reasoning, contradictions
+  - **TQI Feedback** (Teaching Quality Index): Meta-cognitive feedback stored as document summary
+    - Level 0 (구조 반영): Mirror logical structure back to user
+    - Level 1 (명확화 필요): Clarifying probes for ambiguous nodes
+    - Level 2 (논리 보완): Socratic questions about missing logical links
   - Analyze multiple documents to identify workflow relationships, dependencies, and hierarchies
   - **Simple hierarchical grouping** of documents into:
     - **대그룹 (Major Groups)**: Broad workflow stages (리서치, 기획, 실행, 분석) — only 2-4 groups
     - **중그룹 (Medium Groups)**: Only created when a major group has 5+ documents
     - No minor groups (소그룹) — keep hierarchy flat and simple
 
-The AI returns structured JSON matching the `ParseResult` type for document parsing, or workflow analysis data with positions, edges, and group definitions for document layout. Groups are automatically created and documents are assigned based on content analysis and business flow. Results are stored in the database.
+The AI returns structured JSON matching the `ParseResult` type for document parsing (including TQI feedback), or workflow analysis data with positions, edges, and group definitions for document layout. Groups are automatically created and documents are assigned based on content analysis and business flow. Results are stored in the database.
 
 ### Notion Auto-Sync
 - **Background Sync**: `server/notionSync.ts` polls Notion every 5 minutes for new pages

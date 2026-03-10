@@ -40,11 +40,19 @@ export async function importSingleNotionPage(pageId: string): Promise<any | null
 
   const parseResult = await parseDocumentWithAI(pageContent.content);
 
+  const feedbackSummary = parseResult.feedback && parseResult.feedback.length > 0
+    ? parseResult.feedback.map(f => {
+        const levelLabel = f.level === 0 ? "[구조 반영]" : f.level === 1 ? "[명확화 필요]" : "[논리 보완]";
+        return `${levelLabel} ${f.message}`;
+      }).join("\n")
+    : undefined;
+
   const document = await storage.createDocument({
     title: pageContent.title,
     content: pageContent.content,
     images: pageContent.images.length > 0 ? pageContent.images : null,
     notionPageId: pageId,
+    ...(feedbackSummary ? { summary: feedbackSummary } : {}),
   });
 
   if (parseResult.concepts.length > 0) {

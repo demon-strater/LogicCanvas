@@ -48,7 +48,7 @@ export const nodes = pgTable("nodes", {
   documentId: integer("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
   label: text("label").notNull(),
   content: text("content").notNull(),
-  nodeType: text("node_type").notNull().default("concept"), // concept, claim, evidence, question
+  nodeType: text("node_type").notNull().default("concept"), // concept, claim, evidence, question, premise, elaboration, contrast
   x: integer("x").notNull().default(0),
   y: integer("y").notNull().default(0),
   isTagged: boolean("is_tagged").notNull().default(false),
@@ -71,7 +71,7 @@ export const edges = pgTable("edges", {
   sourceId: integer("source_id").notNull().references(() => nodes.id, { onDelete: "cascade" }),
   targetId: integer("target_id").notNull().references(() => nodes.id, { onDelete: "cascade" }),
   label: text("label"),
-  edgeType: text("edge_type").notNull().default("related"), // related, supports, contradicts, implies
+  edgeType: text("edge_type").notNull().default("related"), // related, supports, contradicts, implies, cause, result, elaboration, contrast
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -171,21 +171,31 @@ export type GraphData = {
   edges: Edge[];
 };
 
-// AI parsing result structure
+// AI parsing result structure (RST-based Rhetorical Structure Analysis)
+export type NodeType = "concept" | "claim" | "evidence" | "question" | "premise" | "elaboration" | "contrast";
+export type EdgeType = "related" | "supports" | "contradicts" | "implies" | "cause" | "result" | "elaboration" | "contrast";
+
 export type ParsedConcept = {
   label: string;
   content: string;
-  nodeType: "concept" | "claim" | "evidence" | "question";
+  nodeType: NodeType;
+  weight?: number;
 };
 
 export type ParsedRelation = {
   sourceIndex: number;
   targetIndex: number;
   label?: string;
-  edgeType: "related" | "supports" | "contradicts" | "implies";
+  edgeType: EdgeType;
+};
+
+export type TQIFeedback = {
+  level: 0 | 1 | 2;
+  message: string;
 };
 
 export type ParseResult = {
   concepts: ParsedConcept[];
   relations: ParsedRelation[];
+  feedback?: TQIFeedback[];
 };

@@ -17,6 +17,10 @@ const edgeTypeConfig = {
   supports: { color: "stroke-chart-3/60", dashArray: "" },
   contradicts: { color: "stroke-destructive/60", dashArray: "8 4" },
   implies: { color: "stroke-primary/60", dashArray: "4 4" },
+  cause: { color: "stroke-chart-1/60", dashArray: "" },
+  result: { color: "stroke-chart-2/60", dashArray: "" },
+  elaboration: { color: "stroke-chart-4/50", dashArray: "6 3" },
+  contrast: { color: "stroke-chart-5/60", dashArray: "8 4" },
 };
 
 function GraphEdgeComponent({ edge, nodes }: Props) {

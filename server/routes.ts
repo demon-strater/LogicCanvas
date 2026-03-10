@@ -268,10 +268,19 @@ export async function registerRoutes(
       // Parse document with AI
       const parseResult = await parseDocumentWithAI(content);
 
-      // Create document
-      const document = await storage.createDocument({ title, content });
+      const feedbackSummary = parseResult.feedback && parseResult.feedback.length > 0
+        ? parseResult.feedback.map(f => {
+            const levelLabel = f.level === 0 ? "[구조 반영]" : f.level === 1 ? "[명확화 필요]" : "[논리 보완]";
+            return `${levelLabel} ${f.message}`;
+          }).join("\n")
+        : undefined;
 
-      // Create nodes from parsed concepts
+      const document = await storage.createDocument({ 
+        title, 
+        content,
+        ...(feedbackSummary ? { summary: feedbackSummary } : {}),
+      });
+
       const createdNodes = await storage.createNodes(
         parseResult.concepts.map((concept) => ({
           documentId: document.id,
