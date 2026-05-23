@@ -40,7 +40,7 @@ function GraphEdgeComponent({ edge, nodes }: Props) {
   const midX = (source.x + target.x) / 2;
   const midY = (source.y + target.y) / 2;
 
-  const arrowSize = 8;
+  const arrowSize = 12;
   const angle = Math.atan2(dy, dx);
   const arrowX = target.x - (dx / dist) * 50;
   const arrowY = target.y - (dy / dist) * 50;
@@ -67,7 +67,7 @@ function GraphEdgeComponent({ edge, nodes }: Props) {
         x2={target.x}
         y2={target.y}
         className={config.color}
-        strokeWidth={2}
+        strokeWidth={4}
         strokeDasharray={config.dashArray}
         strokeLinecap="round"
       />

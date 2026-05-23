@@ -3,11 +3,17 @@ import OpenAI from "openai";
 import { chatStorage } from "./storage";
 
 const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 export function registerChatRoutes(app: Express): void {
+  const parseRouteId = (value: string | string[] | undefined): number | null => {
+    const raw = Array.isArray(value) ? value[0] : value;
+    if (!raw) return null;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
   // Get all conversations
   app.get("/api/conversations", async (req: Request, res: Response) => {
     try {
@@ -22,7 +28,10 @@ export function registerChatRoutes(app: Express): void {
   // Get single conversation with messages
   app.get("/api/conversations/:id", async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseRouteId(req.params.id);
+      if (id === null) {
+        return res.status(400).json({ error: "Invalid conversation id" });
+      }
       const conversation = await chatStorage.getConversation(id);
       if (!conversation) {
         return res.status(404).json({ error: "Conversation not found" });
@@ -50,7 +59,10 @@ export function registerChatRoutes(app: Express): void {
   // Delete conversation
   app.delete("/api/conversations/:id", async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseRouteId(req.params.id);
+      if (id === null) {
+        return res.status(400).json({ error: "Invalid conversation id" });
+      }
       await chatStorage.deleteConversation(id);
       res.status(204).send();
     } catch (error) {
@@ -62,7 +74,10 @@ export function registerChatRoutes(app: Express): void {
   // Send message and get AI response (streaming)
   app.post("/api/conversations/:id/messages", async (req: Request, res: Response) => {
     try {
-      const conversationId = parseInt(req.params.id);
+      const conversationId = parseRouteId(req.params.id);
+      if (conversationId === null) {
+        return res.status(400).json({ error: "Invalid conversation id" });
+      }
       const { content } = req.body;
 
       // Save user message

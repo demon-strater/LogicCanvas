@@ -1,0 +1,46 @@
+services:
+  app:
+    build:
+      context: .
+      target: runner
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/postgres
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      NOTION_API_KEY: ${NOTION_API_KEY}
+
+  migrate:
+    build:
+      context: .
+      target: migrator
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/postgres
+
+  db:
+    image: docker.io/postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pg_data:

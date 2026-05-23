@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { FileText } from "lucide-react";
+import { FileText } from "@/lib/icons";
 
 type Props = {
   startMonth: number;

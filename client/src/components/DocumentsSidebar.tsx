@@ -1,4 +1,4 @@
-import { Plus, FileText, Trash2, MoreVertical, Network } from "lucide-react";
+import { Plus, FileText, Trash2, MoreVertical, Network } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {

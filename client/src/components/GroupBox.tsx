@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Folder, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Folder, MoreHorizontal, Pencil, Trash2 } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -325,6 +325,8 @@ export function GroupBox({
 
   const groupColor = group.color || "#6366f1";
   const hasManualSize = group.manualWidth != null || group.manualHeight != null;
+  const compactWidth = Math.max(180, Math.min(300, Math.round(groupWidth * 0.35)));
+  const compactHeight = Math.max(110, Math.min(180, Math.round(groupHeight * 0.32)));
 
   const isTimelineZoom = zoom < 0.08;
   const isMajorZoom = zoom >= 0.08 && zoom < 0.15;

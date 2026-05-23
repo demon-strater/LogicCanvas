@@ -3,7 +3,7 @@ import { DocumentBox } from "./DocumentBox";
 import { GroupBox } from "./GroupBox";
 import { Minimap } from "./Minimap";
 import { TimelineHeader, TimelineGridLines } from "./TimelineHeader";
-import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import type { Document, DocumentEdge, DocumentGroup, GroupEdge } from "@shared/schema";
 
@@ -857,23 +857,23 @@ export function DocumentCanvas({
           style={{ width: canvasWidth, height: canvasHeight, zIndex: 3 }}
         >
           <defs>
-            <marker id="arrow-flow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-              <path d="M 0.5 0.5 L 5 3 L 0.5 5.5 Z" fill="hsl(var(--primary))" fillOpacity="0.7" stroke="none" />
+            <marker id="arrow-flow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+              <path d="M 1 1 L 9 5 L 1 9 Z" fill="hsl(var(--primary))" fillOpacity="0.7" stroke="none" />
             </marker>
-            <marker id="arrow-depends" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-              <path d="M 0.5 0.5 L 5 3 L 0.5 5.5 Z" fill="hsl(var(--destructive))" fillOpacity="0.7" stroke="none" />
+            <marker id="arrow-depends" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+              <path d="M 1 1 L 9 5 L 1 9 Z" fill="hsl(var(--destructive))" fillOpacity="0.7" stroke="none" />
             </marker>
-            <marker id="arrow-parent" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-              <path d="M 0.5 0.5 L 5 3 L 0.5 5.5 Z" fill="hsl(142, 60%, 45%)" fillOpacity="0.7" stroke="none" />
+            <marker id="arrow-parent" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+              <path d="M 1 1 L 9 5 L 1 9 Z" fill="hsl(142, 60%, 45%)" fillOpacity="0.7" stroke="none" />
             </marker>
-            <marker id="arrow-related" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto">
-              <circle cx="2.5" cy="2.5" r="2" fill="hsl(var(--muted-foreground))" fillOpacity="0.5" stroke="none" />
+            <marker id="arrow-related" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <circle cx="4" cy="4" r="3" fill="hsl(var(--muted-foreground))" fillOpacity="0.5" stroke="none" />
             </marker>
-            <marker id="arrow-group-flow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-              <path d="M 0.5 0.5 L 7 4 L 0.5 7.5 Z" fill="hsl(var(--primary))" fillOpacity="0.6" stroke="none" />
+            <marker id="arrow-group-flow" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto">
+              <path d="M 1 1 L 11 6 L 1 11 Z" fill="hsl(var(--primary))" fillOpacity="0.6" stroke="none" />
             </marker>
-            <marker id="arrow-group-depends" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-              <path d="M 0.5 0.5 L 7 4 L 0.5 7.5 Z" fill="hsl(var(--destructive))" fillOpacity="0.6" stroke="none" />
+            <marker id="arrow-group-depends" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto">
+              <path d="M 1 1 L 11 6 L 1 11 Z" fill="hsl(var(--destructive))" fillOpacity="0.6" stroke="none" />
             </marker>
           </defs>
 
@@ -1071,14 +1071,14 @@ export function DocumentCanvas({
                   d={pathD}
                   fill="none"
                   stroke="hsl(var(--background))"
-                  strokeWidth="5"
+                  strokeWidth="8"
                   strokeLinecap="round"
                 />
                 <path
                   d={pathD}
                   fill="none"
                   stroke={edgeColor}
-                  strokeWidth="1.8"
+                  strokeWidth="3.5"
                   strokeLinecap="round"
                   strokeOpacity="0.6"
                   strokeDasharray={edge.edgeType === "related" ? "6,4" : undefined}
@@ -1233,19 +1233,19 @@ export function DocumentCanvas({
         <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 tracking-wide">연결선 의미</p>
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
-            <svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="hsl(var(--primary))" strokeWidth="1.5" strokeOpacity="0.7" strokeLinecap="round" /><path d="M 20 2 L 26 5 L 20 8 Z" fill="hsl(var(--primary))" fillOpacity="0.7" stroke="none" /></svg>
+            <svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="hsl(var(--primary))" strokeWidth="3" strokeOpacity="0.7" strokeLinecap="round" /><path d="M 18 1 L 27 5 L 18 9 Z" fill="hsl(var(--primary))" fillOpacity="0.7" stroke="none" /></svg>
             <span className="text-[10px] text-foreground/70">흐름 (순차적 진행)</span>
           </div>
           <div className="flex items-center gap-2">
-            <svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="hsl(var(--destructive))" strokeWidth="1.5" strokeOpacity="0.6" strokeLinecap="round" /><path d="M 20 2 L 26 5 L 20 8 Z" fill="hsl(var(--destructive))" fillOpacity="0.6" stroke="none" /></svg>
+            <svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="hsl(var(--destructive))" strokeWidth="3" strokeOpacity="0.6" strokeLinecap="round" /><path d="M 18 1 L 27 5 L 18 9 Z" fill="hsl(var(--destructive))" fillOpacity="0.6" stroke="none" /></svg>
             <span className="text-[10px] text-foreground/70">의존 (선행 필요)</span>
           </div>
           <div className="flex items-center gap-2">
-            <svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="hsl(142, 55%, 42%)" strokeWidth="1.5" strokeOpacity="0.7" strokeLinecap="round" /><path d="M 20 2 L 26 5 L 20 8 Z" fill="hsl(142, 55%, 42%)" fillOpacity="0.7" stroke="none" /></svg>
+            <svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="hsl(142, 55%, 42%)" strokeWidth="3" strokeOpacity="0.7" strokeLinecap="round" /><path d="M 18 1 L 27 5 L 18 9 Z" fill="hsl(142, 55%, 42%)" fillOpacity="0.7" stroke="none" /></svg>
             <span className="text-[10px] text-foreground/70">상위 (계층 관계)</span>
           </div>
           <div className="flex items-center gap-2">
-            <svg width="30" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeOpacity="0.45" strokeDasharray="4,3" strokeLinecap="round" /><circle cx="27" cy="5" r="2" fill="hsl(var(--muted-foreground))" fillOpacity="0.5" /></svg>
+            <svg width="30" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="hsl(var(--muted-foreground))" strokeWidth="2.5" strokeOpacity="0.45" strokeDasharray="4,3" strokeLinecap="round" /><circle cx="27" cy="5" r="3" fill="hsl(var(--muted-foreground))" fillOpacity="0.5" /></svg>
             <span className="text-[10px] text-foreground/70">관련 (참고 연관)</span>
           </div>
         </div>
