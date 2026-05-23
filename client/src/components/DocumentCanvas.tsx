@@ -245,6 +245,10 @@ export function DocumentCanvas({
   const [groupPositions, setGroupPositions] = useState<Record<number, { x: number; y: number }>>({});
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const zoomRef = useRef(zoom);
+  const panRef = useRef(pan);
+  zoomRef.current = zoom;
+  panRef.current = pan;
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
@@ -337,34 +341,45 @@ export function DocumentCanvas({
     setPan({ x: panX, y: panY });
   }, [documents, groups, dimensions]);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
+  // Native non-passive wheel listener so Ctrl+scroll zooms the canvas
+  // instead of triggering the browser's page zoom.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
 
-    if (e.ctrlKey || e.metaKey) {
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
 
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
+      const currentZoom = zoomRef.current;
+      const currentPan = panRef.current;
 
-      const worldX = (mouseX - pan.x) / zoom;
-      const worldY = (mouseY - pan.y) / zoom;
+      if (e.ctrlKey || e.metaKey) {
+        const rect = el.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
 
-      const zoomFactor = zoom < 0.15 ? 0.01 : ZOOM_STEP;
-      const delta = e.deltaY > 0 ? -zoomFactor : zoomFactor;
-      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom + delta));
+        const worldX = (mouseX - currentPan.x) / currentZoom;
+        const worldY = (mouseY - currentPan.y) / currentZoom;
 
-      const newPanX = mouseX - worldX * newZoom;
-      const newPanY = mouseY - worldY * newZoom;
+        const zoomFactor = currentZoom < 0.15 ? 0.01 : ZOOM_STEP;
+        const delta = e.deltaY > 0 ? -zoomFactor : zoomFactor;
+        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, currentZoom + delta));
 
-      setZoom(newZoom);
-      setPan({ x: newPanX, y: newPanY });
-    } else {
-      const dy = -e.deltaY * PAN_SPEED;
-      const dx = -e.deltaX * PAN_SPEED;
-      setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
-    }
-  }, [zoom, pan]);
+        const newPanX = mouseX - worldX * newZoom;
+        const newPanY = mouseY - worldY * newZoom;
+
+        setZoom(newZoom);
+        setPan({ x: newPanX, y: newPanY });
+      } else {
+        const dy = -e.deltaY * PAN_SPEED;
+        const dx = -e.deltaX * PAN_SPEED;
+        setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   const handleZoomIn = useCallback(() => {
     setZoom(z => Math.min(MAX_ZOOM, z + ZOOM_STEP));
@@ -799,7 +814,6 @@ export function DocumentCanvas({
       onClick={handleCanvasClick}
       onMouseDown={handlePanStart}
       onAuxClick={(e) => e.preventDefault()}
-      onWheel={handleWheel}
       data-testid="document-canvas"
     >
       {/* Fixed timeline header at top */}
