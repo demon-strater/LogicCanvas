@@ -1,11 +1,12 @@
 import { db } from "./db";
-import { documents, nodes, edges, tasks } from "@shared/schema";
-import { sql } from "drizzle-orm";
+import { documentGroups, documents, nodes, edges, tasks } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 export async function seedDatabase() {
   // Check if we already have data
   const existingDocs = await db.select().from(documents);
   if (existingDocs.length > 0) {
+    await seedGrowthStrategyData();
     console.log("Database already seeded, skipping...");
     return;
   }
@@ -134,5 +135,214 @@ export async function seedDatabase() {
     },
   ]);
 
+  await seedGrowthStrategyData();
+
   console.log("Database seeded successfully!");
+}
+
+async function seedGrowthStrategyData() {
+  const MONTH_WIDTH = 800;
+  const OFFSET_X = 150;
+  const TIMELINE_START_YEAR = 2026;
+  const TIMELINE_START_MONTH = 1;
+
+  const monthCenterX = (year: number, month: number) => {
+    const monthIndex = (year - TIMELINE_START_YEAR) * 12 + month - TIMELINE_START_MONTH;
+    return OFFSET_X + monthIndex * MONTH_WIDTH + MONTH_WIDTH / 2;
+  };
+
+  const periodCenterX = (startMonth: number, endMonth: number) =>
+    Math.round((monthCenterX(2026, startMonth) + monthCenterX(2026, endMonth)) / 2);
+
+  const makeDate = (month: number) => new Date(Date.UTC(2026, month - 1, 15, 9, 0, 0));
+
+  const ensureGroup = async (input: {
+    name: string;
+    description: string;
+    parentId: number | null;
+    monthStart: number;
+    monthEnd: number;
+    color: string;
+    x: number;
+    y: number;
+    manualWidth?: number;
+    manualHeight?: number;
+  }) => {
+    const existingGroups = await db.select().from(documentGroups);
+    const existing = existingGroups.find(
+      (group) => group.name === input.name && (group.parentId ?? null) === input.parentId,
+    );
+
+    const values = {
+      name: input.name,
+      description: input.description,
+      parentId: input.parentId,
+      monthStart: input.monthStart,
+      monthEnd: input.monthEnd,
+      color: input.color,
+      x: input.x,
+      y: input.y,
+      manualWidth: input.manualWidth ?? null,
+      manualHeight: input.manualHeight ?? null,
+    };
+
+    if (existing) {
+      const [updated] = await db
+        .update(documentGroups)
+        .set(values)
+        .where(eq(documentGroups.id, existing.id))
+        .returning();
+      return updated;
+    }
+
+    const [created] = await db.insert(documentGroups).values(values).returning();
+    return created;
+  };
+
+  const ensureDocument = async (input: {
+    title: string;
+    content: string;
+    summary: string;
+    groupId: number;
+    month: number;
+    x: number;
+    y: number;
+  }) => {
+    const existingDocs = await db.select().from(documents);
+    const existing = existingDocs.find((doc) => doc.title === input.title);
+    const values = {
+      title: input.title,
+      content: input.content,
+      summary: input.summary,
+      groupId: input.groupId,
+      x: input.x,
+      y: input.y,
+      createdAt: makeDate(input.month),
+      updatedAt: makeDate(input.month),
+    };
+
+    if (existing) {
+      await db.update(documents).set(values).where(eq(documents.id, existing.id));
+      return;
+    }
+
+    await db.insert(documents).values(values);
+  };
+
+  await ensureGroup({
+    name: "성장 전략 실행",
+    description: "4월부터 6월까지 성장 전략 실행을 관리하는 대그룹",
+    parentId: null,
+    monthStart: 4,
+    monthEnd: 6,
+    color: "#2563eb",
+    x: periodCenterX(4, 6),
+    y: 900,
+    manualWidth: 2100,
+    manualHeight: 260,
+  });
+
+  const marketingEngine = await ensureGroup({
+    name: "마케팅 엔진 구축",
+    description: "마케팅 실행 체계를 구축하고 성과를 확장하는 대그룹",
+    parentId: null,
+    monthStart: 5,
+    monthEnd: 7,
+    color: "#0891b2",
+    x: periodCenterX(5, 7),
+    y: 1350,
+    manualWidth: 2300,
+    manualHeight: 900,
+  });
+
+  const performanceOptimization = await ensureGroup({
+    name: "퍼포먼스 마케팅 최적화",
+    description: "5월부터 6월까지 퍼포먼스 마케팅을 개선하고 성과를 검증",
+    parentId: marketingEngine.id,
+    monthStart: 5,
+    monthEnd: 6,
+    color: "#16a34a",
+    x: periodCenterX(5, 6),
+    y: 1260,
+    manualWidth: 1500,
+    manualHeight: 320,
+  });
+
+  const salesPipeline = await ensureGroup({
+    name: "영업 파이프라인 관리",
+    description: "5월 영업 파이프라인 운영 현황과 관리 체계 정리",
+    parentId: marketingEngine.id,
+    monthStart: 5,
+    monthEnd: 5,
+    color: "#f59e0b",
+    x: monthCenterX(2026, 5),
+    y: 1640,
+    manualWidth: 760,
+    manualHeight: 300,
+  });
+
+  const brandAwareness = await ensureGroup({
+    name: "브랜드 인지도 확산",
+    description: "6월부터 7월까지 브랜드 인지도 확산 활동과 결과 정리",
+    parentId: marketingEngine.id,
+    monthStart: 6,
+    monthEnd: 7,
+    color: "#db2777",
+    x: periodCenterX(6, 7),
+    y: 2020,
+    manualWidth: 1500,
+    manualHeight: 320,
+  });
+
+  await ensureDocument({
+    title: "퍼포먼스 마케팅 최적화 보고서1",
+    content: "5월 퍼포먼스 마케팅 최적화 실행 내용과 초기 성과를 정리한 보고서입니다.",
+    summary: "5월 퍼포먼스 마케팅 최적화 보고서",
+    groupId: performanceOptimization.id,
+    month: 5,
+    x: monthCenterX(2026, 5),
+    y: 1260,
+  });
+
+  await ensureDocument({
+    title: "퍼포먼스 마케팅 최적화 보고서2",
+    content: "6월 퍼포먼스 마케팅 최적화 후속 실험과 개선 결과를 정리한 보고서입니다.",
+    summary: "6월 퍼포먼스 마케팅 최적화 보고서",
+    groupId: performanceOptimization.id,
+    month: 6,
+    x: monthCenterX(2026, 6),
+    y: 1260,
+  });
+
+  await ensureDocument({
+    title: "영업 파이프라인 관리1 보고서",
+    content: "5월 영업 파이프라인 관리 현황과 후속 액션을 정리한 보고서입니다.",
+    summary: "5월 영업 파이프라인 관리 보고서",
+    groupId: salesPipeline.id,
+    month: 5,
+    x: monthCenterX(2026, 5),
+    y: 1640,
+  });
+
+  await ensureDocument({
+    title: "브랜드 인지도 확산 보고서1",
+    content: "6월 브랜드 인지도 확산 활동과 채널별 성과를 정리한 보고서입니다.",
+    summary: "6월 브랜드 인지도 확산 보고서",
+    groupId: brandAwareness.id,
+    month: 6,
+    x: monthCenterX(2026, 6),
+    y: 2020,
+  });
+
+  await ensureDocument({
+    title: "브랜드 인지도 확산 보고서 2",
+    content: "7월 브랜드 인지도 확산 후속 캠페인과 누적 성과를 정리한 보고서입니다.",
+    summary: "7월 브랜드 인지도 확산 보고서",
+    groupId: brandAwareness.id,
+    month: 7,
+    x: monthCenterX(2026, 7),
+    y: 2020,
+  });
+
+  console.log("Growth strategy timeline data seeded.");
 }

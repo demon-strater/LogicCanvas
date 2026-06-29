@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM node:24-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 COPY . .
 RUN npm ci && \
@@ -7,7 +7,7 @@ RUN npm ci && \
     npm run build
 
 # Stage 2: Migration
-FROM node:24-alpine AS migrator
+FROM node:20-alpine AS migrator
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -16,7 +16,7 @@ COPY shared ./shared
 CMD ["npx", "drizzle-kit", "push"]
 
 # Stage 3: Production
-FROM node:24-alpine AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package*.json ./

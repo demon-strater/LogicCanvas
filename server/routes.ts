@@ -1010,8 +1010,8 @@ export async function registerRoutes(
       // Timeline constants (must match frontend DocumentCanvas)
       const MONTH_WIDTH = 800;
       const OFFSET_X = 150;
-      const TIMELINE_START_YEAR = 2025;
-      const TIMELINE_START_MONTH = 12;
+      const TIMELINE_START_YEAR = 2026;
+      const TIMELINE_START_MONTH = 1;
 
       // Layout constants
       const DOC_WIDTH = 260;
@@ -1271,8 +1271,8 @@ function calculateGroupedLayout(
   // Timeline constants (must match frontend)
   const MONTH_WIDTH = 800;
   const OFFSET_X = 150;
-  const TIMELINE_START_YEAR = 2025;
-  const TIMELINE_START_MONTH = 12;
+  const TIMELINE_START_YEAR = 2026;
+  const TIMELINE_START_MONTH = 1;
 
   const DOC_WIDTH = 260;
   const DOC_HEIGHT = 140;

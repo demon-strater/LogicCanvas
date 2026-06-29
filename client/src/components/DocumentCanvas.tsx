@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DocumentBox } from "./DocumentBox";
 import { GroupBox } from "./GroupBox";
 import { Minimap } from "./Minimap";
@@ -182,7 +182,9 @@ function computeEdgePath(
   halfW: number, halfH: number,
   targetHalfW: number, targetHalfH: number,
   obstacles: ObstacleRect[],
-  baseCurveDist: number = 400
+  baseCurveDist: number = 400,
+  sourceGap: number = 6,
+  targetGap: number = 16
 ): string {
   const dx = targetX - sourceX, dy = targetY - sourceY;
   const absDx = Math.abs(dx), absDy = Math.abs(dy);
@@ -193,20 +195,20 @@ function computeEdgePath(
   if (absDx * (halfH * 2) > absDy * (halfW * 2)) {
     horizontal = true;
     if (dx > 0) {
-      startX = sourceX + halfW; startY = sourceY;
-      endX = targetX - targetHalfW; endY = targetY;
+      startX = sourceX + halfW + sourceGap; startY = sourceY;
+      endX = targetX - targetHalfW - targetGap; endY = targetY;
     } else {
-      startX = sourceX - halfW; startY = sourceY;
-      endX = targetX + targetHalfW; endY = targetY;
+      startX = sourceX - halfW - sourceGap; startY = sourceY;
+      endX = targetX + targetHalfW + targetGap; endY = targetY;
     }
   } else {
     horizontal = false;
     if (dy > 0) {
-      startX = sourceX; startY = sourceY + halfH;
-      endX = targetX; endY = targetY - targetHalfH;
+      startX = sourceX; startY = sourceY + halfH + sourceGap;
+      endX = targetX; endY = targetY - targetHalfH - targetGap;
     } else {
-      startX = sourceX; startY = sourceY - halfH;
-      endX = targetX; endY = targetY + targetHalfH;
+      startX = sourceX; startY = sourceY - halfH - sourceGap;
+      endX = targetX; endY = targetY + targetHalfH + targetGap;
     }
   }
 
@@ -785,6 +787,53 @@ export function DocumentCanvas({
 
   const ungroupedDocuments = documents.filter(doc => !doc.groupId);
 
+  const groupLayerItems = useMemo(() => {
+    const childMap = new Map<number, DocumentGroup[]>();
+    groups.forEach((group) => {
+      if (group.parentId === null) return;
+      const children = childMap.get(group.parentId) ?? [];
+      children.push(group);
+      childMap.set(group.parentId, children);
+    });
+
+    const collectGroupIds = (groupId: number): number[] => {
+      const children = childMap.get(groupId) ?? [];
+      return [
+        groupId,
+        ...children.flatMap((child) => collectGroupIds(child.id)),
+      ];
+    };
+
+    const countDocs = (groupId: number) => {
+      const ids = new Set(collectGroupIds(groupId));
+      return documents.filter((doc) => doc.groupId !== null && ids.has(doc.groupId)).length;
+    };
+
+    return groups
+      .filter((group) => group.parentId === null)
+      .sort((a, b) => {
+        const aMonth = a.monthStart ?? 99;
+        const bMonth = b.monthStart ?? 99;
+        if (aMonth !== bMonth) return aMonth - bMonth;
+        return a.name.localeCompare(b.name);
+      })
+      .map((group) => ({
+        group,
+        count: countDocs(group.id),
+        children: (childMap.get(group.id) ?? [])
+          .sort((a, b) => {
+            const aMonth = a.monthStart ?? 99;
+            const bMonth = b.monthStart ?? 99;
+            if (aMonth !== bMonth) return aMonth - bMonth;
+            return a.name.localeCompare(b.name);
+          })
+          .map((child) => ({
+            group: child,
+            count: countDocs(child.id),
+          })),
+      }));
+  }, [documents, groups]);
+
   const getEdgeColor = (edgeType: string) => {
     switch (edgeType) {
       case "flow": return "hsl(var(--primary))";
@@ -796,11 +845,11 @@ export function DocumentCanvas({
 
   const TIMELINE_MONTH_WIDTH = 800;
   const TIMELINE_OFFSET_X = 150;
-  const TIMELINE_BASE_YEAR = 2025;
-  const TIMELINE_BASE_MONTH = 12;
+  const TIMELINE_BASE_YEAR = 2026;
+  const TIMELINE_BASE_MONTH = 1;
 
   const timelineStartMonth = TIMELINE_BASE_MONTH;
-  const timelineEndMonth = 24;
+  const timelineEndMonth = 12;
 
   const allPositions = [...Object.values(docPositions), ...Object.values(groupPositions)];
   const timelineRightEdge = TIMELINE_OFFSET_X + (timelineEndMonth - TIMELINE_BASE_MONTH + 1) * TIMELINE_MONTH_WIDTH;
@@ -816,6 +865,68 @@ export function DocumentCanvas({
       onAuxClick={(e) => e.preventDefault()}
       data-testid="document-canvas"
     >
+      <aside
+        className="absolute left-4 top-16 w-72 max-h-[calc(100%-8rem)] overflow-y-auto rounded-md border bg-card/95 shadow-lg backdrop-blur-sm"
+        style={{ zIndex: 22 }}
+        data-testid="group-layer-sidebar"
+      >
+        <div className="border-b px-3 py-2">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold">레이어</h2>
+            <span className="text-[11px] text-muted-foreground">{documents.length}개 보고서</span>
+          </div>
+        </div>
+        <div className="space-y-2 p-2">
+          {groupLayerItems.map(({ group, count, children }) => (
+            <div key={`layer-group-${group.id}`} className="rounded border bg-background/70">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left hover:bg-muted/60"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectGroup(group.id);
+                }}
+              >
+                <span className="min-w-0 flex items-center gap-2">
+                  <span
+                    className="h-2.5 w-2.5 flex-shrink-0 rounded-sm"
+                    style={{ backgroundColor: group.color ?? "#6366f1" }}
+                  />
+                  <span className="truncate text-xs font-medium">{group.name}</span>
+                </span>
+                <span className="flex-shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  {count}개
+                </span>
+              </button>
+              {children.length > 0 && (
+                <div className="border-t py-1">
+                  {children.map(({ group: child, count: childCount }) => (
+                    <button
+                      key={`layer-child-${child.id}`}
+                      type="button"
+                      className="flex w-full items-center justify-between gap-2 px-3 py-1.5 pl-7 text-left hover:bg-muted/60"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectGroup(child.id);
+                      }}
+                    >
+                      <span className="min-w-0 flex items-center gap-2">
+                        <span
+                          className="h-2 w-2 flex-shrink-0 rounded-sm"
+                          style={{ backgroundColor: child.color ?? "#6366f1" }}
+                        />
+                        <span className="truncate text-[11px] text-foreground/80">{child.name}</span>
+                      </span>
+                      <span className="flex-shrink-0 text-[10px] text-muted-foreground">{childCount}개</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </aside>
+
       {/* Fixed timeline header at top */}
       <TimelineHeader
         startMonth={timelineStartMonth}
@@ -868,7 +979,7 @@ export function DocumentCanvas({
 
         <svg
           className="absolute inset-0 pointer-events-none"
-          style={{ width: canvasWidth, height: canvasHeight, zIndex: 3 }}
+          style={{ width: canvasWidth, height: canvasHeight, zIndex: 16 }}
         >
           <defs>
             <marker id="arrow-flow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
@@ -919,7 +1030,7 @@ export function DocumentCanvas({
                 sourcePos.x, sourcePos.y,
                 targetPos.x, targetPos.y,
                 HALF_W, HALF_H, HALF_W, HALF_H,
-                obstacles, 400
+                obstacles, 400, 6, 16
               );
 
               const edgeColor = getEdgeColor(edge.edgeType);
@@ -1069,7 +1180,7 @@ export function DocumentCanvas({
               targetCenter.x, targetCenter.y,
               sourceCenter.width / 2, sourceCenter.height / 2,
               targetCenter.width / 2, targetCenter.height / 2,
-              groupObstacles, 600
+              groupObstacles, 600, 10, 26
             );
             
             const edgeColor = edge.edgeType === "depends" 
@@ -1243,7 +1354,7 @@ export function DocumentCanvas({
         onNavigate={handleMinimapNavigate}
       />
 
-      <div className="absolute bottom-4 left-4 bg-card/90 backdrop-blur-sm border rounded-md px-3 py-2 shadow-sm" style={{ zIndex: 20 }} data-testid="edge-legend">
+      <div className="absolute bottom-4 left-[19rem] bg-card/90 backdrop-blur-sm border rounded-md px-3 py-2 shadow-sm" style={{ zIndex: 20 }} data-testid="edge-legend">
         <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 tracking-wide">연결선 의미</p>
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
