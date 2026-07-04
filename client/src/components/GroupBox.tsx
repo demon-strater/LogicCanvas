@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Folder, MoreHorizontal, Pencil, Trash2 } from "@/lib/icons";
+import { MoreHorizontal, Pencil, Trash2 } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,10 +10,34 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { DocumentGroup, Document } from "@shared/schema";
 
-const DOC_WIDTH = 260;
-const DOC_HEIGHT = 130;
-const GROUP_PADDING = 30;
-const GROUP_HEADER = 100;
+const DOC_WIDTH = 380;
+const DOC_HEIGHT = 190;
+const GROUP_PADDING = 36;
+const GROUP_HEADER = 112;
+const GROUP_CONTENT_GAP = 32;
+const GROUP_RENDER_Y_OFFSET = 80;
+
+function getStableTitleLayout(text: string, maxLines: number) {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  const longestWordLength = Math.max(1, ...words.map((word) => word.length));
+  const length = Math.max(1, text.length);
+  const lines = Math.min(maxLines, Math.max(1, Math.ceil(length / 12)));
+  return {
+    lines,
+    charsPerLine: Math.max(longestWordLength, Math.ceil(length / lines)),
+  };
+}
+
+function estimateFittingFontSize(
+  charsPerLine: number,
+  lines: number,
+  maxWidth: number,
+  maxHeight: number,
+) {
+  const widthLimited = maxWidth / (charsPerLine * 0.95);
+  const heightLimited = maxHeight / (lines * 1.16);
+  return Math.min(widthLimited, heightLimited);
+}
 
 type Props = {
   group: DocumentGroup;
@@ -21,6 +45,7 @@ type Props = {
   childGroups: DocumentGroup[];
   allDocuments: Document[];
   docPositions?: Record<number, { x: number; y: number }>;
+  groupPositions?: Record<number, { x: number; y: number }>;
   x: number;
   y: number;
   zoom?: number;
@@ -30,6 +55,7 @@ type Props = {
   isSpacePressed?: boolean;
   onSelect: (id: number, shiftKey?: boolean) => void;
   onToggleExpand: (id: number) => void;
+  onDragMove?: (id: number, x: number, y: number, prevX: number, prevY: number) => void;
   onDragEnd: (id: number, x: number, y: number, prevX: number, prevY: number) => void;
   onResize?: (id: number, width: number, height: number) => void;
   onEdit: (id: number) => void;
@@ -42,6 +68,7 @@ export function GroupBox({
   childGroups,
   allDocuments,
   docPositions = {},
+  groupPositions = {},
   x,
   y,
   zoom = 1,
@@ -51,6 +78,7 @@ export function GroupBox({
   isSpacePressed = false,
   onSelect,
   onToggleExpand,
+  onDragMove,
   onDragEnd,
   onResize,
   onEdit,
@@ -67,9 +95,19 @@ export function GroupBox({
 
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDir, setResizeDir] = useState<"r" | "b" | "rb" | null>(null);
-  const resizeStartRef = useRef({ mouseX: 0, mouseY: 0, width: 0, height: 0 });
+  const resizeStartRef = useRef({
+    mouseX: 0,
+    mouseY: 0,
+    width: 0,
+    height: 0,
+    centerX: 0,
+    centerY: 0,
+  });
   const [resizeSize, setResizeSize] = useState<{ w: number; h: number } | null>(null);
   const resizeSizeRef = useRef<{ w: number; h: number } | null>(null);
+  const [resizeCenter, setResizeCenter] = useState<{ x: number; y: number } | null>(null);
+  const resizeCenterRef = useRef<{ x: number; y: number } | null>(null);
+  const hasLayoutContentRef = useRef(false);
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
 
@@ -77,7 +115,13 @@ export function GroupBox({
     setCurrentPos({ x, y });
   }, [x, y]);
 
-  const totalItems = documents.length + childGroups.length;
+  const childGroupIds = useMemo(
+    () => new Set((childGroups || []).map((child) => child.id)),
+    [childGroups]
+  );
+  const reportCount = isTopLevel
+    ? (allDocuments || []).filter((doc) => doc.groupId === group.id || (doc.groupId != null && childGroupIds.has(doc.groupId))).length
+    : documents.length;
 
   const getDocPos = useCallback((doc: Document) => {
     const live = docPositions[doc.id];
@@ -87,13 +131,18 @@ export function GroupBox({
 
   const calculateChildGroupBounds = useCallback((childGroup: DocumentGroup) => {
     const childDocs = (allDocuments || []).filter(d => d.groupId === childGroup.id);
+    const childLivePos = groupPositions[childGroup.id];
+    const childBaseX = childLivePos?.x ?? childGroup.x ?? 0;
+    const childBaseY = (childLivePos?.y ?? childGroup.y ?? 0) + GROUP_RENDER_Y_OFFSET;
     
     if (childDocs.length === 0) {
+      const autoWidth = DOC_WIDTH + GROUP_PADDING * 2;
+      const autoHeight = DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
       return { 
-        centerX: childGroup.x, 
-        centerY: childGroup.y, 
-        width: DOC_WIDTH + GROUP_PADDING * 2, 
-        height: DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING 
+        centerX: childBaseX,
+        centerY: childBaseY,
+        width: autoWidth,
+        height: autoHeight,
       };
     }
     
@@ -107,21 +156,36 @@ export function GroupBox({
     }
     
     if (minX === Infinity) {
-      return { centerX: childGroup.x, centerY: childGroup.y, width: DOC_WIDTH + GROUP_PADDING * 2, height: DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING };
+      const autoWidth = DOC_WIDTH + GROUP_PADDING * 2;
+      const autoHeight = DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
+      return {
+        centerX: childBaseX,
+        centerY: childBaseY,
+        width: autoWidth,
+        height: autoHeight,
+      };
     }
     
     const contentWidth = maxX - minX;
     const contentHeight = maxY - minY;
     const width = Math.max(DOC_WIDTH + GROUP_PADDING * 2, contentWidth + GROUP_PADDING * 2);
-    const height = Math.max(DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING, contentHeight + GROUP_HEADER + GROUP_PADDING);
+    const height = Math.max(
+      DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
+      contentHeight + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
+    );
     
     const topLeftX = minX - GROUP_PADDING;
-    const topLeftY = minY - GROUP_HEADER;
+    const topLeftY = minY - GROUP_HEADER - GROUP_CONTENT_GAP;
     const centerX = topLeftX + width / 2;
     const centerY = topLeftY + height / 2;
     
-    return { centerX, centerY, width, height };
-  }, [allDocuments, getDocPos]);
+    return {
+      centerX,
+      centerY,
+      width,
+      height,
+    };
+  }, [allDocuments, getDocPos, groupPositions]);
 
   const { width: autoWidth, height: autoHeight, centerX: computedCenterX, centerY: computedCenterY } = useMemo(() => {
     const allItems: { x: number; y: number; w: number; h: number }[] = [];
@@ -147,7 +211,12 @@ export function GroupBox({
     }
     
     if (allItems.length === 0) {
-      return { width: DOC_WIDTH + GROUP_PADDING * 2, height: DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING, centerX: x, centerY: y };
+      return {
+        width: DOC_WIDTH + GROUP_PADDING * 2,
+        height: DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
+        centerX: x,
+        centerY: y,
+      };
     }
     
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -162,15 +231,15 @@ export function GroupBox({
     const contentHeight = maxY - minY;
     
     const width = contentWidth + GROUP_PADDING * 2;
-    const height = contentHeight + GROUP_HEADER + GROUP_PADDING;
+    const height = contentHeight + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
     
     const topLeftX = minX - GROUP_PADDING;
-    const topLeftY = minY - GROUP_HEADER;
+    const topLeftY = minY - GROUP_HEADER - GROUP_CONTENT_GAP;
     const centerX = topLeftX + width / 2;
     const centerY = topLeftY + height / 2;
     
     const minWidth = DOC_WIDTH + GROUP_PADDING * 2;
-    const minHeight = DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING;
+    const minHeight = DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
     return { 
       width: Math.max(minWidth, width), 
       height: Math.max(minHeight, height),
@@ -179,14 +248,38 @@ export function GroupBox({
     };
   }, [documents, childGroups, calculateChildGroupBounds, getDocPos, x, y]);
 
-  const groupWidth = resizeSize ? resizeSize.w : (group.manualWidth ?? autoWidth);
-  const groupHeight = resizeSize ? resizeSize.h : (group.manualHeight ?? autoHeight);
+  const groupWidth = resizeSize ? resizeSize.w : Math.max(group.manualWidth ?? autoWidth, autoWidth);
+  const groupHeight = resizeSize ? resizeSize.h : Math.max(group.manualHeight ?? autoHeight, autoHeight);
+
+  useEffect(() => {
+    if (isResizing || !resizeSize) return;
+
+    const widthMatches = group.manualWidth === resizeSize.w || (group.manualWidth == null && resizeSize.w === autoWidth);
+    const heightMatches = group.manualHeight === resizeSize.h || (group.manualHeight == null && resizeSize.h === autoHeight);
+
+    if (widthMatches && heightMatches) {
+      setResizeSize(null);
+      resizeSizeRef.current = null;
+      setResizeCenter(null);
+      resizeCenterRef.current = null;
+    }
+  }, [autoHeight, autoWidth, group.manualHeight, group.manualWidth, isResizing, resizeSize]);
   
-  const effectiveCenterX = (documents || []).length > 0 || (childGroups || []).length > 0 ? computedCenterX : x;
-  const effectiveCenterY = (documents || []).length > 0 || (childGroups || []).length > 0 ? computedCenterY : y;
+  const hasLayoutContent = (documents || []).length > 0 || (childGroups || []).length > 0;
+  hasLayoutContentRef.current = hasLayoutContent;
+  const baseCenterX = hasLayoutContent ? computedCenterX : x;
+  const baseCenterY = hasLayoutContent ? computedCenterY : y;
+  const effectiveCenterX = hasLayoutContent
+    ? baseCenterX + Math.max(0, groupWidth - autoWidth) / 2
+    : baseCenterX;
+  const effectiveCenterY = hasLayoutContent
+    ? baseCenterY + Math.max(0, groupHeight - autoHeight) / 2
+    : baseCenterY;
 
   const onDragEndRef = useRef(onDragEnd);
   onDragEndRef.current = onDragEnd;
+  const onDragMoveRef = useRef(onDragMove);
+  onDragMoveRef.current = onDragMove;
   const groupIdRef = useRef(group.id);
   groupIdRef.current = group.id;
 
@@ -226,6 +319,13 @@ export function GroupBox({
       currentPosRef.current = { x: newX, y: newY };
       hasDraggedRef.current = true;
       setHasDragged(true);
+      onDragMoveRef.current?.(
+        groupIdRef.current,
+        newX,
+        newY,
+        originalPosRef.current.x,
+        originalPosRef.current.y
+      );
     };
 
     const handleMouseUp = () => {
@@ -250,8 +350,8 @@ export function GroupBox({
     };
   }, [isDragging]);
 
-  const minW = DOC_WIDTH + GROUP_PADDING * 2;
-  const minH = DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING;
+  const minW = Math.max(DOC_WIDTH + GROUP_PADDING * 2, autoWidth);
+  const minH = Math.max(DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING, autoHeight);
 
   const onResizeRef = useRef(onResize);
   onResizeRef.current = onResize;
@@ -272,8 +372,10 @@ export function GroupBox({
       mouseY: e.clientY,
       width: groupWidth,
       height: groupHeight,
+      centerX: effectiveCenterX,
+      centerY: effectiveCenterY,
     };
-  }, [groupWidth, groupHeight]);
+  }, [effectiveCenterX, effectiveCenterY, groupWidth, groupHeight]);
 
   useEffect(() => {
     if (!isResizing) return;
@@ -293,20 +395,40 @@ export function GroupBox({
         newH = Math.max(minHRef.current, resizeStartRef.current.height + dy);
       }
       const rounded = { w: Math.round(newW), h: Math.round(newH) };
+      const nextCenter = {
+        x: resizeStartRef.current.centerX + (dir === "r" || dir === "rb" ? (rounded.w - resizeStartRef.current.width) / 2 : 0),
+        y: resizeStartRef.current.centerY + (dir === "b" || dir === "rb" ? (rounded.h - resizeStartRef.current.height) / 2 : 0),
+      };
       setResizeSize(rounded);
       resizeSizeRef.current = rounded;
+      setResizeCenter(nextCenter);
+      resizeCenterRef.current = nextCenter;
     };
 
     const handleMouseUp = () => {
+      const dir = resizeDirRef.current;
       setIsResizing(false);
       setResizeDir(null);
       resizeDirRef.current = null;
       const size = resizeSizeRef.current;
       if (size && onResizeRef.current) {
         onResizeRef.current(groupIdRef.current, size.w, size.h);
+        const dx = (dir === "r" || dir === "rb")
+          ? (size.w - resizeStartRef.current.width) / 2
+          : 0;
+        const dy = (dir === "b" || dir === "rb")
+          ? (size.h - resizeStartRef.current.height) / 2
+          : 0;
+        if (!hasLayoutContentRef.current) {
+          onDragEndRef.current(
+            groupIdRef.current,
+            resizeStartRef.current.centerX + dx,
+            resizeStartRef.current.centerY + dy,
+            resizeStartRef.current.centerX,
+            resizeStartRef.current.centerY,
+          );
+        }
       }
-      setResizeSize(null);
-      resizeSizeRef.current = null;
     };
 
     window.addEventListener("mousemove", handleMouseMove);
@@ -325,41 +447,69 @@ export function GroupBox({
 
   const groupColor = group.color || "#6366f1";
   const hasManualSize = group.manualWidth != null || group.manualHeight != null;
-  const compactWidth = Math.max(180, Math.min(300, Math.round(groupWidth * 0.35)));
-  const compactHeight = Math.max(110, Math.min(180, Math.round(groupHeight * 0.32)));
 
-  const isTimelineZoom = zoom < 0.08;
-  const isMajorZoom = zoom >= 0.08 && zoom < 0.15;
   const isMidZoom = zoom >= 0.15 && zoom < 0.3;
   const isDocZoom = zoom >= 0.3 && zoom < 0.6;
+  const isMajorOnlyView = isTopLevel && zoom < 0.1;
+  const isChildOverview = !isTopLevel && zoom < 0.3;
+  const isCenteredTitle = isMajorOnlyView || isChildOverview;
+
+  const normalizedMajorZoom = Math.min(1, Math.max(0, (zoom - 0.03) / 0.12));
+  const normalizedChildZoom = Math.min(1, Math.max(0, (zoom - 0.15) / 0.15));
+  const centeredScreenTitleSize = isTopLevel
+    ? 30 - normalizedMajorZoom * 10
+    : 24 - normalizedChildZoom * 8;
+  const centeredTitleLayout = getStableTitleLayout(group.name, isTopLevel ? 4 : 3);
+  const centeredMaxWidth = Math.max(1, groupWidth - (isTopLevel ? 64 : 40));
+  const centeredMaxHeight = Math.max(1, groupHeight - (isTopLevel ? 64 : 32));
+  const centeredFitFontSize = estimateFittingFontSize(
+      centeredTitleLayout.charsPerLine,
+      centeredTitleLayout.lines,
+      centeredMaxWidth,
+      centeredMaxHeight
+    );
+  const centeredTitleFontSize = Math.max(
+    10,
+    Math.min(
+      centeredScreenTitleSize / Math.max(zoom, 0.03),
+      centeredFitFontSize,
+      isTopLevel ? 360 : 160
+    )
+  );
 
   const titleFontSize = isTopLevel
-    ? (isTimelineZoom ? 24 : isMajorZoom ? 20 : isMidZoom ? 16 : 16)
-    : (isTimelineZoom ? 16 : isMajorZoom ? 14 : 12);
+    ? (isCenteredTitle ? centeredTitleFontSize : isMidZoom ? 48 : 44)
+    : (isCenteredTitle ? centeredTitleFontSize : isDocZoom ? 40 : 36);
 
-  const headerPadding = isTimelineZoom || isMajorZoom ? "px-4 py-3" : "px-2.5 py-1.5";
+  const headerPadding = isCenteredTitle ? "p-0" : isTopLevel ? "px-6 py-4" : "px-4 py-3";
+  const layerZIndex = isTopLevel ? 1 : 2;
+  const headerMinHeight = isCenteredTitle ? undefined : isTopLevel ? 104 : 84;
+  const countBadgeSize = isTopLevel ? 50 : 42;
 
   return (
     <div
       ref={boxRef}
       className={cn(
         "absolute rounded-lg cursor-pointer group/groupbox",
-        isTopLevel ? "border-[3px]" : "border-2",
+        isTopLevel ? "border-[5px]" : "border-[4px]",
         "backdrop-blur-sm",
         isSelected
-          ? "shadow-lg"
-          : "hover:shadow-md",
+          ? "shadow-2xl ring-4 ring-primary/25"
+          : "shadow-md hover:shadow-xl",
         isDragging && "shadow-xl cursor-grabbing",
         isResizing && "cursor-nwse-resize"
       )}
       style={{
-        left: isDragging ? currentPos.x : effectiveCenterX,
-        top: isDragging ? currentPos.y : effectiveCenterY,
+        left: isDragging ? currentPos.x : resizeCenter?.x ?? effectiveCenterX,
+        top: isDragging ? currentPos.y : resizeCenter?.y ?? effectiveCenterY,
         transform: "translate(-50%, -50%)",
         transition: isDragging || isResizing ? 'box-shadow 0.2s' : 'left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), top 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), width 0.35s cubic-bezier(0.25, 0.1, 0.25, 1), height 0.35s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.2s',
-        zIndex: isSelected || isDragging ? 4 : (isTopLevel ? 1 : 2),
-        borderColor: isSelected ? groupColor : `${groupColor}${isTopLevel ? '50' : '90'}`,
-        backgroundColor: isTopLevel ? `${groupColor}08` : `${groupColor}12`,
+        zIndex: isDragging ? 20 : layerZIndex,
+        borderColor: isSelected ? groupColor : `${groupColor}${isTopLevel ? 'B8' : 'D8'}`,
+        backgroundColor: isTopLevel ? `${groupColor}0D` : `${groupColor}18`,
+        boxShadow: isSelected
+          ? `0 0 0 3px ${groupColor}30, 0 18px 45px hsl(var(--foreground) / 0.16)`
+          : `0 0 0 1px ${groupColor}28, 0 12px 32px hsl(var(--foreground) / 0.10)`,
         width: groupWidth,
         height: groupHeight,
       }}
@@ -367,31 +517,65 @@ export function GroupBox({
       data-testid={`group-box-${group.id}`}
     >
       <div
-        className={cn("flex items-center justify-between gap-1 rounded-t-md relative", headerPadding)}
-        style={{ backgroundColor: `${groupColor}${isTopLevel ? '20' : '25'}`, zIndex: 10 }}
+        className={cn(
+          "flex items-center justify-between gap-1 rounded-t-md relative transition-all duration-200",
+          isCenteredTitle ? "absolute inset-0" : "",
+          headerPadding
+        )}
+        style={{
+          backgroundColor: isCenteredTitle ? "transparent" : `${groupColor}${isTopLevel ? '20' : '25'}`,
+          zIndex: 10,
+          minHeight: headerMinHeight,
+        }}
       >
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <Folder
-            className="flex-shrink-0"
-            style={{ color: groupColor, width: isTimelineZoom || isMajorZoom ? 20 : 14, height: isTimelineZoom || isMajorZoom ? 20 : 14 }}
-          />
+        <div
+          className={cn(
+            "min-w-0",
+            isCenteredTitle
+              ? "absolute inset-0 flex items-center justify-center px-8 text-center"
+              : "flex flex-1 items-center gap-3 overflow-hidden"
+          )}
+        >
+          {!isCenteredTitle && (
+            <span
+              className="inline-flex flex-shrink-0 items-center justify-center rounded-full font-semibold leading-none"
+              style={{
+                width: countBadgeSize,
+                height: countBadgeSize,
+                backgroundColor: "hsl(var(--background) / 0.92)",
+                border: `2px solid ${groupColor}70`,
+                color: "hsl(var(--foreground) / 0.86)",
+                fontSize: isTopLevel ? 24 : 19,
+              }}
+            >
+              {reportCount}
+            </span>
+          )}
           <h3
-            className="font-semibold leading-snug"
+            className={cn(
+              "font-semibold leading-tight",
+              isCenteredTitle ? "" : "min-w-0 flex-1"
+            )}
             style={{
               wordBreak: "keep-all",
-              overflowWrap: "break-word",
+              overflowWrap: "normal",
               fontSize: titleFontSize,
+              width: isCenteredTitle ? "auto" : undefined,
+              maxWidth: isCenteredTitle ? centeredMaxWidth : undefined,
+              minWidth: 0,
+              whiteSpace: "normal",
+              overflow: "hidden",
+              textWrap: isCenteredTitle ? "balance" : undefined,
               transition: "font-size 0.2s ease",
+              color: "hsl(var(--foreground) / 0.9)",
+              textShadow: isCenteredTitle ? "0 1px 0 hsl(var(--background)), 0 8px 28px hsl(var(--background) / 0.65)" : undefined,
             }}
           >
             {group.name}
           </h3>
-          <span className="text-muted-foreground flex-shrink-0" style={{ fontSize: isTimelineZoom || isMajorZoom ? 14 : 10 }}>
-            {totalItems}
-          </span>
         </div>
 
-        {!(isTimelineZoom || isMajorZoom) && (
+        {!isCenteredTitle && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0">
@@ -421,21 +605,7 @@ export function GroupBox({
         )}
       </div>
 
-      {group.description && !(isTimelineZoom || isMajorZoom) && (
-        <div
-          className="px-2.5 py-1 text-muted-foreground leading-relaxed"
-          style={{
-            fontSize: isMidZoom ? 10 : 11,
-            wordBreak: "keep-all",
-            overflowWrap: "break-word",
-            maxWidth: "60ch",
-          }}
-        >
-          {group.description}
-        </div>
-      )}
-
-      {!(isTimelineZoom || isMajorZoom) && (
+      {!isCenteredTitle && (
         <>
           <div
             data-resize-handle

@@ -57,6 +57,18 @@ export default function Canvas() {
 
   const viewingDocument = documents.find((d) => d.id === viewingDocumentId) || null;
 
+  const requestAutoRelayout = useCallback(() => {
+    window.setTimeout(async () => {
+      try {
+        await apiRequest("POST", "/api/relayout");
+        queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      } catch (error) {
+        console.error("Auto relayout failed:", error);
+      }
+    }, 300);
+  }, []);
+
   const createDocumentMutation = useMutation({
     mutationFn: async ({ title, content }: { title: string; content: string }) => {
       const summary = content.split("\n").filter((line) => line.trim()).slice(0, 3).join(" ").slice(0, 200);
@@ -67,6 +79,7 @@ export default function Canvas() {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
       queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
       setIsDocumentModalOpen(false);
+      requestAutoRelayout();
       toast({ title: "문서가 추가되었습니다" });
     },
     onError: () => {
@@ -152,7 +165,12 @@ export default function Canvas() {
     },
   });
 
-  const { data: syncStatus } = useQuery<{
+  const { data: syncStatus = {
+    enabled: false,
+    lastSyncTime: null,
+    isSyncing: false,
+    lastSyncResult: null,
+  } } = useQuery<{
     enabled: boolean;
     lastSyncTime: string | null;
     isSyncing: boolean;
@@ -213,6 +231,7 @@ export default function Canvas() {
       queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
       setIsGroupModalOpen(false);
       setEditingGroup(null);
+      requestAutoRelayout();
       toast({ title: "그룹이 생성되었습니다" });
     },
     onError: () => {
@@ -264,7 +283,7 @@ export default function Canvas() {
           positionHistoryRef.current.shift();
         }
       }
-      updateDocumentMutation.mutate({ id, updates: { x, y } });
+      updateDocumentMutation.mutate({ id, updates: { x: Math.round(x), y: Math.round(y) } });
     },
     [updateDocumentMutation]
   );
@@ -399,44 +418,7 @@ export default function Canvas() {
           />
         )}
 
-        {syncStatus && (
-          <div className="fixed top-4 right-4 z-30 flex items-center gap-2 bg-card/90 backdrop-blur-sm border rounded-md px-3 py-1.5 shadow-sm">
-            <div className={cn("w-2 h-2 rounded-full", syncStatus.enabled ? "bg-green-500" : "bg-muted-foreground/40")} />
-            <span className="text-[11px] text-muted-foreground">
-              {syncStatus.isSyncing ? "동기화 중..." : syncStatus.enabled ? "노션 자동 동기화" : "동기화 꺼짐"}
-            </span>
-            {syncStatus.lastSyncTime && (
-              <span className="text-[10px] text-muted-foreground/60">
-                {new Date(syncStatus.lastSyncTime).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
-              </span>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => syncNotionMutation.mutate()}
-              disabled={syncNotionMutation.isPending || syncStatus.isSyncing}
-              data-testid="button-sync-notion"
-            >
-              <RefreshCw className={cn("h-3 w-3", (syncNotionMutation.isPending || syncStatus.isSyncing) && "animate-spin")} />
-            </Button>
-          </div>
-        )}
-
         <div className="fixed bottom-4 right-4 flex items-center gap-2 z-30">
-          {documents.length >= 2 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="shadow-lg bg-card/90 backdrop-blur-sm"
-              onClick={() => deduplicateMutation.mutate()}
-              disabled={deduplicateMutation.isPending}
-              data-testid="button-deduplicate"
-            >
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              {deduplicateMutation.isPending ? "정리 중..." : "중복 제거"}
-            </Button>
-          )}
           {(documents.length >= 1 || (groups || []).length >= 1) && (
             <Button
               variant="outline"
@@ -450,46 +432,34 @@ export default function Canvas() {
               {relayoutMutation.isPending ? "정렬 중..." : "재정렬"}
             </Button>
           )}
-          {documents.length >= 2 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="shadow-lg bg-card/90 backdrop-blur-sm"
-              onClick={() => analyzeWorkflowMutation.mutate()}
-              disabled={analyzeWorkflowMutation.isPending}
-              data-testid="button-analyze-workflow"
-            >
-              <Wand2 className="h-3.5 w-3.5 mr-1.5" />
-              {analyzeWorkflowMutation.isPending ? "분석 중..." : "자동 정렬"}
-            </Button>
-          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
+                variant="default"
                 size="icon"
-                className="shadow-lg rounded-full"
+                className="h-12 w-12 rounded-full shadow-lg"
                 data-testid="button-add-menu"
               >
-                <Plus className="h-5 w-5" />
+                <Plus className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem
-                onClick={() => setIsDocumentModalOpen(true)}
-                data-testid="menu-item-add-document"
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                새 문서
-              </DropdownMenuItem>
+            <DropdownMenuContent align="end">
               <DropdownMenuItem
                 onClick={() => {
                   setEditingGroup(null);
                   setIsGroupModalOpen(true);
                 }}
-                data-testid="menu-item-add-group"
+                data-testid="menu-add-group"
               >
                 <FolderPlus className="h-4 w-4 mr-2" />
-                새 그룹
+                그룹 추가
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setIsDocumentModalOpen(true)}
+                data-testid="menu-add-document"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                보고서 추가
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

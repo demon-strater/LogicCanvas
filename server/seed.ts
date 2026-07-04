@@ -229,19 +229,6 @@ async function seedGrowthStrategyData() {
     await db.insert(documents).values(values);
   };
 
-  await ensureGroup({
-    name: "성장 전략 실행",
-    description: "4월부터 6월까지 성장 전략 실행을 관리하는 대그룹",
-    parentId: null,
-    monthStart: 4,
-    monthEnd: 6,
-    color: "#2563eb",
-    x: periodCenterX(4, 6),
-    y: 900,
-    manualWidth: 2100,
-    manualHeight: 260,
-  });
-
   const marketingEngine = await ensureGroup({
     name: "마케팅 엔진 구축",
     description: "마케팅 실행 체계를 구축하고 성과를 확장하는 대그룹",

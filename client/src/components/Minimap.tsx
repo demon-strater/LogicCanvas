@@ -4,10 +4,11 @@ import type { Document, DocumentGroup } from "@shared/schema";
 const MINIMAP_WIDTH = 180;
 const MINIMAP_HEIGHT = 120;
 const MINIMAP_PADDING = 12;
-const DOC_WIDTH = 260;
-const DOC_HEIGHT = 130;
-const GROUP_PADDING = 30;
-const GROUP_HEADER = 100;
+const DOC_WIDTH = 380;
+const DOC_HEIGHT = 190;
+const GROUP_PADDING = 36;
+const GROUP_HEADER = 112;
+const GROUP_CONTENT_GAP = 32;
 
 type Props = {
   documents: Document[];
@@ -57,8 +58,8 @@ export function Minimap({
       if (groupDocs.length === 0 && childGroups.length === 0) {
         minX = Math.min(minX, pos.x - (DOC_WIDTH + GROUP_PADDING * 2) / 2);
         maxX = Math.max(maxX, pos.x + (DOC_WIDTH + GROUP_PADDING * 2) / 2);
-        minY = Math.min(minY, pos.y - (DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING) / 2);
-        maxY = Math.max(maxY, pos.y + (DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING) / 2);
+        minY = Math.min(minY, pos.y - (DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING) / 2);
+        maxY = Math.max(maxY, pos.y + (DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING) / 2);
       }
     });
 
@@ -140,7 +141,7 @@ export function Minimap({
           result[group.id] = {
             x: pos.x, y: pos.y,
             w: DOC_WIDTH + GROUP_PADDING * 2,
-            h: DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING,
+            h: DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
           };
         }
         return;
@@ -157,9 +158,9 @@ export function Minimap({
       });
       if (gMinX !== Infinity) {
         const w = (gMaxX - gMinX) + GROUP_PADDING * 2;
-        const h = (gMaxY - gMinY) + GROUP_HEADER + GROUP_PADDING;
+        const h = (gMaxY - gMinY) + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
         const topLeftX = gMinX - GROUP_PADDING;
-        const topLeftY = gMinY - GROUP_HEADER;
+        const topLeftY = gMinY - GROUP_HEADER - GROUP_CONTENT_GAP;
         result[group.id] = {
           x: topLeftX + w / 2,
           y: topLeftY + h / 2,
@@ -185,7 +186,7 @@ export function Minimap({
           result[group.id] = {
             x: pos.x, y: pos.y,
             w: DOC_WIDTH + GROUP_PADDING * 2,
-            h: DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING,
+            h: DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
           };
         }
         return;
@@ -198,9 +199,9 @@ export function Minimap({
         gMaxY = Math.max(gMaxY, item.y + item.h / 2);
       });
       const w = (gMaxX - gMinX) + GROUP_PADDING * 2;
-      const h = (gMaxY - gMinY) + GROUP_HEADER + GROUP_PADDING;
+      const h = (gMaxY - gMinY) + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
       const topLeftX = gMinX - GROUP_PADDING;
-      const topLeftY = gMinY - GROUP_HEADER;
+      const topLeftY = gMinY - GROUP_HEADER - GROUP_CONTENT_GAP;
       result[group.id] = {
         x: topLeftX + w / 2,
         y: topLeftY + h / 2,

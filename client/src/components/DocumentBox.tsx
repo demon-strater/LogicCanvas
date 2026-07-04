@@ -127,11 +127,11 @@ export function DocumentBox({
     <div
       ref={boxRef}
       className={cn(
-        "absolute w-[260px] h-auto p-3 rounded-md border-2 cursor-pointer transition-shadow",
-        "bg-card hover:shadow-lg",
+        "absolute w-[380px] h-auto p-5 rounded-md border-[3px] cursor-pointer transition-shadow",
+        "text-foreground hover:shadow-xl",
         isSelected
-          ? "border-primary shadow-md"
-          : "border-border/60 hover:border-primary/50",
+          ? "border-primary shadow-xl ring-4 ring-primary/20"
+          : "border-foreground/35 hover:border-primary/80 shadow-md",
         isDragging && "shadow-xl cursor-grabbing"
       )}
       style={{
@@ -139,26 +139,52 @@ export function DocumentBox({
         top: currentPos.y,
         transform: "translate(-50%, -50%)",
         zIndex: isSelected || isDragging ? 10 : 3,
+        backgroundColor: "hsl(var(--card))",
+        color: "hsl(var(--card-foreground) / 0.92)",
+        boxShadow: isSelected
+          ? "0 0 0 2px hsl(var(--primary) / 0.22), 0 16px 34px hsl(var(--foreground) / 0.16)"
+          : "0 0 0 1px hsl(var(--border) / 0.75), 0 10px 24px hsl(var(--foreground) / 0.12)",
       }}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
       data-testid={`document-box-${document.id}`}
     >
-      <div className="flex items-start gap-2 mb-2">
-        <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0 bg-primary/10">
-          <FileText className="h-3.5 w-3.5 text-primary" />
+      <div className="flex items-start gap-3.5 mb-4">
+        <div className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0 bg-primary/10">
+          <FileText className="h-5 w-5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-xs leading-tight" style={{ wordBreak: "keep-all", overflowWrap: "break-word", maxWidth: "50ch" }}>{document.title}</h3>
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
-            <Calendar className="h-2.5 w-2.5" />
+          <h3
+            className="font-medium text-base leading-tight"
+            style={{
+              wordBreak: "keep-all",
+              overflowWrap: "normal",
+              maxWidth: "100%",
+              minWidth: 0,
+              whiteSpace: "normal",
+              color: "hsl(var(--card-foreground) / 0.92)",
+            }}
+          >
+            {document.title}
+          </h3>
+          <div className="flex items-center gap-1.5 text-xs mt-1.5" style={{ color: "hsl(var(--muted-foreground))" }}>
+            <Calendar className="h-3 w-3" />
             <span>{formatDate(document.createdAt)}</span>
           </div>
         </div>
       </div>
 
       {!isCompactZoom && (
-        <p className="text-[10px] text-muted-foreground leading-relaxed overflow-hidden" style={{ wordBreak: "keep-all", overflowWrap: "break-word" }}>
+        <p
+          className="text-sm leading-relaxed overflow-hidden"
+          style={{
+            wordBreak: "keep-all",
+            overflowWrap: "normal",
+            maxWidth: "100%",
+            minWidth: 0,
+            color: "hsl(var(--card-foreground) / 0.72)",
+          }}
+        >
           {getSummary()}
         </p>
       )}

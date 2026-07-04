@@ -3,7 +3,7 @@ import { DocumentBox } from "./DocumentBox";
 import { GroupBox } from "./GroupBox";
 import { Minimap } from "./Minimap";
 import { TimelineHeader, TimelineGridLines } from "./TimelineHeader";
-import { ZoomIn, ZoomOut, RotateCcw } from "@/lib/icons";
+import { PanelLeftIcon, ZoomIn, ZoomOut, RotateCcw } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import type { Document, DocumentEdge, DocumentGroup, GroupEdge } from "@shared/schema";
 
@@ -32,19 +32,62 @@ const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.05;
 
 const ZOOM_L1 = 0.08;
-const ZOOM_L2 = 0.15;
+const ZOOM_L2 = 0.1;
 const ZOOM_L3 = 0.3;
 const ZOOM_L4 = 0.6;
 const PAN_SPEED = 1.5;
-const DOC_WIDTH = 260;
-const DOC_HEIGHT = 130;
-const GROUP_PADDING = 30;
-const GROUP_HEADER = 100;
+const DOC_WIDTH = 380;
+const DOC_HEIGHT = 190;
+const DOC_GAP_X = 24;
+const DOC_GAP_Y = 86;
+const GROUP_PADDING = 36;
+const GROUP_HEADER = 112;
+const GROUP_CONTENT_GAP = 32;
 const TIMELINE_HEIGHT = 50;
 const TIMELINE_GAP = 80;
+const TIMELINE_MONTH_WIDTH = 800;
+const TIMELINE_OFFSET_X = 150;
+const TIMELINE_BASE_YEAR = 2026;
+const TIMELINE_BASE_MONTH = 1;
 const OBSTACLE_MARGIN = 25;
+const LAYER_SIDEBAR_DEFAULT_WIDTH = 288;
+const LAYER_SIDEBAR_CLOSE_WIDTH = LAYER_SIDEBAR_DEFAULT_WIDTH / 3;
+const LAYER_SIDEBAR_MIN_DRAG_WIDTH = 80;
+const LAYER_SIDEBAR_MAX_WIDTH = 480;
 
 type ObstacleRect = { left: number; top: number; right: number; bottom: number; id?: number };
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getDocumentYearMonth(doc: Document) {
+  const date = new Date(doc.createdAt);
+  if (Number.isNaN(date.getTime())) {
+    return { year: TIMELINE_BASE_YEAR, month: TIMELINE_BASE_MONTH };
+  }
+  return { year: date.getFullYear(), month: date.getMonth() + 1 };
+}
+
+function getMonthLeftX(year: number, month: number) {
+  const monthIndex = (year - TIMELINE_BASE_YEAR) * 12 + month - TIMELINE_BASE_MONTH;
+  return TIMELINE_OFFSET_X + monthIndex * TIMELINE_MONTH_WIDTH;
+}
+
+function getMonthCenterX(year: number, month: number) {
+  return getMonthLeftX(year, month) + TIMELINE_MONTH_WIDTH / 2;
+}
+
+function clampDocumentXToMonth(doc: Document, x: number) {
+  const { year, month } = getDocumentYearMonth(doc);
+  const monthLeft = getMonthLeftX(year, month);
+  const minX = monthLeft + DOC_WIDTH / 2 + GROUP_PADDING;
+  const maxX = monthLeft + TIMELINE_MONTH_WIDTH - DOC_WIDTH / 2 - GROUP_PADDING;
+  if (minX > maxX) {
+    return getMonthCenterX(year, month);
+  }
+  return clamp(x, minX, maxX);
+}
 
 function lineSegIntersectsRect(
   x1: number, y1: number, x2: number, y2: number,
@@ -189,6 +232,22 @@ function computeEdgePath(
   const dx = targetX - sourceX, dy = targetY - sourceY;
   const absDx = Math.abs(dx), absDy = Math.abs(dy);
 
+  if (absDy > 20) {
+    const useSameSide = absDx < halfW + targetHalfW + sourceGap + targetGap;
+    const sourceDir = dx >= 0 ? 1 : -1;
+    const targetDir = useSameSide ? sourceDir : -sourceDir;
+    const startX = sourceX + sourceDir * halfW;
+    const startY = sourceY;
+    const endX = targetX + targetDir * targetHalfW;
+    const endY = targetY;
+    const curveStrength = Math.max(
+      80,
+      Math.min(260, Math.abs(endY - startY) * 0.45 + Math.abs(endX - startX) * 0.18),
+    );
+
+    return `M ${startX} ${startY} C ${startX + sourceDir * curveStrength} ${startY}, ${endX + targetDir * curveStrength} ${endY}, ${endX} ${endY}`;
+  }
+
   let startX: number, startY: number, endX: number, endY: number;
   let horizontal: boolean;
 
@@ -219,6 +278,31 @@ function computeEdgePath(
 
   const waypoints = computeBypassWaypoints(startX, startY, endX, endY, obstacles);
   return buildSmoothPath(startX, startY, endX, endY, waypoints, curveStrength, horizontal, dirSign);
+}
+
+type GroupEdgeRect = { x: number; y: number; width: number; height: number };
+
+function computeClosestGroupEdgePath(
+  source: GroupEdgeRect,
+  target: GroupEdgeRect,
+  sourceGap = 10,
+  targetGap = 22
+): string {
+  const dx = target.x - source.x;
+  const dy = target.y - source.y;
+  const useSameSide = Math.abs(dx) < (source.width + target.width) / 2 + sourceGap + targetGap;
+  const sourceDir = dx >= 0 ? 1 : -1;
+  const targetDir = useSameSide ? sourceDir : -sourceDir;
+  const startX = source.x + sourceDir * source.width / 2;
+  const startY = source.y;
+  const endX = target.x + targetDir * target.width / 2;
+  const endY = target.y;
+  const curveStrength = Math.max(
+    100,
+    Math.min(340, Math.abs(dy) * 0.45 + Math.abs(endX - startX) * 0.18),
+  );
+
+  return `M ${startX} ${startY} C ${startX + sourceDir * curveStrength} ${startY}, ${endX + targetDir * curveStrength} ${endY}, ${endX} ${endY}`;
 }
 
 export function DocumentCanvas({
@@ -261,6 +345,45 @@ export function DocumentCanvas({
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionRect, setSelectionRect] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
   const selectionStartRef = useRef({ x: 0, y: 0 });
+  const [isLayerSidebarOpen, setIsLayerSidebarOpen] = useState(true);
+  const [layerSidebarWidth, setLayerSidebarWidth] = useState(LAYER_SIDEBAR_DEFAULT_WIDTH);
+  const cascadeDragStartRef = useRef<{
+    id: number;
+    groupPositions: Record<number, { x: number; y: number }>;
+    docPositions: Record<number, { x: number; y: number }>;
+  } | null>(null);
+
+  const handleLayerSidebarResizeStart = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = e.clientX;
+    const startWidth = layerSidebarWidth;
+    let latestWidth = startWidth;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      latestWidth = startWidth + event.clientX - startX;
+      setLayerSidebarWidth(
+        Math.max(
+          LAYER_SIDEBAR_MIN_DRAG_WIDTH,
+          Math.min(LAYER_SIDEBAR_MAX_WIDTH, latestWidth),
+        ),
+      );
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+
+      if (latestWidth <= LAYER_SIDEBAR_CLOSE_WIDTH) {
+        setIsLayerSidebarOpen(false);
+        setLayerSidebarWidth(LAYER_SIDEBAR_DEFAULT_WIDTH);
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }, [layerSidebarWidth]);
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -546,7 +669,7 @@ export function DocumentCanvas({
               if (docBounds.length > 0) {
                 groupLeft = Math.min(...docBounds.map(b => b.left)) - GROUP_PADDING;
                 groupRight = Math.max(...docBounds.map(b => b.right)) + GROUP_PADDING;
-                groupTop = Math.min(...docBounds.map(b => b.top)) - GROUP_HEADER;
+                groupTop = Math.min(...docBounds.map(b => b.top)) - GROUP_HEADER - GROUP_CONTENT_GAP;
                 groupBottom = Math.max(...docBounds.map(b => b.bottom)) + GROUP_PADDING;
               }
             }
@@ -594,15 +717,17 @@ export function DocumentCanvas({
 
   const getDocumentPosition = useCallback((doc: Document, index: number, width: number) => {
     if (doc.x != null && doc.y != null && (doc.x !== 100 || doc.y !== 100)) {
-      return { x: doc.x, y: doc.y };
+      return { x: clampDocumentXToMonth(doc, doc.x), y: doc.y };
     }
-    const colWidth = DOC_WIDTH + 40;
-    const rowHeight = DOC_HEIGHT + 40;
+    const colWidth = DOC_WIDTH + DOC_GAP_X;
+    const rowHeight = DOC_HEIGHT + DOC_GAP_Y;
     const cols = Math.max(1, Math.floor((width - 100) / colWidth));
     const row = Math.floor(index / cols);
     const col = index % cols;
+    const { year, month } = getDocumentYearMonth(doc);
+    const defaultX = getMonthCenterX(year, month) + (col - Math.floor(cols / 2)) * colWidth;
     return {
-      x: 180 + col * colWidth,
+      x: clampDocumentXToMonth(doc, defaultX),
       y: 120 + row * rowHeight,
     };
   }, []);
@@ -649,12 +774,81 @@ export function DocumentCanvas({
   );
 
   const handleDocDragMove = useCallback((id: number, x: number, y: number) => {
-    setDocPositions(prev => ({ ...prev, [id]: { x, y } }));
-  }, []);
+    const doc = documents.find((item) => item.id === id);
+    const nextX = doc ? clampDocumentXToMonth(doc, x) : x;
+    setDocPositions(prev => ({ ...prev, [id]: { x: nextX, y } }));
+  }, [documents]);
+
+  const getGroupCascadeIds = useCallback((groupId: number) => {
+    const groupIds = new Set<number>([groupId]);
+    let changed = true;
+
+    while (changed) {
+      changed = false;
+      groups.forEach((group) => {
+        if (group.parentId != null && groupIds.has(group.parentId) && !groupIds.has(group.id)) {
+          groupIds.add(group.id);
+          changed = true;
+        }
+      });
+    }
+
+    const docIds = documents
+      .filter((doc) => doc.groupId != null && groupIds.has(doc.groupId))
+      .map((doc) => doc.id);
+
+    return { groupIds, docIds };
+  }, [documents, groups]);
+
+  const handleGroupDragMove = useCallback((id: number, x: number, y: number, prevX: number, prevY: number) => {
+    const deltaX = x - prevX;
+    const deltaY = y - prevY;
+    const { groupIds, docIds } = getGroupCascadeIds(id);
+
+    if (cascadeDragStartRef.current?.id !== id) {
+      cascadeDragStartRef.current = {
+        id,
+        groupPositions: { ...groupPositions, [id]: { x: prevX, y: prevY } },
+        docPositions: { ...docPositions },
+      };
+    }
+    const start = cascadeDragStartRef.current;
+
+    setGroupPositions((prev) => {
+      const next = { ...prev };
+      groupIds.forEach((groupId) => {
+        const base = groupId === id
+          ? { x: prevX, y: prevY }
+          : start.groupPositions[groupId];
+        if (base) {
+          next[groupId] = { x: base.x + deltaX, y: base.y + deltaY };
+        }
+      });
+      return next;
+    });
+
+    setDocPositions((prev) => {
+      const next = { ...prev };
+      docIds.forEach((docId) => {
+        const base = start.docPositions[docId];
+        if (base) {
+          const doc = documents.find((item) => item.id === docId);
+          const proposedX = base.x + deltaX;
+          next[docId] = {
+            x: doc ? clampDocumentXToMonth(doc, proposedX) : proposedX,
+            y: base.y + deltaY,
+          };
+        }
+      });
+      return next;
+    });
+  }, [docPositions, documents, getGroupCascadeIds, groupPositions]);
 
   // Handle multi-drag for documents
   const handleLocalPositionUpdate = (id: number, x: number, y: number, prevX: number, prevY: number) => {
-    const deltaX = x - prevX;
+    const activeDoc = documents.find((doc) => doc.id === id);
+    const clampedX = activeDoc ? clampDocumentXToMonth(activeDoc, x) : x;
+    const deltaX = clampedX - prevX;
     const deltaY = y - prevY;
     
     // If this document is part of multi-selection, move all selected items
@@ -662,15 +856,17 @@ export function DocumentCanvas({
       const newDocPositions = { ...docPositions };
       selectedDocIds.forEach(docId => {
         if (docId !== id && docPositions[docId]) {
-          const newX = docPositions[docId].x + deltaX;
+          const doc = documents.find((item) => item.id === docId);
+          const proposedX = docPositions[docId].x + deltaX;
+          const newX = doc ? clampDocumentXToMonth(doc, proposedX) : proposedX;
           const newY = docPositions[docId].y + deltaY;
           newDocPositions[docId] = { x: newX, y: newY };
           onUpdateDocumentPosition(docId, newX, newY);
         }
       });
-      newDocPositions[id] = { x, y };
+      newDocPositions[id] = { x: clampedX, y };
       setDocPositions(newDocPositions);
-      onUpdateDocumentPosition(id, x, y, prevX, prevY);
+      onUpdateDocumentPosition(id, clampedX, y, prevX, prevY);
       
       // Also move selected groups
       if (selectedGroupIds.size > 0) {
@@ -686,8 +882,8 @@ export function DocumentCanvas({
         setGroupPositions(newGroupPositions);
       }
     } else {
-      setDocPositions(prev => ({ ...prev, [id]: { x, y } }));
-      onUpdateDocumentPosition(id, x, y, prevX, prevY);
+      setDocPositions(prev => ({ ...prev, [id]: { x: clampedX, y } }));
+      onUpdateDocumentPosition(id, clampedX, y, prevX, prevY);
     }
   };
 
@@ -695,6 +891,9 @@ export function DocumentCanvas({
   const handleGroupPositionUpdate = (id: number, x: number, y: number, prevX: number, prevY: number) => {
     const deltaX = x - prevX;
     const deltaY = y - prevY;
+    const { groupIds: cascadeGroupIds, docIds: cascadeDocIds } = getGroupCascadeIds(id);
+    const cascadeStart = cascadeDragStartRef.current?.id === id ? cascadeDragStartRef.current : null;
+    cascadeDragStartRef.current = null;
     
     // If this group is part of multi-selection, move all selected items
     if (selectedGroupIds.has(id) && (selectedGroupIds.size > 1 || selectedDocIds.size > 0)) {
@@ -716,7 +915,9 @@ export function DocumentCanvas({
         const newDocPositions = { ...docPositions };
         selectedDocIds.forEach(docId => {
           if (docPositions[docId]) {
-            const newX = docPositions[docId].x + deltaX;
+            const doc = documents.find((item) => item.id === docId);
+            const proposedX = docPositions[docId].x + deltaX;
+            const newX = doc ? clampDocumentXToMonth(doc, proposedX) : proposedX;
             const newY = docPositions[docId].y + deltaY;
             newDocPositions[docId] = { x: newX, y: newY };
             onUpdateDocumentPosition(docId, newX, newY);
@@ -725,7 +926,34 @@ export function DocumentCanvas({
         setDocPositions(newDocPositions);
       }
     } else {
-      setGroupPositions(prev => ({ ...prev, [id]: { x, y } }));
+      setGroupPositions(prev => {
+        const next = { ...prev, [id]: { x, y } };
+        cascadeGroupIds.forEach(groupId => {
+          const base = cascadeStart?.groupPositions[groupId] ?? prev[groupId];
+          if (groupId !== id && base) {
+            const newX = base.x + deltaX;
+            const newY = base.y + deltaY;
+            next[groupId] = { x: newX, y: newY };
+            onUpdateGroupPosition(groupId, newX, newY);
+          }
+        });
+        return next;
+      });
+      setDocPositions(prev => {
+        const next = { ...prev };
+        cascadeDocIds.forEach(docId => {
+          const base = cascadeStart?.docPositions[docId] ?? prev[docId];
+          if (base) {
+            const doc = documents.find((item) => item.id === docId);
+            const proposedX = base.x + deltaX;
+            const newX = doc ? clampDocumentXToMonth(doc, proposedX) : proposedX;
+            const newY = base.y + deltaY;
+            next[docId] = { x: newX, y: newY };
+            onUpdateDocumentPosition(docId, newX, newY);
+          }
+        });
+        return next;
+      });
       onUpdateGroupPosition(id, x, y, prevX, prevY);
     }
   };
@@ -843,11 +1071,6 @@ export function DocumentCanvas({
     }
   };
 
-  const TIMELINE_MONTH_WIDTH = 800;
-  const TIMELINE_OFFSET_X = 150;
-  const TIMELINE_BASE_YEAR = 2026;
-  const TIMELINE_BASE_MONTH = 1;
-
   const timelineStartMonth = TIMELINE_BASE_MONTH;
   const timelineEndMonth = 12;
 
@@ -865,10 +1088,13 @@ export function DocumentCanvas({
       onAuxClick={(e) => e.preventDefault()}
       data-testid="document-canvas"
     >
+      {isLayerSidebarOpen ? (
       <aside
-        className="absolute left-4 top-16 w-72 max-h-[calc(100%-8rem)] overflow-y-auto rounded-md border bg-card/95 shadow-lg backdrop-blur-sm"
-        style={{ zIndex: 22 }}
+        className="absolute left-4 top-16 max-h-[calc(100%-8rem)] overflow-y-auto rounded-md border bg-card/95 shadow-lg backdrop-blur-sm"
+        style={{ zIndex: 22, width: layerSidebarWidth }}
         data-testid="group-layer-sidebar"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b px-3 py-2">
           <div className="flex items-center justify-between gap-3">
@@ -925,7 +1151,33 @@ export function DocumentCanvas({
             </div>
           ))}
         </div>
+        <div
+          className="absolute inset-y-0 right-0 w-2 cursor-ew-resize rounded-r-md hover:bg-primary/20"
+          onMouseDown={handleLayerSidebarResizeStart}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize layer sidebar"
+          data-testid="layer-sidebar-resize-handle"
+        />
       </aside>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="absolute left-4 top-16 h-9 w-9 bg-card/95 shadow-lg backdrop-blur-sm"
+          style={{ zIndex: 22 }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            setLayerSidebarWidth(LAYER_SIDEBAR_DEFAULT_WIDTH);
+            setIsLayerSidebarOpen(true);
+          }}
+          data-testid="button-open-layer-sidebar"
+        >
+          <PanelLeftIcon className="h-4 w-4" />
+        </Button>
+      )}
 
       {/* Fixed timeline header at top */}
       <TimelineHeader
@@ -1061,8 +1313,8 @@ export function DocumentCanvas({
             });
           })()}
 
-          {/* Group-to-group edges (visible at Level 2+: zoom >= ZOOM_L1) */}
-          {zoom >= ZOOM_L1 && groupEdges.map((edge) => {
+          {/* Group-to-group edges (visible once child groups are visible) */}
+          {zoom >= ZOOM_L2 && groupEdges.map((edge) => {
             const sourceGroup = groups.find(g => g.id === edge.sourceGroupId);
             const targetGroup = groups.find(g => g.id === edge.targetGroupId);
             if (!sourceGroup || !targetGroup) return null;
@@ -1074,28 +1326,39 @@ export function DocumentCanvas({
                 const cx = cgPos ? cgPos.x : childGroup.x;
                 const cy = cgPos ? cgPos.y + TIMELINE_GAP : (childGroup.y ?? 0) + TIMELINE_GAP;
                 const w = DOC_WIDTH + GROUP_PADDING * 2;
-                const h = DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING;
+                const h = DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
                 return { centerX: cx, centerY: cy, width: w, height: h };
               }
               let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
               for (const d of childDocs) {
-                if (d.x != null && d.y != null) {
-                  mnX = Math.min(mnX, d.x - DOC_WIDTH / 2);
-                  mxX = Math.max(mxX, d.x + DOC_WIDTH / 2);
-                  mnY = Math.min(mnY, d.y - DOC_HEIGHT / 2);
-                  mxY = Math.max(mxY, d.y + DOC_HEIGHT / 2);
+                const docPos = docPositions[d.id];
+                const docX = docPos?.x ?? d.x;
+                const docY = docPos?.y ?? d.y;
+                if (docX != null && docY != null) {
+                  mnX = Math.min(mnX, docX - DOC_WIDTH / 2);
+                  mxX = Math.max(mxX, docX + DOC_WIDTH / 2);
+                  mnY = Math.min(mnY, docY - DOC_HEIGHT / 2);
+                  mxY = Math.max(mxY, docY + DOC_HEIGHT / 2);
                 }
               }
               if (mnX === Infinity) {
                 const cgPos = groupPositions[childGroup.id];
                 const cx = cgPos ? cgPos.x : childGroup.x;
                 const cy = cgPos ? cgPos.y + TIMELINE_GAP : (childGroup.y ?? 0) + TIMELINE_GAP;
-                return { centerX: cx, centerY: cy, width: DOC_WIDTH + GROUP_PADDING * 2, height: DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING };
+                return {
+                  centerX: cx,
+                  centerY: cy,
+                  width: DOC_WIDTH + GROUP_PADDING * 2,
+                  height: DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
+                };
               }
               const w = Math.max(DOC_WIDTH + GROUP_PADDING * 2, (mxX - mnX) + GROUP_PADDING * 2);
-              const h = Math.max(DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING, (mxY - mnY) + GROUP_HEADER + GROUP_PADDING);
+              const h = Math.max(
+                DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
+                (mxY - mnY) + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
+              );
               const topLeftX = mnX - GROUP_PADDING;
-              const topLeftY = mnY - GROUP_HEADER;
+              const topLeftY = mnY - GROUP_HEADER - GROUP_CONTENT_GAP;
               return { centerX: topLeftX + w / 2, centerY: topLeftY + h / 2, width: w, height: h };
             };
 
@@ -1121,14 +1384,14 @@ export function DocumentCanvas({
                     mxY = Math.max(mxY, item.y + item.h / 2);
                   }
                   autoW = (mxX - mnX) + GROUP_PADDING * 2;
-                  autoH = (mxY - mnY) + GROUP_HEADER + GROUP_PADDING;
+                  autoH = (mxY - mnY) + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
                   const topLeftX = mnX - GROUP_PADDING;
-                  const topLeftY = mnY - GROUP_HEADER;
+                  const topLeftY = mnY - GROUP_HEADER - GROUP_CONTENT_GAP;
                   cx = topLeftX + autoW / 2;
                   cy = topLeftY + autoH / 2;
                 } else {
                   autoW = DOC_WIDTH + GROUP_PADDING * 2;
-                  autoH = DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING;
+                  autoH = DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
                   cx = pos.x;
                   cy = pos.y + TIMELINE_GAP;
                 }
@@ -1142,7 +1405,7 @@ export function DocumentCanvas({
                   cy = cb.centerY;
                 } else {
                   autoW = DOC_WIDTH + GROUP_PADDING * 2;
-                  autoH = DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING;
+                  autoH = DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
                   cx = pos.x;
                   cy = pos.y + TIMELINE_GAP;
                 }
@@ -1151,8 +1414,8 @@ export function DocumentCanvas({
               return {
                 x: cx,
                 y: cy,
-                width: group.manualWidth ?? autoW,
-                height: group.manualHeight ?? autoH
+                width: autoW,
+                height: autoH
               };
             };
             
@@ -1160,28 +1423,7 @@ export function DocumentCanvas({
             const targetCenter = getGroupCenter(targetGroup);
             if (!sourceCenter || !targetCenter) return null;
 
-            const groupObstacles: ObstacleRect[] = groups
-              .filter(g => g.id !== edge.sourceGroupId && g.id !== edge.targetGroupId)
-              .map(g => {
-                const gc = getGroupCenter(g);
-                if (!gc) return null;
-                return {
-                  id: g.id,
-                  left: gc.x - gc.width / 2 - 10,
-                  top: gc.y - gc.height / 2 - 10,
-                  right: gc.x + gc.width / 2 + 10,
-                  bottom: gc.y + gc.height / 2 + 10,
-                };
-              })
-              .filter(Boolean) as ObstacleRect[];
-
-            const pathD = computeEdgePath(
-              sourceCenter.x, sourceCenter.y,
-              targetCenter.x, targetCenter.y,
-              sourceCenter.width / 2, sourceCenter.height / 2,
-              targetCenter.width / 2, targetCenter.height / 2,
-              groupObstacles, 600, 10, 26
-            );
+            const pathD = computeClosestGroupEdgePath(sourceCenter, targetCenter);
             
             const edgeColor = edge.edgeType === "depends" 
               ? "hsl(var(--destructive) / 0.85)" 
@@ -1196,22 +1438,150 @@ export function DocumentCanvas({
                   d={pathD}
                   fill="none"
                   stroke="hsl(var(--background))"
-                  strokeWidth="8"
+                  strokeWidth="5"
                   strokeLinecap="round"
                 />
                 <path
                   d={pathD}
                   fill="none"
                   stroke={edgeColor}
-                  strokeWidth="3.5"
+                  strokeWidth="2.25"
                   strokeLinecap="round"
-                  strokeOpacity="0.6"
+                  strokeOpacity="0.75"
                   strokeDasharray={edge.edgeType === "related" ? "6,4" : undefined}
                   markerEnd={`url(#${markerId})`}
                 />
               </g>
             );
           })}
+
+          {/* Top-level workflow arrows, inferred from the visible major-group order. */}
+          {zoom >= ZOOM_L1 && (() => {
+            const getChildBounds = (childGroup: DocumentGroup) => {
+              const childDocs = documents.filter((doc) => doc.groupId === childGroup.id);
+              if (childDocs.length === 0) {
+                const pos = groupPositions[childGroup.id];
+                if (!pos) return null;
+                return {
+                  x: pos.x,
+                  y: pos.y + TIMELINE_GAP,
+                  width: DOC_WIDTH + GROUP_PADDING * 2,
+                  height: DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
+                };
+              }
+
+              let minX = Infinity;
+              let minY = Infinity;
+              let maxX = -Infinity;
+              let maxY = -Infinity;
+              childDocs.forEach((doc) => {
+                const pos = docPositions[doc.id];
+                if (!pos) return;
+                minX = Math.min(minX, pos.x - DOC_WIDTH / 2);
+                maxX = Math.max(maxX, pos.x + DOC_WIDTH / 2);
+                minY = Math.min(minY, pos.y - DOC_HEIGHT / 2);
+                maxY = Math.max(maxY, pos.y + DOC_HEIGHT / 2);
+              });
+
+              if (minX === Infinity) return null;
+              const width = (maxX - minX) + GROUP_PADDING * 2;
+              const height = (maxY - minY) + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
+              const topLeftX = minX - GROUP_PADDING;
+              const topLeftY = minY - GROUP_HEADER - GROUP_CONTENT_GAP;
+              return {
+                x: topLeftX + width / 2,
+                y: topLeftY + height / 2,
+                width,
+                height,
+              };
+            };
+
+            const getTopBounds = (group: DocumentGroup) => {
+              const children = groups.filter((child) => child.parentId === group.id);
+              const directDocs = documents.filter((doc) => doc.groupId === group.id);
+              const items: GroupEdgeRect[] = [];
+
+              children.forEach((child) => {
+                const bounds = getChildBounds(child);
+                if (bounds) items.push(bounds);
+              });
+
+              directDocs.forEach((doc) => {
+                const pos = docPositions[doc.id];
+                if (pos) {
+                  items.push({ x: pos.x, y: pos.y, width: DOC_WIDTH, height: DOC_HEIGHT });
+                }
+              });
+
+              if (items.length === 0) {
+                const pos = groupPositions[group.id];
+                if (!pos) return null;
+                return {
+                  x: pos.x,
+                  y: pos.y + TIMELINE_GAP,
+                  width: DOC_WIDTH + GROUP_PADDING * 2,
+                  height: DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
+                };
+              }
+
+              let minX = Infinity;
+              let minY = Infinity;
+              let maxX = -Infinity;
+              let maxY = -Infinity;
+              items.forEach((item) => {
+                minX = Math.min(minX, item.x - item.width / 2);
+                maxX = Math.max(maxX, item.x + item.width / 2);
+                minY = Math.min(minY, item.y - item.height / 2);
+                maxY = Math.max(maxY, item.y + item.height / 2);
+              });
+
+              const width = (maxX - minX) + GROUP_PADDING * 2;
+              const height = (maxY - minY) + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
+              const topLeftX = minX - GROUP_PADDING;
+              const topLeftY = minY - GROUP_HEADER - GROUP_CONTENT_GAP;
+              return {
+                x: topLeftX + width / 2,
+                y: topLeftY + height / 2,
+                width,
+                height,
+              };
+            };
+
+            const topGroups = groups
+              .filter((group) => group.parentId === null)
+              .map((group) => ({ group, bounds: getTopBounds(group) }))
+              .filter((item): item is { group: DocumentGroup; bounds: GroupEdgeRect } => item.bounds !== null)
+              .sort((a, b) => {
+                if (Math.abs(a.bounds.y - b.bounds.y) > 8) return a.bounds.y - b.bounds.y;
+                return a.bounds.x - b.bounds.x;
+              });
+
+            return topGroups.slice(0, -1).map((item, index) => {
+              const next = topGroups[index + 1];
+              const pathD = computeClosestGroupEdgePath(item.bounds, next.bounds, 18, 26);
+
+              return (
+                <g key={`major-workflow-${item.group.id}-${next.group.id}`}>
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke="hsl(var(--background))"
+                    strokeWidth="7"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeOpacity="0.75"
+                    markerEnd="url(#arrow-group-flow)"
+                  />
+                </g>
+              );
+            });
+          })()}
         </svg>
 
         {/* Selection rectangle */}
@@ -1245,6 +1615,7 @@ export function DocumentCanvas({
               childGroups={childGroups}
               allDocuments={documents}
               docPositions={docPositions}
+              groupPositions={groupPositions}
               x={pos.x}
               y={pos.y + TIMELINE_GAP}
               zoom={zoom}
@@ -1254,6 +1625,7 @@ export function DocumentCanvas({
               isSpacePressed={isSpacePressed}
               onSelect={handleGroupSelect}
               onToggleExpand={onToggleGroupExpand}
+              onDragMove={handleGroupDragMove}
               onDragEnd={handleGroupPositionUpdate}
               onResize={onResizeGroup}
               onEdit={onEditGroup}
@@ -1276,6 +1648,7 @@ export function DocumentCanvas({
               childGroups={[]}
               allDocuments={documents}
               docPositions={docPositions}
+              groupPositions={groupPositions}
               x={pos.x}
               y={pos.y + TIMELINE_GAP}
               zoom={zoom}
@@ -1285,6 +1658,7 @@ export function DocumentCanvas({
               isSpacePressed={isSpacePressed}
               onSelect={handleGroupSelect}
               onToggleExpand={onToggleGroupExpand}
+              onDragMove={handleGroupDragMove}
               onDragEnd={handleGroupPositionUpdate}
               onResize={onResizeGroup}
               onEdit={onEditGroup}
@@ -1354,28 +1728,6 @@ export function DocumentCanvas({
         onNavigate={handleMinimapNavigate}
       />
 
-      <div className="absolute bottom-4 left-[19rem] bg-card/90 backdrop-blur-sm border rounded-md px-3 py-2 shadow-sm" style={{ zIndex: 20 }} data-testid="edge-legend">
-        <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 tracking-wide">연결선 의미</p>
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="hsl(var(--primary))" strokeWidth="3" strokeOpacity="0.7" strokeLinecap="round" /><path d="M 18 1 L 27 5 L 18 9 Z" fill="hsl(var(--primary))" fillOpacity="0.7" stroke="none" /></svg>
-            <span className="text-[10px] text-foreground/70">흐름 (순차적 진행)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="hsl(var(--destructive))" strokeWidth="3" strokeOpacity="0.6" strokeLinecap="round" /><path d="M 18 1 L 27 5 L 18 9 Z" fill="hsl(var(--destructive))" fillOpacity="0.6" stroke="none" /></svg>
-            <span className="text-[10px] text-foreground/70">의존 (선행 필요)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="hsl(142, 55%, 42%)" strokeWidth="3" strokeOpacity="0.7" strokeLinecap="round" /><path d="M 18 1 L 27 5 L 18 9 Z" fill="hsl(142, 55%, 42%)" fillOpacity="0.7" stroke="none" /></svg>
-            <span className="text-[10px] text-foreground/70">상위 (계층 관계)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <svg width="30" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="hsl(var(--muted-foreground))" strokeWidth="2.5" strokeOpacity="0.45" strokeDasharray="4,3" strokeLinecap="round" /><circle cx="27" cy="5" r="3" fill="hsl(var(--muted-foreground))" fillOpacity="0.5" /></svg>
-            <span className="text-[10px] text-foreground/70">관련 (참고 연관)</span>
-          </div>
-        </div>
-      </div>
-
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-card/90 backdrop-blur-sm border rounded-lg p-1 shadow-lg" style={{ zIndex: 20 }}>
         <Button
           variant="ghost"
@@ -1417,9 +1769,6 @@ export function DocumentCanvas({
         </Button>
       </div>
 
-      <div className="absolute top-4 left-4 text-xs text-muted-foreground bg-card/80 backdrop-blur-sm px-2 py-1 rounded" style={{ zIndex: 20 }}>
-        스크롤: 상하이동 | Ctrl+스크롤: 확대/축소 | 스페이스+드래그: 자유이동
-      </div>
     </div>
   );
 }

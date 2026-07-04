@@ -1014,20 +1014,26 @@ export async function registerRoutes(
       const TIMELINE_START_MONTH = 1;
 
       // Layout constants
-      const DOC_WIDTH = 260;
-      const DOC_HEIGHT = 140;
-      const DOC_GAP_X = 30;
-      const DOC_GAP_Y = 40;
-      const GROUP_PADDING = 40;
-      const GROUP_HEADER = 60;
-      const CHILD_GROUP_GAP_Y = 80;
-      const TOP_GROUP_GAP_Y = 120;
+      const DOC_WIDTH = 380;
+      const DOC_HEIGHT = 190;
+      const DOC_GAP_X = 24;
+      const DOC_GAP_Y = 86;
+      const GROUP_PADDING = 36;
+      const GROUP_HEADER = 112;
+      const GROUP_CONTENT_GAP = 32;
+      const CHILD_GROUP_GAP_Y = 90;
+      const TOP_GROUP_GAP_Y = 150;
       const CANVAS_START_Y = 200;
       const MAX_DOCS_PER_ROW = 2;
 
       const getMonthCenterX = (year: number, month: number): number => {
         const monthIndex = (year - TIMELINE_START_YEAR) * 12 + month - TIMELINE_START_MONTH;
         return OFFSET_X + monthIndex * MONTH_WIDTH + MONTH_WIDTH / 2;
+      };
+
+      const getMonthLeftX = (year: number, month: number): number => {
+        const monthIndex = (year - TIMELINE_START_YEAR) * 12 + month - TIMELINE_START_MONTH;
+        return OFFSET_X + monthIndex * MONTH_WIDTH;
       };
 
       const getYearMonth = (date: Date | string | null): { year: number; month: number } => {
@@ -1083,15 +1089,24 @@ export async function registerRoutes(
 
         for (const [monthKey, monthDocs] of Object.entries(byMonth)) {
           const [yr, mo] = monthKey.split("-").map(Number);
-          const monthCx = getMonthCenterX(yr, mo);
-          const cols = Math.min(MAX_DOCS_PER_ROW, monthDocs.length);
+          const monthLeft = getMonthLeftX(yr, mo);
+          const availableWidth = MONTH_WIDTH - GROUP_PADDING * 2;
+          const fittingCols = Math.max(
+            1,
+            Math.floor((availableWidth + DOC_GAP_X) / (DOC_WIDTH + DOC_GAP_X)),
+          );
+          const cols = Math.min(MAX_DOCS_PER_ROW, fittingCols, monthDocs.length);
           const totalRowWidth = cols * DOC_WIDTH + (cols - 1) * DOC_GAP_X;
-          const startX = monthCx - totalRowWidth / 2 + DOC_WIDTH / 2;
+          const startX = monthLeft + GROUP_PADDING + (availableWidth - totalRowWidth) / 2 + DOC_WIDTH / 2;
 
           for (let i = 0; i < monthDocs.length; i++) {
             const col = i % cols;
             const row = Math.floor(i / cols);
-            const docX = startX + col * (DOC_WIDTH + DOC_GAP_X);
+            const proposedX = startX + col * (DOC_WIDTH + DOC_GAP_X);
+            const docX = Math.min(
+              monthLeft + MONTH_WIDTH - GROUP_PADDING - DOC_WIDTH / 2,
+              Math.max(monthLeft + GROUP_PADDING + DOC_WIDTH / 2, proposedX),
+            );
             const docY = baseY + row * (DOC_HEIGHT + DOC_GAP_Y) + DOC_HEIGHT / 2;
             positions[monthDocs[i].id] = { x: docX, y: docY };
             maxRows = Math.max(maxRows, row + 1);
@@ -1120,7 +1135,7 @@ export async function registerRoutes(
       for (const topGroup of topLevelGroups) {
         const children = childrenOf[topGroup.id] || [];
         const directDocs = documents.filter(d => d.groupId === topGroup.id);
-        let contentY = currentRowY + GROUP_HEADER;
+        let contentY = currentRowY + GROUP_HEADER + GROUP_CONTENT_GAP;
 
         // Position direct docs of the top-level group
         if (directDocs.length > 0) {
@@ -1131,19 +1146,19 @@ export async function registerRoutes(
 
         // Position child groups as sub-rows
         if (children.length > 0) {
-          if (directDocs.length > 0) contentY += 40;
+          if (directDocs.length > 0) contentY += 60;
 
           children.sort((a, b) => getWorkflowOrder(a.name) - getWorkflowOrder(b.name));
 
           for (const child of children) {
             const childDocs = documents.filter(d => d.groupId === child.id);
-            const childContentY = contentY + GROUP_HEADER;
+            const childContentY = contentY + GROUP_HEADER + GROUP_CONTENT_GAP;
 
             if (childDocs.length > 0) {
               const { maxRows, positions } = positionDocsInMonthColumns(childDocs, childContentY);
               Object.assign(allDocPositions, positions);
 
-              const childHeight = GROUP_HEADER + maxRows * (DOC_HEIGHT + DOC_GAP_Y) + GROUP_PADDING;
+              const childHeight = GROUP_HEADER + GROUP_CONTENT_GAP + maxRows * (DOC_HEIGHT + DOC_GAP_Y) + GROUP_PADDING;
 
               // Set child group center based on its document bounds
               const docXValues = childDocs.map(d => {
@@ -1158,7 +1173,7 @@ export async function registerRoutes(
 
               contentY += childHeight + CHILD_GROUP_GAP_Y;
             } else {
-              const emptyHeight = DOC_HEIGHT + GROUP_HEADER + GROUP_PADDING;
+              const emptyHeight = DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
               await storage.updateGroup(child.id, {
                 x: getMonthCenterX(2026, 2),
                 y: Math.round(contentY + emptyHeight / 2)
@@ -1274,19 +1289,26 @@ function calculateGroupedLayout(
   const TIMELINE_START_YEAR = 2026;
   const TIMELINE_START_MONTH = 1;
 
-  const DOC_WIDTH = 260;
-  const DOC_HEIGHT = 140;
-  const DOC_GAP_X = 30;
-  const DOC_GAP_Y = 40;
-  const GROUP_HEADER = 60;
-  const CHILD_GROUP_GAP_Y = 80;
-  const TOP_GROUP_GAP_Y = 120;
+  const DOC_WIDTH = 380;
+  const DOC_HEIGHT = 190;
+  const DOC_GAP_X = 24;
+  const DOC_GAP_Y = 86;
+  const GROUP_PADDING = 36;
+  const GROUP_HEADER = 112;
+  const GROUP_CONTENT_GAP = 32;
+  const CHILD_GROUP_GAP_Y = 90;
+  const TOP_GROUP_GAP_Y = 150;
   const CANVAS_START_Y = 200;
   const MAX_DOCS_PER_ROW = 2;
 
   function getMonthCenterX(year: number, month: number): number {
     const monthIndex = (year - TIMELINE_START_YEAR) * 12 + month - TIMELINE_START_MONTH;
     return OFFSET_X + monthIndex * MONTH_WIDTH + MONTH_WIDTH / 2;
+  }
+
+  function getMonthLeftX(year: number, month: number): number {
+    const monthIndex = (year - TIMELINE_START_YEAR) * 12 + month - TIMELINE_START_MONTH;
+    return OFFSET_X + monthIndex * MONTH_WIDTH;
   }
 
   function getYearMonth(date: Date | string | null): { year: number; month: number } {
@@ -1336,16 +1358,25 @@ function calculateGroupedLayout(
     let maxRows = 0;
     for (const [monthKey, monthDocs] of Object.entries(byMonth)) {
       const [yr, mo] = monthKey.split("-").map(Number);
-      const monthCx = getMonthCenterX(yr, mo);
-      const cols = Math.min(MAX_DOCS_PER_ROW, monthDocs.length);
+      const monthLeft = getMonthLeftX(yr, mo);
+      const availableWidth = MONTH_WIDTH - GROUP_PADDING * 2;
+      const fittingCols = Math.max(
+        1,
+        Math.floor((availableWidth + DOC_GAP_X) / (DOC_WIDTH + DOC_GAP_X)),
+      );
+      const cols = Math.min(MAX_DOCS_PER_ROW, fittingCols, monthDocs.length);
       const totalRowWidth = cols * DOC_WIDTH + (cols - 1) * DOC_GAP_X;
-      const startX = monthCx - totalRowWidth / 2 + DOC_WIDTH / 2;
+      const startX = monthLeft + GROUP_PADDING + (availableWidth - totalRowWidth) / 2 + DOC_WIDTH / 2;
 
       for (let i = 0; i < monthDocs.length; i++) {
         const col = i % cols;
         const row = Math.floor(i / cols);
+        const proposedX = startX + col * (DOC_WIDTH + DOC_GAP_X);
         documentPositions[monthDocs[i].id] = {
-          x: startX + col * (DOC_WIDTH + DOC_GAP_X),
+          x: Math.min(
+            monthLeft + MONTH_WIDTH - GROUP_PADDING - DOC_WIDTH / 2,
+            Math.max(monthLeft + GROUP_PADDING + DOC_WIDTH / 2, proposedX),
+          ),
           y: baseY + row * (DOC_HEIGHT + DOC_GAP_Y) + DOC_HEIGHT / 2,
           groupId
         };
@@ -1378,7 +1409,7 @@ function calculateGroupedLayout(
   for (const topGroup of topLevelGroups) {
     const children = childrenOf[topGroup.id] || [];
     const directDocs = documents.filter((d: any) => docToGroup[d.id] === topGroup.id);
-    let contentY = currentRowY + GROUP_HEADER;
+    let contentY = currentRowY + GROUP_HEADER + GROUP_CONTENT_GAP;
 
     if (directDocs.length > 0) {
       const { maxRows } = positionDocsInMonthColumns(directDocs, contentY, topGroup.id);
@@ -1386,16 +1417,16 @@ function calculateGroupedLayout(
     }
 
     if (children.length > 0) {
-      if (directDocs.length > 0) contentY += 40;
+      if (directDocs.length > 0) contentY += 60;
       children.sort((a: any, b: any) => getWorkflowOrder(a.name) - getWorkflowOrder(b.name));
 
       for (const child of children) {
         const childDocs = documents.filter((d: any) => docToGroup[d.id] === child.id);
-        const childContentY = contentY + GROUP_HEADER;
+        const childContentY = contentY + GROUP_HEADER + GROUP_CONTENT_GAP;
 
         if (childDocs.length > 0) {
           const { maxRows } = positionDocsInMonthColumns(childDocs, childContentY, child.id);
-          const childHeight = GROUP_HEADER + maxRows * (DOC_HEIGHT + DOC_GAP_Y) + 60;
+          const childHeight = GROUP_HEADER + GROUP_CONTENT_GAP + maxRows * (DOC_HEIGHT + DOC_GAP_Y) + GROUP_PADDING;
 
           const docXValues = childDocs.map((d: any) => {
             const p = documentPositions[d.id];
@@ -1405,7 +1436,7 @@ function calculateGroupedLayout(
           groupPositions[child.id] = { x: Math.round(centerX), y: Math.round(contentY + childHeight / 2) };
           contentY += childHeight + CHILD_GROUP_GAP_Y;
         } else {
-          const emptyHeight = DOC_HEIGHT + GROUP_HEADER + 60;
+          const emptyHeight = DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
           groupPositions[child.id] = { x: getMonthCenterX(2026, 2), y: Math.round(contentY + emptyHeight / 2) };
           contentY += emptyHeight + CHILD_GROUP_GAP_Y;
         }

@@ -7,3 +7,5 @@ vite.config.ts.*
 .env
 .env.local
 devserver-runtime*.log
+devserver.err.log
+devserver.log
