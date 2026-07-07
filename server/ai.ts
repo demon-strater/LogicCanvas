@@ -39,6 +39,26 @@ const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
+export function isAIConfigured(): boolean {
+  return Boolean(process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
+}
+
+export function getAIConfigStatus() {
+  return {
+    configured: isAIConfigured(),
+    provider: process.env.AI_INTEGRATIONS_OPENAI_API_KEY ? "ai-integrations" : process.env.OPENAI_API_KEY ? "openai" : null,
+    baseURLConfigured: Boolean(process.env.AI_INTEGRATIONS_OPENAI_BASE_URL),
+  };
+}
+
+function assertAIConfigured() {
+  if (!isAIConfigured()) {
+    const error = new Error("AI service is not configured. Set OPENAI_API_KEY or AI_INTEGRATIONS_OPENAI_API_KEY in the deployment environment.");
+    (error as Error & { code?: string }).code = "AI_NOT_CONFIGURED";
+    throw error;
+  }
+}
+
 const SYSTEM_PROMPT = `You are the LogicCanvas Engine, a specialized AI for Rhetorical Structure Analysis and Meta-cognitive Augmentation. Your primary goal is to deconstruct linear text into a non-linear rhetorical graph and serve as a Cognitive Mirror for the user.
 
 ## Step 1: Discourse Segmentation and RST Mapping
@@ -86,6 +106,8 @@ const VALID_NODE_TYPES: NodeType[] = ["concept", "claim", "evidence", "question"
 const VALID_EDGE_TYPES: EdgeType[] = ["related", "supports", "contradicts", "implies", "cause", "result", "elaboration", "contrast"];
 
 export async function parseDocumentWithAI(content: string): Promise<ParseResult> {
+  assertAIConfigured();
+
   const response = await openai.chat.completions.create({
     model: "gpt-5.2",
     messages: [
@@ -180,6 +202,8 @@ export async function assignDocumentToGroup(
   docContent: string,
   existingGroups: { id: number; name: string; description: string | null; parentId: number | null; color: string | null }[]
 ): Promise<GroupAssignmentResult> {
+  assertAIConfigured();
+
   const contentPreview = docContent.substring(0, 2000);
   
   const groupList = existingGroups.length > 0
@@ -294,6 +318,8 @@ const GROUP_COLORS = [
 ];
 
 export async function analyzeDocumentWorkflow(documents: Document[]): Promise<WorkflowAnalysisResult> {
+  assertAIConfigured();
+
   if (documents.length === 0) {
     return { relations: [], hierarchyLevels: {}, groups: [], groupRelations: [], summary: "No documents to analyze" };
   }

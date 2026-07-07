@@ -7,7 +7,7 @@ import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import { storage } from "./storage";
-import { parseDocumentWithAI, analyzeDocumentWorkflow, assignDocumentToGroup } from "./ai";
+import { parseDocumentWithAI, analyzeDocumentWorkflow, assignDocumentToGroup, getAIConfigStatus } from "./ai";
 import { listNotionPages, fetchNotionPageContent } from "./notion";
 import { syncNotionPages, getSyncStatus, setSyncEnabled, importSingleNotionPage } from "./notionSync";
 import { insertDocumentSchema, insertNodeSchema, insertEdgeSchema, insertTaskSchema, insertDocumentGroupSchema } from "@shared/schema";
@@ -87,6 +87,26 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  app.get("/api/health", async (_req, res) => {
+    const status = {
+      ok: true,
+      database: false,
+      ai: getAIConfigStatus(),
+      notionConfigured: Boolean(process.env.NOTION_API_KEY),
+      timestamp: new Date().toISOString(),
+    };
+
+    try {
+      await storage.getAllDocuments();
+      status.database = true;
+    } catch (error) {
+      status.ok = false;
+      console.error("Health check database error:", error);
+    }
+
+    res.status(status.ok ? 200 : 503).json(status);
+  });
 
   app.get("/api/download/planning-doc", (req, res) => {
     const filePath = path.resolve("LogicCanvas_기획서.docx");
@@ -334,8 +354,11 @@ export async function registerRoutes(
       }
 
       res.json(document);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error parsing document:", error);
+      if (error?.code === "AI_NOT_CONFIGURED") {
+        return res.status(503).json({ error: "AI 기능이 아직 설정되지 않았습니다. 배포 환경 변수에 OPENAI_API_KEY 또는 AI_INTEGRATIONS_OPENAI_API_KEY를 등록해야 합니다." });
+      }
       res.status(500).json({ error: "Failed to parse document" });
     }
   });
@@ -936,8 +959,11 @@ export async function registerRoutes(
         groupEdges,
         summary: analysis.summary
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error analyzing workflow:", error);
+      if (error?.code === "AI_NOT_CONFIGURED") {
+        return res.status(503).json({ error: "AI 기능이 아직 설정되지 않았습니다. 배포 환경 변수에 OPENAI_API_KEY 또는 AI_INTEGRATIONS_OPENAI_API_KEY를 등록해야 합니다." });
+      }
       res.status(500).json({ error: "Failed to analyze workflow" });
     }
   });
