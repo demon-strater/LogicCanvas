@@ -69,6 +69,21 @@ export default function Canvas() {
     }, 300);
   }, []);
 
+  const requestAIWorkflowGrouping = useCallback(() => {
+    window.setTimeout(async () => {
+      try {
+        await apiRequest("POST", "/api/analyze-workflow");
+        queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/document-edges"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/group-edges"] });
+      } catch (error) {
+        console.error("Auto workflow analysis failed:", error);
+        requestAutoRelayout();
+      }
+    }, 300);
+  }, [requestAutoRelayout]);
+
   const createDocumentMutation = useMutation({
     mutationFn: async ({ title, content, createdAt }: { title: string; content: string; createdAt?: string }) => {
       const summary = content.split("\n").filter((line) => line.trim()).slice(0, 3).join(" ").slice(0, 200);
@@ -79,7 +94,7 @@ export default function Canvas() {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
       queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
       setIsDocumentModalOpen(false);
-      requestAutoRelayout();
+      requestAIWorkflowGrouping();
       toast({ title: "문서가 추가되었습니다" });
     },
     onError: () => {
@@ -98,7 +113,11 @@ export default function Canvas() {
       queryClient.invalidateQueries({ queryKey: ["/api/document-edges"] });
       queryClient.invalidateQueries({ queryKey: ["/api/group-edges"] });
       setIsDocumentModalOpen(false);
-      requestAutoRelayout();
+      if (data.imported > 0) {
+        requestAIWorkflowGrouping();
+      } else {
+        requestAutoRelayout();
+      }
       toast({ title: `${data.imported}개의 노션 페이지를 가져왔습니다` });
     },
     onError: () => {
@@ -192,7 +211,8 @@ export default function Canvas() {
       queryClient.invalidateQueries({ queryKey: ["/api/document-edges"] });
       queryClient.invalidateQueries({ queryKey: ["/api/group-edges"] });
       queryClient.invalidateQueries({ queryKey: ["/api/notion/sync-status"] });
-      requestAutoRelayout();
+      if (data.imported > 0) requestAIWorkflowGrouping();
+      else requestAutoRelayout();
       if (data.imported > 0) {
         toast({ title: `노션 동기화 완료: ${data.imported}개 새 문서 가져옴` });
       } else {
