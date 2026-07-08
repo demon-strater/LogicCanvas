@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { DocumentGroup, Document } from "@shared/schema";
 
-const DOC_WIDTH = 380;
+const DOC_WIDTH = 340;
 const DOC_HEIGHT = 190;
 const GROUP_PADDING = 36;
 const GROUP_HEADER = 112;

@@ -4,7 +4,7 @@ import type { Document, DocumentGroup } from "@shared/schema";
 const MINIMAP_WIDTH = 180;
 const MINIMAP_HEIGHT = 120;
 const MINIMAP_PADDING = 12;
-const DOC_WIDTH = 380;
+const DOC_WIDTH = 340;
 const DOC_HEIGHT = 190;
 const GROUP_PADDING = 36;
 const GROUP_HEADER = 112;

@@ -29,14 +29,15 @@ type Props = {
 
 const MIN_ZOOM = 0.03;
 const MAX_ZOOM = 2;
-const ZOOM_STEP = 0.05;
+const ZOOM_STEP = 0.02;
+const WHEEL_ZOOM_SENSITIVITY = 0.0008;
 
 const ZOOM_L1 = 0.08;
 const ZOOM_L2 = 0.1;
 const ZOOM_L3 = 0.3;
 const ZOOM_L4 = 0.6;
 const PAN_SPEED = 1.5;
-const DOC_WIDTH = 380;
+const DOC_WIDTH = 340;
 const DOC_HEIGHT = 190;
 const DOC_GAP_X = 24;
 const DOC_GAP_Y = 86;
@@ -180,129 +181,175 @@ function computeBypassWaypoints(
   return [...beforeWps, wp, ...afterWps];
 }
 
-function buildSmoothPath(
-  startX: number, startY: number,
-  endX: number, endY: number,
-  waypoints: { x: number; y: number }[],
-  curveStrength: number,
-  horizontal: boolean,
-  dirSign: number
-): string {
-  if (waypoints.length === 0) {
-    if (horizontal) {
-      return `M ${startX} ${startY} C ${startX + dirSign * curveStrength} ${startY}, ${endX - dirSign * curveStrength} ${endY}, ${endX} ${endY}`;
-    } else {
-      return `M ${startX} ${startY} C ${startX} ${startY + dirSign * curveStrength}, ${endX} ${endY - dirSign * curveStrength}, ${endX} ${endY}`;
-    }
-  }
-
-  const allPts = [{ x: startX, y: startY }, ...waypoints, { x: endX, y: endY }];
-  let path = `M ${allPts[0].x} ${allPts[0].y}`;
-
-  for (let i = 0; i < allPts.length - 1; i++) {
-    const p0 = allPts[i];
-    const p1 = allPts[i + 1];
-    const segDist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-    const segCurve = Math.min(curveStrength, segDist * 0.4);
-    const sdx = p1.x - p0.x, sdy = p1.y - p0.y;
-    const segHoriz = Math.abs(sdx) >= Math.abs(sdy);
-
-    if (segHoriz) {
-      const d = sdx > 0 ? 1 : -1;
-      path += ` C ${p0.x + d * segCurve} ${p0.y}, ${p1.x - d * segCurve} ${p1.y}, ${p1.x} ${p1.y}`;
-    } else {
-      const d = sdy > 0 ? 1 : -1;
-      path += ` C ${p0.x} ${p0.y + d * segCurve}, ${p1.x} ${p1.y - d * segCurve}, ${p1.x} ${p1.y}`;
-    }
-  }
-
-  return path;
-}
-
 function computeEdgePath(
   sourceX: number, sourceY: number,
   targetX: number, targetY: number,
   halfW: number, halfH: number,
   targetHalfW: number, targetHalfH: number,
   obstacles: ObstacleRect[],
-  baseCurveDist: number = 400,
+  _baseCurveDist: number = 400,
   sourceGap: number = 6,
   targetGap: number = 16
 ): string {
-  const dx = targetX - sourceX, dy = targetY - sourceY;
-  const absDx = Math.abs(dx), absDy = Math.abs(dy);
-
-  if (absDy > 20) {
-    const useSameSide = absDx < halfW + targetHalfW + sourceGap + targetGap;
-    const sourceDir = dx >= 0 ? 1 : -1;
-    const targetDir = useSameSide ? sourceDir : -sourceDir;
-    const startX = sourceX + sourceDir * halfW;
-    const startY = sourceY;
-    const endX = targetX + targetDir * targetHalfW;
-    const endY = targetY;
-    const curveStrength = Math.max(
-      80,
-      Math.min(260, Math.abs(endY - startY) * 0.45 + Math.abs(endX - startX) * 0.18),
-    );
-
-    return `M ${startX} ${startY} C ${startX + sourceDir * curveStrength} ${startY}, ${endX + targetDir * curveStrength} ${endY}, ${endX} ${endY}`;
-  }
-
-  let startX: number, startY: number, endX: number, endY: number;
-  let horizontal: boolean;
-
-  if (absDx * (halfH * 2) > absDy * (halfW * 2)) {
-    horizontal = true;
-    if (dx > 0) {
-      startX = sourceX + halfW + sourceGap; startY = sourceY;
-      endX = targetX - targetHalfW - targetGap; endY = targetY;
-    } else {
-      startX = sourceX - halfW - sourceGap; startY = sourceY;
-      endX = targetX + targetHalfW + targetGap; endY = targetY;
-    }
-  } else {
-    horizontal = false;
-    if (dy > 0) {
-      startX = sourceX; startY = sourceY + halfH + sourceGap;
-      endX = targetX; endY = targetY - targetHalfH - targetGap;
-    } else {
-      startX = sourceX; startY = sourceY - halfH - sourceGap;
-      endX = targetX; endY = targetY + targetHalfH + targetGap;
-    }
-  }
-
-  const dist = Math.hypot(endX - startX, endY - startY);
-  const t = Math.min(1, dist / baseCurveDist);
-  const curveStrength = 30 + t * 50;
-  const dirSign = horizontal ? (dx > 0 ? 1 : -1) : (dy > 0 ? 1 : -1);
-
-  const waypoints = computeBypassWaypoints(startX, startY, endX, endY, obstacles);
-  return buildSmoothPath(startX, startY, endX, endY, waypoints, curveStrength, horizontal, dirSign);
+  return computeClosestGroupEdgePath(
+    { x: sourceX, y: sourceY, width: halfW * 2, height: halfH * 2 },
+    { x: targetX, y: targetY, width: targetHalfW * 2, height: targetHalfH * 2 },
+    obstacles,
+    sourceGap,
+    targetGap,
+  );
 }
 
 type GroupEdgeRect = { x: number; y: number; width: number; height: number };
+type EdgeSide = "left" | "right" | "top" | "bottom";
+type EdgePoint = { x: number; y: number; portX: number; portY: number; side: EdgeSide };
+
+function rectToObstacle(rect: GroupEdgeRect, id?: number): ObstacleRect {
+  return {
+    id,
+    left: rect.x - rect.width / 2,
+    top: rect.y - rect.height / 2,
+    right: rect.x + rect.width / 2,
+    bottom: rect.y + rect.height / 2,
+  };
+}
+
+function getGroupEdgeAnchors(rect: GroupEdgeRect, _gap: number): EdgePoint[] {
+  const left = rect.x - rect.width / 2;
+  const right = rect.x + rect.width / 2;
+  const top = rect.y - rect.height / 2;
+  const bottom = rect.y + rect.height / 2;
+
+  return [
+    { x: left, y: rect.y, portX: left, portY: rect.y, side: "left" },
+    { x: right, y: rect.y, portX: right, portY: rect.y, side: "right" },
+    { x: rect.x, y: top, portX: rect.x, portY: top, side: "top" },
+    { x: rect.x, y: bottom, portX: rect.x, portY: bottom, side: "bottom" },
+  ];
+}
+
+function directionPenalty(side: EdgeSide, dx: number, dy: number, isSource: boolean): number {
+  const primaryHorizontal = Math.abs(dx) >= Math.abs(dy);
+  if (isSource) {
+    if (primaryHorizontal) return (dx < 0 && side === "left") || (dx > 0 && side === "right") ? 0 : 80;
+    return (dy < 0 && side === "top") || (dy > 0 && side === "bottom") ? 0 : 80;
+  }
+
+  if (primaryHorizontal) return (dx < 0 && side === "right") || (dx > 0 && side === "left") ? 0 : 80;
+  return (dy < 0 && side === "bottom") || (dy > 0 && side === "top") ? 0 : 80;
+}
+
+function routeLength(points: { x: number; y: number }[]): number {
+  let length = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    length += Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
+  }
+  return length;
+}
+
+function routeCrossesObstacles(points: { x: number; y: number }[], obstacles: ObstacleRect[]): boolean {
+  for (let i = 0; i < points.length - 1; i++) {
+    if (obstacles.some((obs) => lineSegIntersectsRect(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y, obs))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function orthogonalizePoints(points: { x: number; y: number }[]): { x: number; y: number }[] {
+  const result: { x: number; y: number }[] = [];
+
+  for (const point of points) {
+    const prev = result[result.length - 1];
+    if (!prev) {
+      result.push(point);
+      continue;
+    }
+
+    if (point.x === prev.x || point.y === prev.y) {
+      if (point.x !== prev.x || point.y !== prev.y) result.push(point);
+      continue;
+    }
+
+    result.push({ x: point.x, y: prev.y }, point);
+  }
+
+  return result.filter((point, index, arr) => {
+    if (index === 0) return true;
+    const prev = arr[index - 1];
+    return point.x !== prev.x || point.y !== prev.y;
+  });
+}
+
+function buildOrthogonalRoutePath(
+  start: EdgePoint,
+  corePoints: { x: number; y: number }[],
+  end: EdgePoint
+): string {
+  const startPort = { x: start.portX, y: start.portY };
+  const endPort = { x: end.portX, y: end.portY };
+  const points = [
+    { x: start.x, y: start.y },
+    startPort,
+    ...corePoints.slice(1, -1),
+    endPort,
+    { x: end.x, y: end.y },
+  ];
+  const orthogonalPoints = orthogonalizePoints(points).filter((point, index, arr) => {
+    if (index === 0) return true;
+    const prev = arr[index - 1];
+    return point.x !== prev.x || point.y !== prev.y;
+  });
+
+  return orthogonalPoints
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+    .join(" ");
+}
 
 function computeClosestGroupEdgePath(
   source: GroupEdgeRect,
   target: GroupEdgeRect,
+  _obstacles: ObstacleRect[] = [],
   sourceGap = 10,
   targetGap = 22
 ): string {
-  const dx = target.x - source.x;
-  const dy = target.y - source.y;
-  const useSameSide = Math.abs(dx) < (source.width + target.width) / 2 + sourceGap + targetGap;
-  const sourceDir = dx >= 0 ? 1 : -1;
-  const targetDir = useSameSide ? sourceDir : -sourceDir;
-  const startX = source.x + sourceDir * source.width / 2;
-  const startY = source.y;
-  const endX = target.x + targetDir * target.width / 2;
-  const endY = target.y;
-  const curveStrength = Math.max(
-    100,
-    Math.min(340, Math.abs(dy) * 0.45 + Math.abs(endX - startX) * 0.18),
-  );
+  const sourceAnchors = getGroupEdgeAnchors(source, sourceGap);
+  const targetAnchors = getGroupEdgeAnchors(target, targetGap);
+  let bestRoute: { points: { x: number; y: number }[]; cost: number } | null = null;
 
-  return `M ${startX} ${startY} C ${startX + sourceDir * curveStrength} ${startY}, ${endX + targetDir * curveStrength} ${endY}, ${endX} ${endY}`;
+  for (const start of sourceAnchors) {
+    for (const end of targetAnchors) {
+      const startPoint = { x: start.x, y: start.y };
+      const endPoint = { x: end.x, y: end.y };
+      const routes: { x: number; y: number }[][] = [
+        [startPoint, { x: end.x, y: start.y }, endPoint],
+        [startPoint, { x: start.x, y: end.y }, endPoint],
+      ];
+
+      for (const points of routes) {
+        const normalizedPoints = points.filter((point, index, arr) => {
+          if (index === 0) return true;
+          const prev = arr[index - 1];
+          return point.x !== prev.x || point.y !== prev.y;
+        });
+
+        const bends = Math.max(0, normalizedPoints.length - 2);
+        const cost = routeLength(normalizedPoints) + bends * 0.001;
+
+        if (!bestRoute || cost < bestRoute.cost) {
+          bestRoute = { points: [start, ...normalizedPoints, end], cost };
+        }
+      }
+    }
+  }
+
+  if (bestRoute) {
+    const start = bestRoute.points[0] as EdgePoint;
+    const end = bestRoute.points[bestRoute.points.length - 1] as EdgePoint;
+    return buildOrthogonalRoutePath(start, bestRoute.points.slice(1, -1), end);
+  }
+
+  return "";
 }
 
 export function DocumentCanvas({
@@ -486,9 +533,8 @@ export function DocumentCanvas({
         const worldX = (mouseX - currentPan.x) / currentZoom;
         const worldY = (mouseY - currentPan.y) / currentZoom;
 
-        const zoomFactor = currentZoom < 0.15 ? 0.01 : ZOOM_STEP;
-        const delta = e.deltaY > 0 ? -zoomFactor : zoomFactor;
-        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, currentZoom + delta));
+        const zoomFactor = Math.exp(-e.deltaY * WHEEL_ZOOM_SENSITIVITY);
+        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, currentZoom * zoomFactor));
 
         const newPanX = mouseX - worldX * newZoom;
         const newPanY = mouseY - worldY * newZoom;
@@ -800,6 +846,48 @@ export function DocumentCanvas({
     return { groupIds, docIds };
   }, [documents, groups]);
 
+  const getDescendantDocuments = useCallback((groupId: number): Document[] => {
+    const childGroups = groups.filter((group) => group.parentId === groupId);
+    return [
+      ...documents.filter((doc) => doc.groupId === groupId),
+      ...childGroups.flatMap((group) => getDescendantDocuments(group.id)),
+    ];
+  }, [documents, groups]);
+
+  const clampGroupXToMonthRange = useCallback((
+    groupId: number,
+    x: number,
+    positions: Record<number, { x: number; y: number }> = docPositions
+  ) => {
+    const group = groups.find((item) => item.id === groupId);
+    const groupDocs = getDescendantDocuments(groupId);
+    if (groupDocs.length === 0) return x;
+
+    const monthLeft = Math.min(...groupDocs.map((doc) => {
+      const { year, month } = getDocumentYearMonth(doc);
+      return getMonthLeftX(year, month);
+    }));
+    const monthRight = Math.max(...groupDocs.map((doc) => {
+      const { year, month } = getDocumentYearMonth(doc);
+      return getMonthLeftX(year, month) + TIMELINE_MONTH_WIDTH;
+    }));
+
+    const docXs = groupDocs
+      .map((doc) => positions[doc.id]?.x)
+      .filter((value): value is number => typeof value === "number");
+    const contentWidth = docXs.length > 0
+      ? Math.max(DOC_WIDTH + GROUP_PADDING * 2, (Math.max(...docXs) - Math.min(...docXs)) + DOC_WIDTH + GROUP_PADDING * 2)
+      : DOC_WIDTH + GROUP_PADDING * 2;
+    const groupWidth = Math.max(group?.manualWidth ?? 0, contentWidth);
+    const minX = monthLeft + groupWidth / 2;
+    const maxX = monthRight - groupWidth / 2;
+
+    if (minX > maxX) {
+      return (monthLeft + monthRight) / 2;
+    }
+    return clamp(x, minX, maxX);
+  }, [docPositions, getDescendantDocuments, groups]);
+
   const handleGroupDragMove = useCallback((id: number, x: number, y: number, prevX: number, prevY: number) => {
     const deltaX = x - prevX;
     const deltaY = y - prevY;
@@ -821,7 +909,10 @@ export function DocumentCanvas({
           ? { x: prevX, y: prevY }
           : start.groupPositions[groupId];
         if (base) {
-          next[groupId] = { x: base.x + deltaX, y: base.y + deltaY };
+          next[groupId] = {
+            x: clampGroupXToMonthRange(groupId, base.x + deltaX),
+            y: base.y + deltaY,
+          };
         }
       });
       return next;
@@ -842,7 +933,7 @@ export function DocumentCanvas({
       });
       return next;
     });
-  }, [docPositions, documents, getGroupCascadeIds, groupPositions]);
+  }, [clampGroupXToMonthRange, docPositions, documents, getGroupCascadeIds, groupPositions]);
 
   // Handle multi-drag for documents
   const handleLocalPositionUpdate = (id: number, x: number, y: number, prevX: number, prevY: number) => {
@@ -873,7 +964,7 @@ export function DocumentCanvas({
         const newGroupPositions = { ...groupPositions };
         selectedGroupIds.forEach(groupId => {
           if (groupPositions[groupId]) {
-            const newX = groupPositions[groupId].x + deltaX;
+            const newX = clampGroupXToMonthRange(groupId, groupPositions[groupId].x + deltaX);
             const newY = groupPositions[groupId].y + deltaY;
             newGroupPositions[groupId] = { x: newX, y: newY };
             onUpdateGroupPosition(groupId, newX, newY);
@@ -900,15 +991,16 @@ export function DocumentCanvas({
       const newGroupPositions = { ...groupPositions };
       selectedGroupIds.forEach(groupId => {
         if (groupId !== id && groupPositions[groupId]) {
-          const newX = groupPositions[groupId].x + deltaX;
+          const newX = clampGroupXToMonthRange(groupId, groupPositions[groupId].x + deltaX);
           const newY = groupPositions[groupId].y + deltaY;
           newGroupPositions[groupId] = { x: newX, y: newY };
           onUpdateGroupPosition(groupId, newX, newY);
         }
       });
-      newGroupPositions[id] = { x, y };
+      const clampedGroupX = clampGroupXToMonthRange(id, x);
+      newGroupPositions[id] = { x: clampedGroupX, y };
       setGroupPositions(newGroupPositions);
-      onUpdateGroupPosition(id, x, y, prevX, prevY);
+      onUpdateGroupPosition(id, clampedGroupX, y, prevX, prevY);
       
       // Also move selected documents
       if (selectedDocIds.size > 0) {
@@ -927,11 +1019,12 @@ export function DocumentCanvas({
       }
     } else {
       setGroupPositions(prev => {
-        const next = { ...prev, [id]: { x, y } };
+        const clampedGroupX = clampGroupXToMonthRange(id, x);
+        const next = { ...prev, [id]: { x: clampedGroupX, y } };
         cascadeGroupIds.forEach(groupId => {
           const base = cascadeStart?.groupPositions[groupId] ?? prev[groupId];
           if (groupId !== id && base) {
-            const newX = base.x + deltaX;
+            const newX = clampGroupXToMonthRange(groupId, base.x + deltaX);
             const newY = base.y + deltaY;
             next[groupId] = { x: newX, y: newY };
             onUpdateGroupPosition(groupId, newX, newY);
@@ -954,7 +1047,7 @@ export function DocumentCanvas({
         });
         return next;
       });
-      onUpdateGroupPosition(id, x, y, prevX, prevY);
+      onUpdateGroupPosition(id, clampGroupXToMonthRange(id, x), y, prevX, prevY);
     }
   };
   
@@ -1423,7 +1516,12 @@ export function DocumentCanvas({
             const targetCenter = getGroupCenter(targetGroup);
             if (!sourceCenter || !targetCenter) return null;
 
-            const pathD = computeClosestGroupEdgePath(sourceCenter, targetCenter);
+            const groupObstacles = groups
+              .filter((group) => group.id !== sourceGroup.id && group.id !== targetGroup.id)
+              .map((group) => getGroupCenter(group))
+              .filter((bounds): bounds is GroupEdgeRect => bounds !== null)
+              .map((bounds) => rectToObstacle(bounds));
+            const pathD = computeClosestGroupEdgePath(sourceCenter, targetCenter, groupObstacles);
             
             const edgeColor = edge.edgeType === "depends" 
               ? "hsl(var(--destructive) / 0.85)" 
@@ -1440,6 +1538,7 @@ export function DocumentCanvas({
                   stroke="hsl(var(--background))"
                   strokeWidth="5"
                   strokeLinecap="round"
+                  strokeLinejoin="round"
                 />
                 <path
                   d={pathD}
@@ -1447,6 +1546,7 @@ export function DocumentCanvas({
                   stroke={edgeColor}
                   strokeWidth="2.25"
                   strokeLinecap="round"
+                  strokeLinejoin="round"
                   strokeOpacity="0.75"
                   strokeDasharray={edge.edgeType === "related" ? "6,4" : undefined}
                   markerEnd={`url(#${markerId})`}
@@ -1558,7 +1658,10 @@ export function DocumentCanvas({
 
             return topGroups.slice(0, -1).map((item, index) => {
               const next = topGroups[index + 1];
-              const pathD = computeClosestGroupEdgePath(item.bounds, next.bounds, 18, 26);
+              const groupObstacles = topGroups
+                .filter((candidate) => candidate.group.id !== item.group.id && candidate.group.id !== next.group.id)
+                .map((candidate) => rectToObstacle(candidate.bounds));
+              const pathD = computeClosestGroupEdgePath(item.bounds, next.bounds, groupObstacles, 18, 26);
 
               return (
                 <g key={`major-workflow-${item.group.id}-${next.group.id}`}>
@@ -1568,6 +1671,7 @@ export function DocumentCanvas({
                     stroke="hsl(var(--background))"
                     strokeWidth="7"
                     strokeLinecap="round"
+                    strokeLinejoin="round"
                   />
                   <path
                     d={pathD}
@@ -1575,6 +1679,7 @@ export function DocumentCanvas({
                     stroke="hsl(var(--primary))"
                     strokeWidth="3"
                     strokeLinecap="round"
+                    strokeLinejoin="round"
                     strokeOpacity="0.75"
                     markerEnd="url(#arrow-group-flow)"
                   />

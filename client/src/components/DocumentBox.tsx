@@ -127,7 +127,7 @@ export function DocumentBox({
     <div
       ref={boxRef}
       className={cn(
-        "absolute w-[380px] h-auto p-5 rounded-md border-[3px] cursor-pointer transition-shadow",
+        "absolute w-[340px] h-auto p-5 rounded-md border-[3px] cursor-pointer transition-shadow",
         "text-foreground hover:shadow-xl",
         isSelected
           ? "border-primary shadow-xl ring-4 ring-primary/20"
@@ -155,7 +155,7 @@ export function DocumentBox({
         </div>
         <div className="flex-1 min-w-0">
           <h3
-            className="font-medium text-base leading-tight"
+            className="font-medium text-[17px] leading-tight"
             style={{
               wordBreak: "keep-all",
               overflowWrap: "normal",
@@ -167,8 +167,8 @@ export function DocumentBox({
           >
             {document.title}
           </h3>
-          <div className="flex items-center gap-1.5 text-xs mt-1.5" style={{ color: "hsl(var(--muted-foreground))" }}>
-            <Calendar className="h-3 w-3" />
+          <div className="flex items-center gap-1.5 text-[13px] mt-1.5" style={{ color: "hsl(var(--muted-foreground))" }}>
+            <Calendar className="h-3.5 w-3.5" />
             <span>{formatDate(document.createdAt)}</span>
           </div>
         </div>

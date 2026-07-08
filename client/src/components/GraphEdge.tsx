@@ -39,11 +39,19 @@ function GraphEdgeComponent({ edge, nodes }: Props) {
 
   const midX = (source.x + target.x) / 2;
   const midY = (source.y + target.y) / 2;
+  const cornerX = Math.abs(dx) >= Math.abs(dy) ? midX : source.x;
+  const cornerY = Math.abs(dx) >= Math.abs(dy) ? source.y : midY;
+  const secondCornerX = Math.abs(dx) >= Math.abs(dy) ? midX : target.x;
+  const secondCornerY = Math.abs(dx) >= Math.abs(dy) ? target.y : midY;
+  const pathD = `M ${source.x} ${source.y} L ${cornerX} ${cornerY} L ${secondCornerX} ${secondCornerY} L ${target.x} ${target.y}`;
 
   const arrowSize = 12;
-  const angle = Math.atan2(dy, dx);
-  const arrowX = target.x - (dx / dist) * 50;
-  const arrowY = target.y - (dy / dist) * 50;
+  const finalDx = target.x - secondCornerX;
+  const finalDy = target.y - secondCornerY;
+  const finalDist = Math.max(1, Math.hypot(finalDx, finalDy));
+  const angle = Math.atan2(finalDy, finalDx);
+  const arrowX = target.x - (finalDx / finalDist) * 50;
+  const arrowY = target.y - (finalDy / finalDist) * 50;
 
   const arrowPoints = [
     [arrowX, arrowY],
@@ -61,15 +69,14 @@ function GraphEdgeComponent({ edge, nodes }: Props) {
 
   return (
     <g data-testid={`edge-${edge.id}`}>
-      <line
-        x1={source.x}
-        y1={source.y}
-        x2={target.x}
-        y2={target.y}
+      <path
+        d={pathD}
+        fill="none"
         className={config.color}
         strokeWidth={4}
         strokeDasharray={config.dashArray}
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
       <polygon points={arrowPoints} className={config.color.replace("stroke-", "fill-")} />
       {edge.label && (

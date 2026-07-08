@@ -1157,7 +1157,7 @@ export async function registerRoutes(
       const TIMELINE_START_MONTH = 1;
 
       // Layout constants
-      const DOC_WIDTH = 380;
+      const DOC_WIDTH = 340;
       const DOC_HEIGHT = 190;
       const DOC_GAP_X = 24;
       const DOC_GAP_Y = 86;
@@ -1432,7 +1432,7 @@ function calculateGroupedLayout(
   const TIMELINE_START_YEAR = 2026;
   const TIMELINE_START_MONTH = 1;
 
-  const DOC_WIDTH = 380;
+  const DOC_WIDTH = 340;
   const DOC_HEIGHT = 190;
   const DOC_GAP_X = 24;
   const DOC_GAP_Y = 86;
