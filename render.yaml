@@ -16,4 +16,4 @@ services:
 
 databases:
   - name: logiccanvas-db
-    plan: starter
+    plan: basic-256mb
