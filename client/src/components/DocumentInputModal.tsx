@@ -106,6 +106,10 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
     onNotionImport(Array.from(selectedNotionPages));
   };
 
+  const connectNotion = () => {
+    window.location.href = "/api/notion/oauth/start";
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
@@ -315,13 +319,19 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
                   ) : notionError ? (
                     <div className="text-center py-8">
                       <p className="text-sm text-destructive mb-3">{notionError}</p>
-                      <Button variant="outline" size="sm" onClick={loadNotionPages} data-testid="button-retry-notion">
+                      <Button type="button" variant="default" size="sm" onClick={connectNotion} className="mr-2" data-testid="button-connect-notion">
+                        Notion 연결하기
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={loadNotionPages} data-testid="button-retry-notion">
                         다시 시도
                       </Button>
                     </div>
                   ) : notionPages.length === 0 ? (
                     <div className="text-center py-8">
                       <SiNotion className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+                      <Button type="button" variant="outline" size="sm" onClick={connectNotion} className="mb-3" data-testid="button-connect-notion-empty">
+                        Notion 다시 연결하기
+                      </Button>
                       <p className="text-sm text-muted-foreground">연결된 노션에 페이지가 없습니다.</p>
                     </div>
                   ) : (

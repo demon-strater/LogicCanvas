@@ -31,8 +31,8 @@ export function setSyncEnabled(enabled: boolean) {
   }
 }
 
-export async function importSingleNotionPage(pageId: string): Promise<any | null> {
-  const pageContent = await fetchNotionPageContent(pageId);
+export async function importSingleNotionPage(pageId: string, authToken?: string): Promise<any | null> {
+  const pageContent = await fetchNotionPageContent(pageId, authToken);
 
   if (!pageContent.content.trim()) {
     return null;
@@ -111,7 +111,7 @@ export async function importSingleNotionPage(pageId: string): Promise<any | null
   return document;
 }
 
-export async function syncNotionPages(): Promise<{ imported: number; skipped: number; errors: number; busy?: boolean }> {
+export async function syncNotionPages(authToken?: string): Promise<{ imported: number; skipped: number; errors: number; busy?: boolean }> {
   if (isSyncing) {
     return { imported: 0, skipped: 0, errors: 0, busy: true };
   }
@@ -120,7 +120,7 @@ export async function syncNotionPages(): Promise<{ imported: number; skipped: nu
   const result = { imported: 0, skipped: 0, errors: 0 };
 
   try {
-    const notionPages = await listNotionPages();
+    const notionPages = await listNotionPages(authToken);
     const existingDocs = await storage.getAllDocuments();
     const existingNotionIds = new Set(
       existingDocs
@@ -141,7 +141,7 @@ export async function syncNotionPages(): Promise<{ imported: number; skipped: nu
 
     for (const page of newPages) {
       try {
-        const doc = await importSingleNotionPage(page.id);
+        const doc = await importSingleNotionPage(page.id, authToken);
         if (doc) {
           result.imported++;
           log(`Notion sync: imported "${page.title}"`, "notion-sync");

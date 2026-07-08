@@ -13,6 +13,16 @@ services:
           property: connectionString
       - key: OPENAI_API_KEY
         sync: false
+      - key: NOTION_OAUTH_CLIENT_ID
+        sync: false
+      - key: NOTION_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: NOTION_OAUTH_REDIRECT_URI
+        value: https://logiccanvas.onrender.com/api/notion/oauth/callback
+      - key: PUBLIC_URL
+        value: https://logiccanvas.onrender.com
+      - key: SESSION_SECRET
+        generateValue: true
 
 databases:
   - name: logiccanvas-db

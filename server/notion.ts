@@ -1,7 +1,7 @@
 // Notion integration via standard Notion SDK
 import { Client } from '@notionhq/client';
 
-function getNotionApiKey(): string | undefined {
+export function getNotionApiKey(): string | undefined {
   return process.env.NOTION_API_KEY || process.env.NOTION_TOKEN;
 }
 
@@ -9,17 +9,25 @@ export function isNotionConfigured(): boolean {
   return Boolean(getNotionApiKey());
 }
 
-function assertNotionConfigured() {
-  if (!isNotionConfigured()) {
+export function isNotionOAuthConfigured(): boolean {
+  return Boolean(
+    process.env.NOTION_OAUTH_CLIENT_ID &&
+    process.env.NOTION_OAUTH_CLIENT_SECRET &&
+    process.env.NOTION_OAUTH_REDIRECT_URI
+  );
+}
+
+function assertNotionConfigured(authToken?: string) {
+  if (!authToken && !isNotionConfigured()) {
     const error = new Error("Notion is not configured. Set NOTION_API_KEY in the deployment environment.");
     (error as Error & { code?: string }).code = "NOTION_NOT_CONFIGURED";
     throw error;
   }
 }
 
-export function getNotionClient() {
-  assertNotionConfigured();
-  return new Client({ auth: getNotionApiKey() });
+export function getNotionClient(authToken?: string) {
+  assertNotionConfigured(authToken);
+  return new Client({ auth: authToken || getNotionApiKey() });
 }
 
 export type NotionPageSummary = {
@@ -29,8 +37,8 @@ export type NotionPageSummary = {
   lastEditedTime: string;
 };
 
-export async function listNotionPages(): Promise<NotionPageSummary[]> {
-  const notion = getNotionClient();
+export async function listNotionPages(authToken?: string): Promise<NotionPageSummary[]> {
+  const notion = getNotionClient(authToken);
   const response = await notion.search({
     filter: { property: "object", value: "page" },
     sort: { direction: "descending", timestamp: "last_edited_time" },
@@ -74,8 +82,8 @@ export type NotionPageContent = {
   images: string[];
 };
 
-export async function fetchNotionPageContent(pageId: string): Promise<NotionPageContent> {
-  const notion = getNotionClient();
+export async function fetchNotionPageContent(pageId: string, authToken?: string): Promise<NotionPageContent> {
+  const notion = getNotionClient(authToken);
   const page = await notion.pages.retrieve({ page_id: pageId }) as any;
 
   let title = "Untitled";
@@ -89,14 +97,14 @@ export async function fetchNotionPageContent(pageId: string): Promise<NotionPage
     }
   }
 
-  const blocks = await getAllBlocks(pageId);
+  const blocks = await getAllBlocks(pageId, authToken);
   const { text, images } = convertBlocksToText(blocks);
 
   return { title, content: text, images };
 }
 
-async function getAllBlocks(blockId: string): Promise<any[]> {
-  const notion = getNotionClient();
+async function getAllBlocks(blockId: string, authToken?: string): Promise<any[]> {
+  const notion = getNotionClient(authToken);
   const blocks: any[] = [];
   let cursor: string | undefined = undefined;
 
@@ -113,7 +121,7 @@ async function getAllBlocks(blockId: string): Promise<any[]> {
 
   for (const block of blocks) {
     if (block.has_children && block.type !== "child_page" && block.type !== "child_database") {
-      block.children = await getAllBlocks(block.id);
+      block.children = await getAllBlocks(block.id, authToken);
     }
   }
 

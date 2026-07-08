@@ -2,13 +2,14 @@ import type { Express } from "express";
 import type { Server } from "http";
 import path from "path";
 import fs from "fs";
+import { randomUUID } from "crypto";
 import multer from "multer";
 import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import { storage, storageMode } from "./storage";
 import { parseDocumentWithAI, analyzeDocumentWorkflow, assignDocumentToGroup, getAIConfigStatus } from "./ai";
-import { listNotionPages, fetchNotionPageContent, isNotionConfigured } from "./notion";
+import { listNotionPages, fetchNotionPageContent, isNotionConfigured, isNotionOAuthConfigured } from "./notion";
 import { syncNotionPages, getSyncStatus, setSyncEnabled, importSingleNotionPage } from "./notionSync";
 import { insertDocumentSchema, insertNodeSchema, insertEdgeSchema, insertTaskSchema, insertDocumentGroupSchema } from "@shared/schema";
 import { z } from "zod";
@@ -83,6 +84,22 @@ function parseIdParam(idStr: string): number | null {
   return isNaN(id) ? null : id;
 }
 
+function getNotionSessionToken(req: any): string | undefined {
+  return req.session?.notionAccessToken;
+}
+
+function getNotionOAuthConfig() {
+  return {
+    clientId: process.env.NOTION_OAUTH_CLIENT_ID,
+    clientSecret: process.env.NOTION_OAUTH_CLIENT_SECRET,
+    redirectUri: process.env.NOTION_OAUTH_REDIRECT_URI,
+  };
+}
+
+function getPublicBaseUrl(req: any): string {
+  return process.env.PUBLIC_URL || `${req.protocol}://${req.get("host")}`;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -95,6 +112,7 @@ export async function registerRoutes(
       storage: storageMode,
       ai: getAIConfigStatus(),
       notionConfigured: isNotionConfigured(),
+      notionOAuthConfigured: isNotionOAuthConfigured(),
       timestamp: new Date().toISOString(),
     };
 
@@ -740,14 +758,99 @@ export async function registerRoutes(
   });
 
   // Notion integration routes
-  app.get("/api/notion/pages", async (_req, res) => {
+  app.get("/api/notion/oauth/status", (req, res) => {
+    res.json({
+      connected: Boolean(req.session.notionAccessToken),
+      workspaceId: req.session.notionWorkspaceId || null,
+      workspaceName: req.session.notionWorkspaceName || null,
+      oauthConfigured: isNotionOAuthConfigured(),
+      fallbackConfigured: isNotionConfigured(),
+    });
+  });
+
+  app.get("/api/notion/oauth/start", (req, res) => {
+    const { clientId, redirectUri } = getNotionOAuthConfig();
+    if (!clientId || !redirectUri) {
+      return res.status(503).json({ error: "Notion OAuth가 설정되지 않았습니다. Render 환경 변수에 NOTION_OAUTH_CLIENT_ID, NOTION_OAUTH_CLIENT_SECRET, NOTION_OAUTH_REDIRECT_URI를 등록하세요." });
+    }
+
+    const state = randomUUID();
+    req.session.notionOAuthState = state;
+
+    const url = new URL("https://api.notion.com/v1/oauth/authorize");
+    url.searchParams.set("owner", "user");
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("redirect_uri", redirectUri);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("state", state);
+
+    res.redirect(url.toString());
+  });
+
+  app.get("/api/notion/oauth/callback", async (req, res) => {
+    const { clientId, clientSecret, redirectUri } = getNotionOAuthConfig();
+    const code = typeof req.query.code === "string" ? req.query.code : null;
+    const state = typeof req.query.state === "string" ? req.query.state : null;
+    const error = typeof req.query.error === "string" ? req.query.error : null;
+
+    if (error) {
+      return res.redirect(`${getPublicBaseUrl(req)}/?notion=denied`);
+    }
+    if (!clientId || !clientSecret || !redirectUri) {
+      return res.status(503).json({ error: "Notion OAuth가 설정되지 않았습니다." });
+    }
+    if (!code || !state || state !== req.session.notionOAuthState) {
+      return res.status(400).json({ error: "Notion OAuth state가 유효하지 않습니다. 다시 연결을 시도하세요." });
+    }
+
+    const encodedCredentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+    const response = await fetch("https://api.notion.com/v1/oauth/token", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Basic ${encodedCredentials}`,
+      },
+      body: JSON.stringify({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    const tokenPayload: any = await response.json().catch(() => ({}));
+    if (!response.ok || !tokenPayload.access_token) {
+      console.error("Notion OAuth token exchange failed:", tokenPayload);
+      return res.status(502).json({ error: "Notion 토큰 교환에 실패했습니다.", details: tokenPayload.error || tokenPayload.message });
+    }
+
+    req.session.notionAccessToken = tokenPayload.access_token;
+    req.session.notionRefreshToken = tokenPayload.refresh_token;
+    req.session.notionWorkspaceId = tokenPayload.workspace_id;
+    req.session.notionWorkspaceName = tokenPayload.workspace_name;
+    req.session.notionOAuthState = undefined;
+
+    req.session.save(() => {
+      res.redirect(`${getPublicBaseUrl(req)}/?notion=connected`);
+    });
+  });
+
+  app.post("/api/notion/oauth/disconnect", (req, res) => {
+    req.session.notionAccessToken = undefined;
+    req.session.notionRefreshToken = undefined;
+    req.session.notionWorkspaceId = undefined;
+    req.session.notionWorkspaceName = undefined;
+    res.json({ connected: false });
+  });
+
+  app.get("/api/notion/pages", async (req, res) => {
     try {
-      const pages = await listNotionPages();
+      const pages = await listNotionPages(getNotionSessionToken(req));
       res.json(pages);
     } catch (error: any) {
       console.error("Error fetching Notion pages:", error);
       if (error?.code === "NOTION_NOT_CONFIGURED") {
-        return res.status(503).json({ error: "Notion 연결이 설정되지 않았습니다. Render 환경 변수에 NOTION_API_KEY를 등록하세요." });
+        return res.status(503).json({ error: "Notion 연결이 설정되지 않았습니다. Notion 연결하기 버튼을 누르거나 Render 환경 변수에 NOTION_API_KEY를 등록하세요." });
       }
       if (error.message?.includes("not connected")) {
         return res.status(401).json({ error: "노션이 연결되지 않았습니다. 노션 연동을 먼저 설정해 주세요." });
@@ -758,12 +861,12 @@ export async function registerRoutes(
 
   app.get("/api/notion/pages/:pageId", async (req, res) => {
     try {
-      const pageContent = await fetchNotionPageContent(req.params.pageId);
+      const pageContent = await fetchNotionPageContent(req.params.pageId, getNotionSessionToken(req));
       res.json(pageContent);
     } catch (error: any) {
       console.error("Error fetching Notion page content:", error);
       if (error?.code === "NOTION_NOT_CONFIGURED") {
-        return res.status(503).json({ error: "Notion 연결이 설정되지 않았습니다. Render 환경 변수에 NOTION_API_KEY를 등록하세요." });
+        return res.status(503).json({ error: "Notion 연결이 설정되지 않았습니다. Notion 연결하기 버튼을 누르거나 Render 환경 변수에 NOTION_API_KEY를 등록하세요." });
       }
       res.status(500).json({ error: "노션 페이지 내용을 가져오는데 실패했습니다." });
     }
@@ -787,7 +890,7 @@ export async function registerRoutes(
             continue;
           }
 
-          const doc = await importSingleNotionPage(pageId);
+          const doc = await importSingleNotionPage(pageId, getNotionSessionToken(req));
           if (doc) {
             importedDocs.push(doc);
           }
@@ -801,7 +904,7 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error importing from Notion:", error);
       if (error?.code === "NOTION_NOT_CONFIGURED") {
-        return res.status(503).json({ error: "Notion 연결이 설정되지 않았습니다. Render 환경 변수에 NOTION_API_KEY를 등록하세요." });
+        return res.status(503).json({ error: "Notion 연결이 설정되지 않았습니다. Notion 연결하기 버튼을 누르거나 Render 환경 변수에 NOTION_API_KEY를 등록하세요." });
       }
       res.status(500).json({ error: "노션에서 가져오기에 실패했습니다." });
     }
@@ -811,9 +914,9 @@ export async function registerRoutes(
     res.json(getSyncStatus());
   });
 
-  app.post("/api/notion/sync", async (_req, res) => {
+  app.post("/api/notion/sync", async (req, res) => {
     try {
-      const result = await syncNotionPages();
+      const result = await syncNotionPages(getNotionSessionToken(req));
       if (result.busy) {
         return res.status(409).json({ error: "이미 동기화가 진행 중입니다.", busy: true });
       }
@@ -821,7 +924,7 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error syncing Notion:", error);
       if (error?.code === "NOTION_NOT_CONFIGURED") {
-        return res.status(503).json({ error: "Notion 연결이 설정되지 않았습니다. Render 환경 변수에 NOTION_API_KEY를 등록하세요." });
+        return res.status(503).json({ error: "Notion 연결이 설정되지 않았습니다. Notion 연결하기 버튼을 누르거나 Render 환경 변수에 NOTION_API_KEY를 등록하세요." });
       }
       res.status(500).json({ error: "노션 동기화에 실패했습니다." });
     }

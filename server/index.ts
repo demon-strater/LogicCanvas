@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -14,6 +15,18 @@ declare module "http" {
   }
 }
 
+declare module "express-session" {
+  interface SessionData {
+    notionAccessToken?: string;
+    notionRefreshToken?: string;
+    notionWorkspaceId?: string;
+    notionWorkspaceName?: string;
+    notionOAuthState?: string;
+  }
+}
+
+app.set("trust proxy", 1);
+
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -23,6 +36,20 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "logiccanvas-session-secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 1000 * 60 * 60 * 24 * 30,
+    },
+  }),
+);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
