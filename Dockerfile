@@ -25,4 +25,4 @@ COPY drizzle.config.ts ./
 COPY shared ./shared
 COPY --from=builder /app/dist ./dist
 EXPOSE 5000
-CMD ["sh", "-c", "npm run db:push && node dist/index.cjs"]
+CMD ["sh", "-c", "if [ -n \"$DATABASE_URL\" ]; then npm run db:push; else echo 'DATABASE_URL is not set; starting with in-memory storage'; fi && node dist/index.cjs"]

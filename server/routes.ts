@@ -6,7 +6,7 @@ import multer from "multer";
 import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
-import { storage } from "./storage";
+import { storage, storageMode } from "./storage";
 import { parseDocumentWithAI, analyzeDocumentWorkflow, assignDocumentToGroup, getAIConfigStatus } from "./ai";
 import { listNotionPages, fetchNotionPageContent } from "./notion";
 import { syncNotionPages, getSyncStatus, setSyncEnabled, importSingleNotionPage } from "./notionSync";
@@ -91,7 +91,8 @@ export async function registerRoutes(
   app.get("/api/health", async (_req, res) => {
     const status = {
       ok: true,
-      database: false,
+      database: storageMode === "postgres",
+      storage: storageMode,
       ai: getAIConfigStatus(),
       notionConfigured: Boolean(process.env.NOTION_API_KEY),
       timestamp: new Date().toISOString(),
@@ -99,7 +100,7 @@ export async function registerRoutes(
 
     try {
       await storage.getAllDocuments();
-      status.database = true;
+      status.database = storageMode === "postgres";
     } catch (error) {
       status.ok = false;
       console.error("Health check database error:", error);

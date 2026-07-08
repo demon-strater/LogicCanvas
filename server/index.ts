@@ -64,8 +64,10 @@ app.use((req, res, next) => {
 (async () => {
   await registerRoutes(httpServer, app);
   
-  // Seed database with example data
-  await seedDatabase().catch(console.error);
+  // Seed only when a real database is attached. Memory storage is for ephemeral demos.
+  if (process.env.DATABASE_URL) {
+    await seedDatabase().catch(console.error);
+  }
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -99,7 +101,7 @@ app.use((req, res, next) => {
     {
       port,
       host: "0.0.0.0",
-      reusePort: true,
+      reusePort: process.platform !== "win32",
     },
     () => {
       log(`serving on port ${port}`);

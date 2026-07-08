@@ -287,4 +287,271 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+class MemoryStorage implements IStorage {
+  private users: User[] = [];
+  private documents: Document[] = [];
+  private nodes: Node[] = [];
+  private edges: Edge[] = [];
+  private tasks: Task[] = [];
+  private documentEdges: DocumentEdge[] = [];
+  private documentGroups: DocumentGroup[] = [];
+  private groupEdges: GroupEdge[] = [];
+
+  private userId = 1;
+  private documentId = 1;
+  private nodeId = 1;
+  private edgeId = 1;
+  private taskId = 1;
+  private documentEdgeId = 1;
+  private documentGroupId = 1;
+  private groupEdgeId = 1;
+
+  async getUser(id: string): Promise<User | undefined> {
+    return this.users.find(user => user.id === id);
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return this.users.find(user => user.username === username);
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const created = { id: String(this.userId++), ...user } as User;
+    this.users.push(created);
+    return created;
+  }
+
+  async getAllDocuments(): Promise<Document[]> {
+    return [...this.documents].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getDocument(id: number): Promise<Document | undefined> {
+    return this.documents.find(document => document.id === id);
+  }
+
+  async createDocument(doc: InsertDocument): Promise<Document> {
+    const now = new Date();
+    const created = {
+      id: this.documentId++,
+      title: doc.title,
+      content: doc.content,
+      summary: doc.summary ?? null,
+      images: doc.images ?? null,
+      notionPageId: doc.notionPageId ?? null,
+      groupId: doc.groupId ?? null,
+      x: doc.x ?? 100,
+      y: doc.y ?? 100,
+      createdAt: now,
+      updatedAt: now,
+    } as Document;
+    this.documents.push(created);
+    return created;
+  }
+
+  async updateDocument(id: number, updates: Partial<Document>): Promise<Document | undefined> {
+    const document = await this.getDocument(id);
+    if (!document) return undefined;
+    Object.assign(document, updates, { updatedAt: updates.updatedAt ?? new Date() });
+    return document;
+  }
+
+  async deleteDocument(id: number): Promise<void> {
+    this.documents = this.documents.filter(document => document.id !== id);
+    this.nodes = this.nodes.filter(node => node.documentId !== id);
+    this.edges = this.edges.filter(edge => edge.documentId !== id);
+    this.tasks = this.tasks.filter(task => task.documentId !== id);
+    this.documentEdges = this.documentEdges.filter(edge => edge.sourceDocId !== id && edge.targetDocId !== id);
+  }
+
+  async getNodesByDocument(documentId: number): Promise<Node[]> {
+    return this.nodes.filter(node => node.documentId === documentId);
+  }
+
+  async getNode(id: number): Promise<Node | undefined> {
+    return this.nodes.find(node => node.id === id);
+  }
+
+  async createNode(node: InsertNode): Promise<Node> {
+    const created = { id: this.nodeId++, x: 0, y: 0, isTagged: false, tagNote: null, createdAt: new Date(), ...node } as Node;
+    this.nodes.push(created);
+    return created;
+  }
+
+  async createNodes(nodesData: InsertNode[]): Promise<Node[]> {
+    return Promise.all(nodesData.map(node => this.createNode(node)));
+  }
+
+  async updateNode(id: number, updates: Partial<Node>): Promise<Node | undefined> {
+    const node = await this.getNode(id);
+    if (!node) return undefined;
+    Object.assign(node, updates);
+    return node;
+  }
+
+  async deleteNode(id: number): Promise<void> {
+    this.nodes = this.nodes.filter(node => node.id !== id);
+    this.edges = this.edges.filter(edge => edge.sourceId !== id && edge.targetId !== id);
+    this.tasks = this.tasks.map(task => task.nodeId === id ? { ...task, nodeId: null } : task);
+  }
+
+  async getEdgesByDocument(documentId: number): Promise<Edge[]> {
+    return this.edges.filter(edge => edge.documentId === documentId);
+  }
+
+  async getEdge(id: number): Promise<Edge | undefined> {
+    return this.edges.find(edge => edge.id === id);
+  }
+
+  async createEdge(edge: InsertEdge): Promise<Edge> {
+    const created = { id: this.edgeId++, label: null, createdAt: new Date(), ...edge } as Edge;
+    this.edges.push(created);
+    return created;
+  }
+
+  async createEdges(edgesData: InsertEdge[]): Promise<Edge[]> {
+    return Promise.all(edgesData.map(edge => this.createEdge(edge)));
+  }
+
+  async updateEdge(id: number, updates: Partial<Edge>): Promise<Edge | undefined> {
+    const edge = await this.getEdge(id);
+    if (!edge) return undefined;
+    Object.assign(edge, updates);
+    return edge;
+  }
+
+  async deleteEdge(id: number): Promise<void> {
+    this.edges = this.edges.filter(edge => edge.id !== id);
+  }
+
+  async getTasksByDocument(documentId: number): Promise<Task[]> {
+    return this.tasks.filter(task => task.documentId === documentId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getTask(id: number): Promise<Task | undefined> {
+    return this.tasks.find(task => task.id === id);
+  }
+
+  async createTask(task: InsertTask): Promise<Task> {
+    const created = { id: this.taskId++, description: null, nodeId: null, status: "pending", priority: "medium", completedAt: null, createdAt: new Date(), ...task } as Task;
+    this.tasks.push(created);
+    return created;
+  }
+
+  async updateTask(id: number, updates: Partial<Task>): Promise<Task | undefined> {
+    const task = await this.getTask(id);
+    if (!task) return undefined;
+    Object.assign(task, updates);
+    return task;
+  }
+
+  async deleteTask(id: number): Promise<void> {
+    this.tasks = this.tasks.filter(task => task.id !== id);
+  }
+
+  async getAllDocumentEdges(): Promise<DocumentEdge[]> {
+    return this.documentEdges;
+  }
+
+  async createDocumentEdge(edge: InsertDocumentEdge): Promise<DocumentEdge> {
+    const created = { id: this.documentEdgeId++, label: null, createdAt: new Date(), ...edge } as DocumentEdge;
+    this.documentEdges.push(created);
+    return created;
+  }
+
+  async createDocumentEdges(edgesData: InsertDocumentEdge[]): Promise<DocumentEdge[]> {
+    return Promise.all(edgesData.map(edge => this.createDocumentEdge(edge)));
+  }
+
+  async deleteDocumentEdgesByDoc(docId: number): Promise<void> {
+    this.documentEdges = this.documentEdges.filter(edge => edge.sourceDocId !== docId && edge.targetDocId !== docId);
+  }
+
+  async clearAllDocumentEdges(): Promise<void> {
+    this.documentEdges = [];
+  }
+
+  async getAllGroups(): Promise<DocumentGroup[]> {
+    return [...this.documentGroups].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getGroup(id: number): Promise<DocumentGroup | undefined> {
+    return this.documentGroups.find(group => group.id === id);
+  }
+
+  async createGroup(group: InsertDocumentGroup): Promise<DocumentGroup> {
+    const created = {
+      id: this.documentGroupId++,
+      description: null,
+      parentId: null,
+      x: 100,
+      y: 100,
+      manualWidth: null,
+      manualHeight: null,
+      color: "#6366f1",
+      monthStart: null,
+      monthEnd: null,
+      createdAt: new Date(),
+      ...group,
+    } as DocumentGroup;
+    this.documentGroups.push(created);
+    return created;
+  }
+
+  async updateGroup(id: number, updates: Partial<DocumentGroup>): Promise<DocumentGroup | undefined> {
+    const group = await this.getGroup(id);
+    if (!group) return undefined;
+    Object.assign(group, updates);
+    return group;
+  }
+
+  async deleteGroup(id: number): Promise<void> {
+    this.documents = this.documents.map(document => document.groupId === id ? { ...document, groupId: null } : document);
+    this.documentGroups = this.documentGroups.map(group => group.parentId === id ? { ...group, parentId: null } : group);
+    this.documentGroups = this.documentGroups.filter(group => group.id !== id);
+    this.groupEdges = this.groupEdges.filter(edge => edge.sourceGroupId !== id && edge.targetGroupId !== id);
+  }
+
+  async clearAllGroups(): Promise<void> {
+    this.documents = this.documents.map(document => ({ ...document, groupId: null }));
+    this.groupEdges = [];
+    this.documentGroups = [];
+  }
+
+  async getAllGroupEdges(): Promise<GroupEdge[]> {
+    return this.groupEdges;
+  }
+
+  async createGroupEdge(edge: InsertGroupEdge): Promise<GroupEdge> {
+    const created = { id: this.groupEdgeId++, label: null, createdAt: new Date(), ...edge } as GroupEdge;
+    this.groupEdges.push(created);
+    return created;
+  }
+
+  async createGroupEdges(edgesData: InsertGroupEdge[]): Promise<GroupEdge[]> {
+    return Promise.all(edgesData.map(edge => this.createGroupEdge(edge)));
+  }
+
+  async clearAllGroupEdges(): Promise<void> {
+    this.groupEdges = [];
+  }
+
+  async deduplicateDocuments(): Promise<{ deletedCount: number; deletedIds: number[] }> {
+    const seen = new Set<string>();
+    const deletedIds: number[] = [];
+    this.documents = this.documents.filter(document => {
+      const key = document.notionPageId || `${document.title}|||${document.content}`;
+      if (seen.has(key)) {
+        deletedIds.push(document.id);
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+    for (const id of deletedIds) {
+      await this.deleteDocumentEdgesByDoc(id);
+    }
+    return { deletedCount: deletedIds.length, deletedIds };
+  }
+}
+
+export const storageMode = process.env.DATABASE_URL ? "postgres" : "memory";
+export const storage = process.env.DATABASE_URL ? new DatabaseStorage() : new MemoryStorage();
