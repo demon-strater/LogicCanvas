@@ -13,9 +13,9 @@ export function Header({ userId = "user" }: Props) {
     <header className="h-14 border-b flex items-center justify-between px-4 bg-card">
       <div className="flex items-center">
         <img
-          src="/logicmap-logo.png"
+          src="/logo.png"
           alt="Logicmap"
-          className="h-8 w-auto rounded-sm object-contain"
+          className="h-9 w-auto max-w-[180px] object-contain"
           data-testid="app-logo"
         />
       </div>
