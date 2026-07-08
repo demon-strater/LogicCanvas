@@ -51,12 +51,12 @@ export function DocumentBox({
   };
 
   const getSummary = () => {
-    if (document.summary) {
-      return document.summary;
-    }
-    const content = document.content || "";
-    const lines = content.split("\n").filter((line) => line.trim());
-    return lines.slice(0, 3).join(" ").slice(0, 150) + (content.length > 150 ? "..." : "");
+    const text = (document.content || document.summary || "").replace(/\s+/g, " ").trim();
+    if (!text) return "";
+
+    const sentenceMatch = text.match(/^.*?[.!?。！？](?=\s|$)/);
+    const firstSentence = (sentenceMatch?.[0] || text).trim();
+    return firstSentence.length < text.length ? `${firstSentence}..` : firstSentence;
   };
 
   const handleMouseDown = useCallback(
