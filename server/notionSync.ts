@@ -38,7 +38,13 @@ export async function importSingleNotionPage(pageId: string, authToken?: string)
     return null;
   }
 
-  const parseResult = await parseDocumentWithAI(pageContent.content);
+  let parseResult;
+  try {
+    parseResult = await parseDocumentWithAI(pageContent.content);
+  } catch (error) {
+    log(`Notion import: AI parsing failed for "${pageContent.title}", importing source document only: ${error}`, "notion-sync");
+    parseResult = { concepts: [], relations: [], feedback: [] };
+  }
 
   const feedbackSummary = parseResult.feedback && parseResult.feedback.length > 0
     ? parseResult.feedback.map(f => {

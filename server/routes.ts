@@ -882,6 +882,7 @@ export async function registerRoutes(
       }
 
       const importedDocs = [];
+      const errors: { pageId: string; error: string }[] = [];
 
       for (const pageId of pageIds) {
         try {
@@ -899,10 +900,11 @@ export async function registerRoutes(
         } catch (pageError: any) {
           console.error(`Error importing Notion page ${pageId}:`, pageError);
           if (pageError?.code === "NOTION_NOT_CONFIGURED") throw pageError;
+          errors.push({ pageId, error: pageError?.message || String(pageError) });
         }
       }
 
-      res.json({ imported: importedDocs.length, documents: importedDocs });
+      res.json({ imported: importedDocs.length, documents: importedDocs, errors });
     } catch (error: any) {
       console.error("Error importing from Notion:", error);
       if (error?.code === "NOTION_NOT_CONFIGURED") {
