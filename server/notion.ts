@@ -1,10 +1,25 @@
 // Notion integration via standard Notion SDK
 import { Client } from '@notionhq/client';
 
-const notion = new Client({ auth: process.env.NOTION_API_KEY });
+function getNotionApiKey(): string | undefined {
+  return process.env.NOTION_API_KEY || process.env.NOTION_TOKEN;
+}
+
+export function isNotionConfigured(): boolean {
+  return Boolean(getNotionApiKey());
+}
+
+function assertNotionConfigured() {
+  if (!isNotionConfigured()) {
+    const error = new Error("Notion is not configured. Set NOTION_API_KEY in the deployment environment.");
+    (error as Error & { code?: string }).code = "NOTION_NOT_CONFIGURED";
+    throw error;
+  }
+}
 
 export function getNotionClient() {
-  return notion;
+  assertNotionConfigured();
+  return new Client({ auth: getNotionApiKey() });
 }
 
 export type NotionPageSummary = {
@@ -15,6 +30,7 @@ export type NotionPageSummary = {
 };
 
 export async function listNotionPages(): Promise<NotionPageSummary[]> {
+  const notion = getNotionClient();
   const response = await notion.search({
     filter: { property: "object", value: "page" },
     sort: { direction: "descending", timestamp: "last_edited_time" },
@@ -59,6 +75,7 @@ export type NotionPageContent = {
 };
 
 export async function fetchNotionPageContent(pageId: string): Promise<NotionPageContent> {
+  const notion = getNotionClient();
   const page = await notion.pages.retrieve({ page_id: pageId }) as any;
 
   let title = "Untitled";
@@ -79,6 +96,7 @@ export async function fetchNotionPageContent(pageId: string): Promise<NotionPage
 }
 
 async function getAllBlocks(blockId: string): Promise<any[]> {
+  const notion = getNotionClient();
   const blocks: any[] = [];
   let cursor: string | undefined = undefined;
 

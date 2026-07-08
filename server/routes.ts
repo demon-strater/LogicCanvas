@@ -8,7 +8,7 @@ import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import { storage, storageMode } from "./storage";
 import { parseDocumentWithAI, analyzeDocumentWorkflow, assignDocumentToGroup, getAIConfigStatus } from "./ai";
-import { listNotionPages, fetchNotionPageContent } from "./notion";
+import { listNotionPages, fetchNotionPageContent, isNotionConfigured } from "./notion";
 import { syncNotionPages, getSyncStatus, setSyncEnabled, importSingleNotionPage } from "./notionSync";
 import { insertDocumentSchema, insertNodeSchema, insertEdgeSchema, insertTaskSchema, insertDocumentGroupSchema } from "@shared/schema";
 import { z } from "zod";
@@ -94,7 +94,7 @@ export async function registerRoutes(
       database: storageMode === "postgres",
       storage: storageMode,
       ai: getAIConfigStatus(),
-      notionConfigured: Boolean(process.env.NOTION_API_KEY),
+      notionConfigured: isNotionConfigured(),
       timestamp: new Date().toISOString(),
     };
 
@@ -746,6 +746,9 @@ export async function registerRoutes(
       res.json(pages);
     } catch (error: any) {
       console.error("Error fetching Notion pages:", error);
+      if (error?.code === "NOTION_NOT_CONFIGURED") {
+        return res.status(503).json({ error: "Notion 연결이 설정되지 않았습니다. Render 환경 변수에 NOTION_API_KEY를 등록하세요." });
+      }
       if (error.message?.includes("not connected")) {
         return res.status(401).json({ error: "노션이 연결되지 않았습니다. 노션 연동을 먼저 설정해 주세요." });
       }
@@ -759,6 +762,9 @@ export async function registerRoutes(
       res.json(pageContent);
     } catch (error: any) {
       console.error("Error fetching Notion page content:", error);
+      if (error?.code === "NOTION_NOT_CONFIGURED") {
+        return res.status(503).json({ error: "Notion 연결이 설정되지 않았습니다. Render 환경 변수에 NOTION_API_KEY를 등록하세요." });
+      }
       res.status(500).json({ error: "노션 페이지 내용을 가져오는데 실패했습니다." });
     }
   });
@@ -785,14 +791,18 @@ export async function registerRoutes(
           if (doc) {
             importedDocs.push(doc);
           }
-        } catch (pageError) {
+        } catch (pageError: any) {
           console.error(`Error importing Notion page ${pageId}:`, pageError);
+          if (pageError?.code === "NOTION_NOT_CONFIGURED") throw pageError;
         }
       }
 
       res.json({ imported: importedDocs.length, documents: importedDocs });
     } catch (error: any) {
       console.error("Error importing from Notion:", error);
+      if (error?.code === "NOTION_NOT_CONFIGURED") {
+        return res.status(503).json({ error: "Notion 연결이 설정되지 않았습니다. Render 환경 변수에 NOTION_API_KEY를 등록하세요." });
+      }
       res.status(500).json({ error: "노션에서 가져오기에 실패했습니다." });
     }
   });
@@ -810,6 +820,9 @@ export async function registerRoutes(
       res.json(result);
     } catch (error: any) {
       console.error("Error syncing Notion:", error);
+      if (error?.code === "NOTION_NOT_CONFIGURED") {
+        return res.status(503).json({ error: "Notion 연결이 설정되지 않았습니다. Render 환경 변수에 NOTION_API_KEY를 등록하세요." });
+      }
       res.status(500).json({ error: "노션 동기화에 실패했습니다." });
     }
   });

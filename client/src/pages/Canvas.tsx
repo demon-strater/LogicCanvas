@@ -98,6 +98,7 @@ export default function Canvas() {
       queryClient.invalidateQueries({ queryKey: ["/api/document-edges"] });
       queryClient.invalidateQueries({ queryKey: ["/api/group-edges"] });
       setIsDocumentModalOpen(false);
+      requestAutoRelayout();
       toast({ title: `${data.imported}개의 노션 페이지를 가져왔습니다` });
     },
     onError: () => {
@@ -191,6 +192,7 @@ export default function Canvas() {
       queryClient.invalidateQueries({ queryKey: ["/api/document-edges"] });
       queryClient.invalidateQueries({ queryKey: ["/api/group-edges"] });
       queryClient.invalidateQueries({ queryKey: ["/api/notion/sync-status"] });
+      requestAutoRelayout();
       if (data.imported > 0) {
         toast({ title: `노션 동기화 완료: ${data.imported}개 새 문서 가져옴` });
       } else {
