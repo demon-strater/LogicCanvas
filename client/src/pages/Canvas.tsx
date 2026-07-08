@@ -38,6 +38,7 @@ export default function Canvas() {
   const [editingGroup, setEditingGroup] = useState<DocumentGroup | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
   const positionHistoryRef = useRef<PositionHistoryItem[]>([]);
+  const autoWorkflowAnalysisKeyRef = useRef<string>("");
 
   const { data: documents = [], isLoading: isLoadingDocuments } = useQuery<Document[]>({
     queryKey: ["/api/documents"],
@@ -83,6 +84,20 @@ export default function Canvas() {
       }
     }, 300);
   }, [requestAutoRelayout]);
+
+  useEffect(() => {
+    if (documents.length < 2) return;
+
+    const onlyFallbackGrouping = groups.length <= 1;
+
+    if (!onlyFallbackGrouping) return;
+
+    const analysisKey = documents.map((doc) => doc.id).sort((a, b) => a - b).join(",");
+    if (autoWorkflowAnalysisKeyRef.current === analysisKey) return;
+
+    autoWorkflowAnalysisKeyRef.current = analysisKey;
+    requestAIWorkflowGrouping();
+  }, [documents, groups, requestAIWorkflowGrouping]);
 
   const createDocumentMutation = useMutation({
     mutationFn: async ({ title, content, createdAt }: { title: string; content: string; createdAt?: string }) => {

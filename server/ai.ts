@@ -304,6 +304,52 @@ Guidelines:
 - Use short Korean labels
 - Do not create empty groups`;
 
+const WORKFLOW_ANALYSIS_PROMPT_V2 = `You are a workflow analyst. Convert the supplied documents into a hierarchical workflow graph.
+
+Hard requirements:
+- Always produce 2 to 4 major groups when there are 4 or more documents.
+- Use medium child groups under a major group whenever that major group has multiple documents. For larger sets, prefer 2 to 3 medium groups per major group.
+- Do not leave documents ungrouped.
+- Every document must appear exactly once in the final hierarchy.
+- Use major groups as broad stages, and medium groups as the actual buckets that hold documents.
+- Keep labels short and concrete. Korean labels are preferred.
+- Use monthStart/monthEnd only when timing helps the grouping.
+
+Workflow edges:
+- Create document-to-document relations only for clear sequential or dependency links.
+- Create groupRelations only between major groups, and order them in workflow sequence.
+- If there is no obvious relation, omit the edge rather than inventing one.
+
+Return valid JSON in this shape:
+{
+  "relations": [
+    { "sourceId": 1, "targetId": 2, "label": "description", "edgeType": "flow|depends|related" }
+  ],
+  "groupRelations": [
+    { "sourceGroupName": "기획", "targetGroupName": "실행", "label": "기획 -> 실행", "edgeType": "flow" }
+  ],
+  "hierarchyLevels": { "1": 0, "2": 1 },
+  "groups": [
+    {
+      "name": "기획",
+      "description": "상위 단계",
+      "level": "major",
+      "monthStart": 12,
+      "monthEnd": 1,
+      "documentIds": [],
+      "childGroups": [
+        {
+          "name": "자료 정리",
+          "description": "중간 단계",
+          "level": "medium",
+          "documentIds": [1, 2]
+        }
+      ]
+    }
+  ],
+  "summary": "Overall workflow summary"
+}`;
+
 const GROUP_COLORS = [
   "#6366f1", // indigo
   "#8b5cf6", // violet
@@ -350,7 +396,7 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
   const response = await openai.chat.completions.create({
     model: "gpt-5.2",
     messages: [
-      { role: "system", content: WORKFLOW_ANALYSIS_PROMPT },
+      { role: "system", content: WORKFLOW_ANALYSIS_PROMPT_V2 },
       { 
         role: "user", 
         content: `Analyze the workflow relationships and create hierarchical groups for these documents:\n\n${JSON.stringify(docSummaries, null, 2)}` 
@@ -402,10 +448,70 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
 
     // Process groups with validation and color assignment
     const assignedDocIds = new Set<number>();
-    const groups = processGroups(parsed.groups || [], docIds, assignedDocIds, 0);
+      let groups = processGroups(parsed.groups || [], docIds, assignedDocIds, 0);
 
-    // If no groups were created by AI, create a single default group with all docs
-    if (groups.length === 0) {
+      const needsSyntheticHierarchy =
+        documents.length >= 4 &&
+        groups.length > 0 &&
+        groups.every(group => !group.childGroups || group.childGroups.length === 0);
+
+      if (needsSyntheticHierarchy) {
+        const orderedDocs = [...documents].sort((a, b) => {
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : Number.MAX_SAFE_INTEGER;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : Number.MAX_SAFE_INTEGER;
+          if (aTime !== bTime) return aTime - bTime;
+          return a.title.localeCompare(b.title);
+        });
+
+        const stageNames = ["기획", "준비", "실행", "정리"];
+        const majorCount = Math.min(4, Math.max(2, Math.ceil(orderedDocs.length / 5)));
+        const docsPerMajor = Math.ceil(orderedDocs.length / majorCount);
+
+        groups = [];
+        assignedDocIds.clear();
+
+        for (let i = 0; i < majorCount; i++) {
+          const majorDocs = orderedDocs.slice(i * docsPerMajor, (i + 1) * docsPerMajor);
+          if (majorDocs.length === 0) continue;
+
+          const majorName = stageNames[i] || `단계 ${i + 1}`;
+          const majorGroup: GroupDefinition = {
+            name: majorName,
+            description: `${majorName} 단계`,
+            color: GROUP_COLORS[i % GROUP_COLORS.length],
+            level: "major",
+            documentIds: [],
+            childGroups: [],
+          };
+
+          majorDocs.forEach((doc) => assignedDocIds.add(doc.id));
+
+          if (majorDocs.length >= 5) {
+            const mediumCount = Math.min(3, Math.max(2, Math.ceil(majorDocs.length / 3)));
+            const docsPerMedium = Math.ceil(majorDocs.length / mediumCount);
+            majorGroup.childGroups = [];
+
+            for (let j = 0; j < mediumCount; j++) {
+              const mediumDocs = majorDocs.slice(j * docsPerMedium, (j + 1) * docsPerMedium);
+              if (mediumDocs.length === 0) continue;
+              majorGroup.childGroups.push({
+                name: `${majorName} ${j + 1}`,
+                description: `${majorName} 세부 단계`,
+                color: GROUP_COLORS[(i + j + 1) % GROUP_COLORS.length],
+                level: "medium",
+                documentIds: mediumDocs.map((doc) => doc.id),
+              });
+            }
+          } else {
+            majorGroup.documentIds = majorDocs.map((doc) => doc.id);
+          }
+
+          groups.push(majorGroup);
+        }
+      }
+
+      // If no groups were created by AI, create a single default group with all docs
+      if (groups.length === 0) {
       groups.push({
         name: "전체 문서",
         description: "모든 문서",
@@ -431,24 +537,45 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
     }
 
     // Process group relations
-    const groupRelations: GroupRelation[] = (parsed.groupRelations || [])
-      .filter((r: any) => 
-        typeof r.sourceGroupName === "string" && 
-        typeof r.targetGroupName === "string" &&
-        r.sourceGroupName !== r.targetGroupName
-      )
+      let groupRelations: GroupRelation[] = (parsed.groupRelations || [])
+        .filter((r: any) => 
+          typeof r.sourceGroupName === "string" && 
+          typeof r.targetGroupName === "string" &&
+          r.sourceGroupName !== r.targetGroupName
+        )
       .map((r: any) => ({
         sourceGroupName: String(r.sourceGroupName),
         targetGroupName: String(r.targetGroupName),
         label: String(r.label || ""),
-        edgeType: ["flow", "depends", "related"].includes(r.edgeType) 
-          ? r.edgeType as "flow" | "depends" | "related"
-          : "flow"
-      }));
+          edgeType: ["flow", "depends", "related"].includes(r.edgeType) 
+            ? r.edgeType as "flow" | "depends" | "related"
+            : "flow"
+        }));
 
-    return {
-      relations: validRelations,
-      hierarchyLevels,
+      if (groupRelations.length === 0 && groups.length > 1) {
+        const toTime = (docId: number): number => {
+          const doc = documents.find(d => d.id === docId);
+          return doc?.createdAt ? new Date(doc.createdAt).getTime() : Number.MAX_SAFE_INTEGER;
+        };
+
+        const groupOrder = [...groups].sort((a, b) => {
+          const aMin = Math.min(...(a.documentIds || []).map(toTime), Number.MAX_SAFE_INTEGER);
+          const bMin = Math.min(...(b.documentIds || []).map(toTime), Number.MAX_SAFE_INTEGER);
+          if (aMin !== bMin) return aMin - bMin;
+          return String(a.name).localeCompare(String(b.name));
+        });
+
+        groupRelations = groupOrder.slice(0, -1).map((group, index) => ({
+          sourceGroupName: group.name,
+          targetGroupName: groupOrder[index + 1].name,
+          label: "workflow flow",
+          edgeType: "flow" as const,
+        }));
+      }
+      
+      return {
+        relations: validRelations,
+        hierarchyLevels,
       groups,
       groupRelations,
       summary: String(parsed.summary || "Workflow analysis complete")
