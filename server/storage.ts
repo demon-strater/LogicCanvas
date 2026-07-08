@@ -330,6 +330,7 @@ class MemoryStorage implements IStorage {
 
   async createDocument(doc: InsertDocument): Promise<Document> {
     const now = new Date();
+    const documentDate = doc.createdAt ? new Date(doc.createdAt as any) : now;
     const created = {
       id: this.documentId++,
       title: doc.title,
@@ -340,7 +341,7 @@ class MemoryStorage implements IStorage {
       groupId: doc.groupId ?? null,
       x: doc.x ?? 100,
       y: doc.y ?? 100,
-      createdAt: now,
+      createdAt: Number.isNaN(documentDate.getTime()) ? now : documentDate,
       updatedAt: now,
     } as Document;
     this.documents.push(created);

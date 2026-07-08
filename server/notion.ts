@@ -80,6 +80,7 @@ export type NotionPageContent = {
   title: string;
   content: string;
   images: string[];
+  createdAt?: string;
 };
 
 export async function fetchNotionPageContent(pageId: string, authToken?: string): Promise<NotionPageContent> {
@@ -100,7 +101,7 @@ export async function fetchNotionPageContent(pageId: string, authToken?: string)
   const blocks = await getAllBlocks(pageId, authToken);
   const { text, images } = convertBlocksToText(blocks);
 
-  return { title, content: text, images };
+  return { title, content: text, images, createdAt: page.created_time };
 }
 
 async function getAllBlocks(blockId: string, authToken?: string): Promise<any[]> {

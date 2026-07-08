@@ -70,9 +70,9 @@ export default function Canvas() {
   }, []);
 
   const createDocumentMutation = useMutation({
-    mutationFn: async ({ title, content }: { title: string; content: string }) => {
+    mutationFn: async ({ title, content, createdAt }: { title: string; content: string; createdAt?: string }) => {
       const summary = content.split("\n").filter((line) => line.trim()).slice(0, 3).join(" ").slice(0, 200);
-      const response = await apiRequest("POST", "/api/documents/parse", { title, content, summary });
+      const response = await apiRequest("POST", "/api/documents/parse", { title, content, summary, createdAt });
       return response.json();
     },
     onSuccess: () => {
@@ -471,7 +471,7 @@ export default function Canvas() {
       <DocumentInputModal
         isOpen={isDocumentModalOpen}
         onClose={() => setIsDocumentModalOpen(false)}
-        onSubmit={(title, content) => createDocumentMutation.mutate({ title, content })}
+        onSubmit={(title, content, createdAt) => createDocumentMutation.mutate({ title, content, createdAt })}
         onNotionImport={(pageIds) => importNotionMutation.mutate(pageIds)}
         isLoading={createDocumentMutation.isPending}
         isNotionImporting={importNotionMutation.isPending}

@@ -43,6 +43,7 @@ const edgeUpdateSchema = insertEdgeSchema.pick({
 const parseDocumentInputSchema = insertDocumentSchema.extend({
   title: z.string().min(1, "Title is required"),
   content: z.string().min(1, "Content is required"),
+  createdAt: z.string().optional(),
 });
 
 const documentUpdateSchema = insertDocumentSchema.pick({
@@ -302,7 +303,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: parseInput.error.errors[0].message });
       }
 
-      const { title, content } = parseInput.data;
+      const { title, content, createdAt } = parseInput.data;
 
       // Parse document with AI
       const parseResult = await parseDocumentWithAI(content);
@@ -317,6 +318,7 @@ export async function registerRoutes(
       const document = await storage.createDocument({ 
         title, 
         content,
+        ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
         ...(feedbackSummary ? { summary: feedbackSummary } : {}),
       });
 

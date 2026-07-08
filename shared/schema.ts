@@ -35,7 +35,6 @@ export const documents = pgTable("documents", {
 
 export const insertDocumentSchema = createInsertSchema(documents).omit({
   id: true,
-  createdAt: true,
   updatedAt: true,
 });
 

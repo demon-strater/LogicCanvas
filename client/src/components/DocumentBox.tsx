@@ -182,6 +182,8 @@ export function DocumentBox({
             overflowWrap: "normal",
             maxWidth: "100%",
             minWidth: 0,
+            whiteSpace: "nowrap",
+            textOverflow: "ellipsis",
             color: "hsl(var(--card-foreground) / 0.72)",
           }}
         >

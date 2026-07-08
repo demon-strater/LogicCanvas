@@ -37,7 +37,7 @@ type NotionPage = {
 type Props = {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (title: string, content: string) => void;
+  onSubmit: (title: string, content: string, createdAt?: string) => void;
   onNotionImport?: (pageIds: string[]) => void;
   isLoading: boolean;
   isNotionImporting?: boolean;
@@ -46,6 +46,7 @@ type Props = {
 export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, isLoading, isNotionImporting }: Props) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [tab, setTab] = useState("paste");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState("");
@@ -113,7 +114,7 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
-    onSubmit(title.trim(), content.trim());
+    onSubmit(title.trim(), content.trim(), reportDate ? new Date(reportDate).toISOString() : undefined);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,6 +123,7 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
 
     const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
     const isTextFile = [".txt", ".md", ".text", ".csv"].includes(ext);
+    setReportDate(new Date(file.lastModified).toISOString().slice(0, 10));
 
     if (isTextFile) {
       const text = await file.text();
@@ -183,6 +185,7 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
     if (!isLoading && !isUploading && !isNotionImporting) {
       setTitle("");
       setContent("");
+      setReportDate(new Date().toISOString().slice(0, 10));
       setUploadedFileName("");
       setSelectedNotionPages(new Set());
       setNotionPages([]);
@@ -227,6 +230,14 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
                   placeholder="문서 제목을 입력하세요..."
                   disabled={busy}
                   data-testid="input-document-title"
+                />
+                <label className="text-sm font-medium">작성일</label>
+                <Input
+                  type="date"
+                  value={reportDate}
+                  onChange={(e) => setReportDate(e.target.value)}
+                  disabled={busy}
+                  data-testid="input-document-date"
                 />
               </div>
             )}

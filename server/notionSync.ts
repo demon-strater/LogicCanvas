@@ -52,6 +52,7 @@ export async function importSingleNotionPage(pageId: string, authToken?: string)
     content: pageContent.content,
     images: pageContent.images.length > 0 ? pageContent.images : null,
     notionPageId: pageId,
+    ...(pageContent.createdAt ? { createdAt: new Date(pageContent.createdAt) } : {}),
     ...(feedbackSummary ? { summary: feedbackSummary } : {}),
   });
 
