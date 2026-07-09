@@ -1601,10 +1601,18 @@ function calculateGroupedLayout(
       if (childPlan.childDocs.length > 0) {
         positionDocsInMonthColumns(childPlan.childDocs, childContentY, childPlan.child.id);
       }
+      const childWidth = Math.round(Math.max(DOC_WIDTH + GROUP_PADDING * 2, childPlan.manualWidth));
+      const parentLeft = topPlan.centerX - topPlan.manualWidth / 2 + CHILD_GROUP_INSET_X;
+      const parentRight = topPlan.centerX + topPlan.manualWidth / 2 - CHILD_GROUP_INSET_X;
+      const minChildX = parentLeft + childWidth / 2;
+      const maxChildX = parentRight - childWidth / 2;
+      const childX = minChildX <= maxChildX
+        ? Math.min(maxChildX, Math.max(minChildX, childPlan.centerX))
+        : topPlan.centerX;
       groupPositions[childPlan.child.id] = {
-        x: Math.round(childPlan.centerX),
+        x: Math.round(childX),
         y: Math.round(childPlan.rowTop + childPlan.height / 2),
-        manualWidth: Math.round(Math.max(DOC_WIDTH + GROUP_PADDING * 2, childPlan.manualWidth)),
+        manualWidth: childWidth,
         manualHeight: Math.round(childPlan.height),
       };
     }
