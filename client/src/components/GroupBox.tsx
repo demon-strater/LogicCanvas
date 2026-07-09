@@ -12,9 +12,9 @@ import type { DocumentGroup, Document } from "@shared/schema";
 
 const DOC_WIDTH = 340;
 const DOC_HEIGHT = 190;
-const GROUP_PADDING = 24;
+const GROUP_PADDING = 18;
 const GROUP_HEADER = 112;
-const GROUP_CONTENT_GAP = 20;
+const GROUP_CONTENT_GAP = 12;
 const GROUP_RENDER_Y_OFFSET = 80;
 
 function getStableTitleLayout(text: string, maxLines: number) {

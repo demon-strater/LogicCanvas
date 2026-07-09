@@ -1246,10 +1246,10 @@ function calculateGroupedLayout(
   const DOC_HEIGHT = 190;
   const DOC_GAP_X = 24;
   const DOC_GAP_Y = 86;
-  const GROUP_PADDING = 24;
+  const GROUP_PADDING = 18;
   const GROUP_HEADER = 112;
-  const GROUP_CONTENT_GAP = 20;
-  const GROUP_MONTH_MARGIN = 32;
+  const GROUP_CONTENT_GAP = 12;
+  const GROUP_MONTH_MARGIN = 56;
   const GROUP_GAP_X = 72;
   const GROUP_ROW_GAP_Y = 80;
   const CHILD_GROUP_INSET_X = 32;
