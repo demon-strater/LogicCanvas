@@ -1155,15 +1155,6 @@ export function DocumentCanvas({
       }));
   }, [documents, groups]);
 
-  const getEdgeColor = (edgeType: string) => {
-    switch (edgeType) {
-      case "flow": return "hsl(var(--primary))";
-      case "depends": return "hsl(var(--destructive) / 0.85)";
-      case "parent": return "hsl(142, 55%, 42%)";
-      default: return "hsl(var(--muted-foreground) / 0.6)";
-    }
-  };
-
   const timelineStartMonth = TIMELINE_BASE_MONTH;
   const timelineEndMonth = 12;
 
@@ -1346,65 +1337,6 @@ export function DocumentCanvas({
               <path d="M 1 1 L 11 6 L 1 11 Z" fill="hsl(var(--destructive))" fillOpacity="0.6" stroke="none" />
             </marker>
           </defs>
-
-          {/* Document-to-document edges (visible at Level 5: zoom >= ZOOM_L4) */}
-          {zoom >= ZOOM_L4 && (() => {
-            const docObstacles: ObstacleRect[] = Object.entries(docPositions).map(([idStr, pos]) => {
-              const id = Number(idStr);
-              return {
-                id,
-                left: pos.x - DOC_WIDTH / 2 - 5,
-                top: pos.y - DOC_HEIGHT / 2 - 5,
-                right: pos.x + DOC_WIDTH / 2 + 5,
-                bottom: pos.y + DOC_HEIGHT / 2 + 5,
-              };
-            });
-
-            return edges.map((edge) => {
-              const sourcePos = docPositions[edge.sourceDocId];
-              const targetPos = docPositions[edge.targetDocId];
-              if (!sourcePos || !targetPos) return null;
-
-              const obstacles = docObstacles.filter(
-                o => o.id !== edge.sourceDocId && o.id !== edge.targetDocId
-              );
-
-              const HALF_W = DOC_WIDTH / 2;
-              const HALF_H = DOC_HEIGHT / 2;
-              const pathD = computeEdgePath(
-                sourcePos.x, sourcePos.y,
-                targetPos.x, targetPos.y,
-                HALF_W, HALF_H, HALF_W, HALF_H,
-                obstacles, 400, 6, 16
-              );
-
-              const edgeColor = getEdgeColor(edge.edgeType);
-              const markerId = `arrow-${edge.edgeType}`;
-              const isRelated = edge.edgeType === "related";
-
-              return (
-                <g key={`edge-${edge.id}`}>
-                  <path
-                    d={pathD}
-                    fill="none"
-                    stroke="hsl(var(--background))"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d={pathD}
-                    fill="none"
-                    stroke={edgeColor}
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeOpacity={isRelated ? 0.5 : 0.7}
-                    strokeDasharray={isRelated ? "6,4" : undefined}
-                    markerEnd={`url(#${markerId})`}
-                  />
-                </g>
-              );
-            });
-          })()}
 
           {/* Group-to-group edges (visible once child groups are visible) */}
           {zoom >= ZOOM_L2 && groupEdges.map((edge) => {

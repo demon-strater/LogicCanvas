@@ -960,19 +960,8 @@ export async function registerRoutes(
       // Use AI to analyze document relationships and create groups
       const analysis = await analyzeDocumentWorkflow(documents);
 
-      // Clear existing document edges and create new ones
+      // Report boxes should stay unlinked; only group-level workflow arrows remain.
       await storage.clearAllDocumentEdges();
-      
-      if (analysis.relations.length > 0) {
-        await storage.createDocumentEdges(
-          analysis.relations.map(r => ({
-            sourceDocId: r.sourceDocId,
-            targetDocId: r.targetDocId,
-            label: r.label,
-            edgeType: r.edgeType,
-          }))
-        );
-      }
 
       // Clear existing groups and create new ones based on AI analysis
       await storage.clearAllGroups();
@@ -1006,7 +995,7 @@ export async function registerRoutes(
         }
       }
 
-      const edges = await storage.getAllDocumentEdges();
+      const edges: any[] = [];
       const groups = await storage.getAllGroups();
       
       // Create group-to-group edges based on AI analysis
@@ -1154,214 +1143,21 @@ export async function registerRoutes(
         return res.json({ success: true, message: "정렬할 항목이 없습니다" });
       }
 
-      // Timeline constants (must match frontend DocumentCanvas)
-      const MONTH_WIDTH = 800;
-      const OFFSET_X = 150;
-      const TIMELINE_START_YEAR = 2026;
-      const TIMELINE_START_MONTH = 1;
+      const groupsWithDocumentIds = groups.map((group) => ({
+        ...group,
+        documentIds: documents.filter((doc) => doc.groupId === group.id).map((doc) => doc.id),
+      }));
+      const { groupPositions, documentPositions } = calculateGroupedLayout(
+        documents,
+        groupsWithDocumentIds,
+        { hierarchyLevels: {}, relations: [] },
+      );
 
-      // Layout constants
-      const DOC_WIDTH = 340;
-      const DOC_HEIGHT = 190;
-      const DOC_GAP_X = 24;
-      const DOC_GAP_Y = 86;
-      const GROUP_PADDING = 36;
-      const GROUP_HEADER = 112;
-      const GROUP_CONTENT_GAP = 32;
-      const CHILD_GROUP_GAP_Y = 90;
-      const TOP_GROUP_GAP_Y = 150;
-      const CANVAS_START_Y = 200;
-      const MAX_DOCS_PER_ROW = 2;
-
-      const getMonthCenterX = (year: number, month: number): number => {
-        const monthIndex = (year - TIMELINE_START_YEAR) * 12 + month - TIMELINE_START_MONTH;
-        return OFFSET_X + monthIndex * MONTH_WIDTH + MONTH_WIDTH / 2;
-      };
-
-      const getMonthLeftX = (year: number, month: number): number => {
-        const monthIndex = (year - TIMELINE_START_YEAR) * 12 + month - TIMELINE_START_MONTH;
-        return OFFSET_X + monthIndex * MONTH_WIDTH;
-      };
-
-      const getYearMonth = (date: Date | string | null): { year: number; month: number } => {
-        if (!date) return { year: 2026, month: 2 };
-        const d = new Date(date);
-        return { year: d.getFullYear(), month: d.getMonth() + 1 };
-      };
-
-      const getMonthKey = (date: Date | string | null): string => {
-        const ym = getYearMonth(date);
-        return `${ym.year}-${ym.month}`;
-      };
-
-      // Build parent-child relationships
-      const groupIdSet = new Set(groups.map(g => g.id));
-      const childrenOf: Record<number, typeof groups> = {};
-      for (const group of groups) {
-        if (group.parentId && groupIdSet.has(group.parentId)) {
-          if (!childrenOf[group.parentId]) childrenOf[group.parentId] = [];
-          childrenOf[group.parentId].push(group);
-        }
+      for (const [groupIdStr, pos] of Object.entries(groupPositions)) {
+        await storage.updateGroup(parseInt(groupIdStr), { x: Math.round(pos.x), y: Math.round(pos.y) });
       }
 
-      // Get workflow order for sorting top-level groups vertically
-      const getWorkflowOrder = (name: string): number => {
-        const n = name.toLowerCase();
-        if (n.includes("기획") || n.includes("planning")) return 0;
-        if (n.includes("리서치") || n.includes("research") || n.includes("조사")) return 1;
-        if (n.includes("설계") || n.includes("design")) return 2;
-        if (n.includes("실행") || n.includes("execution")) return 3;
-        if (n.includes("분석") || n.includes("analysis")) return 4;
-        if (n.includes("보고") || n.includes("report")) return 5;
-        return 3;
-      };
-
-      // Position docs in a group at their timeline month X, stacking within the same month
-      // Returns { maxRows, allDocPositions } so we know the height consumed
-      const positionDocsInMonthColumns = (
-        docs: typeof documents,
-        baseY: number
-      ): { maxRows: number; positions: Record<number, { x: number; y: number }> } => {
-        if (docs.length === 0) return { maxRows: 0, positions: {} };
-
-        const byMonth: Record<string, typeof docs> = {};
-        for (const doc of docs) {
-          const key = getMonthKey(doc.createdAt);
-          if (!byMonth[key]) byMonth[key] = [];
-          byMonth[key].push(doc);
-        }
-
-        const positions: Record<number, { x: number; y: number }> = {};
-        let maxRows = 0;
-
-        for (const [monthKey, monthDocs] of Object.entries(byMonth)) {
-          const [yr, mo] = monthKey.split("-").map(Number);
-          const monthLeft = getMonthLeftX(yr, mo);
-          const availableWidth = MONTH_WIDTH - GROUP_PADDING * 2;
-          const fittingCols = Math.max(
-            1,
-            Math.floor((availableWidth + DOC_GAP_X) / (DOC_WIDTH + DOC_GAP_X)),
-          );
-          const cols = Math.min(MAX_DOCS_PER_ROW, fittingCols, monthDocs.length);
-          const totalRowWidth = cols * DOC_WIDTH + (cols - 1) * DOC_GAP_X;
-          const startX = monthLeft + GROUP_PADDING + (availableWidth - totalRowWidth) / 2 + DOC_WIDTH / 2;
-
-          for (let i = 0; i < monthDocs.length; i++) {
-            const col = i % cols;
-            const row = Math.floor(i / cols);
-            const proposedX = startX + col * (DOC_WIDTH + DOC_GAP_X);
-            const docX = Math.min(
-              monthLeft + MONTH_WIDTH - GROUP_PADDING - DOC_WIDTH / 2,
-              Math.max(monthLeft + GROUP_PADDING + DOC_WIDTH / 2, proposedX),
-            );
-            const docY = baseY + row * (DOC_HEIGHT + DOC_GAP_Y) + DOC_HEIGHT / 2;
-            positions[monthDocs[i].id] = { x: docX, y: docY };
-            maxRows = Math.max(maxRows, row + 1);
-          }
-        }
-
-        return { maxRows, positions };
-      };
-
-      // Get all descendant document IDs for a group (including nested child groups)
-      const getDescendantDocs = (groupId: number): typeof documents => {
-        const direct = documents.filter(d => d.groupId === groupId);
-        const children = childrenOf[groupId] || [];
-        const childDocs = children.flatMap(c => getDescendantDocs(c.id));
-        return [...direct, ...childDocs];
-      };
-
-      // Top-level groups sorted by workflow order (stacked vertically as swim lanes)
-      const topLevelGroups = groups
-        .filter(g => !g.parentId || !groupIdSet.has(g.parentId))
-        .sort((a, b) => getWorkflowOrder(a.name) - getWorkflowOrder(b.name));
-
-      let currentRowY = CANVAS_START_Y;
-      const allDocPositions: Record<number, { x: number; y: number }> = {};
-
-      for (const topGroup of topLevelGroups) {
-        const children = childrenOf[topGroup.id] || [];
-        const directDocs = documents.filter(d => d.groupId === topGroup.id);
-        let contentY = currentRowY + GROUP_HEADER + GROUP_CONTENT_GAP;
-
-        // Position direct docs of the top-level group
-        if (directDocs.length > 0) {
-          const { maxRows, positions } = positionDocsInMonthColumns(directDocs, contentY);
-          Object.assign(allDocPositions, positions);
-          contentY += maxRows * (DOC_HEIGHT + DOC_GAP_Y);
-        }
-
-        // Position child groups as sub-rows
-        if (children.length > 0) {
-          if (directDocs.length > 0) contentY += 60;
-
-          children.sort((a, b) => getWorkflowOrder(a.name) - getWorkflowOrder(b.name));
-
-          for (const child of children) {
-            const childDocs = documents.filter(d => d.groupId === child.id);
-            const childContentY = contentY + GROUP_HEADER + GROUP_CONTENT_GAP;
-
-            if (childDocs.length > 0) {
-              const { maxRows, positions } = positionDocsInMonthColumns(childDocs, childContentY);
-              Object.assign(allDocPositions, positions);
-
-              const childHeight = GROUP_HEADER + GROUP_CONTENT_GAP + maxRows * (DOC_HEIGHT + DOC_GAP_Y) + GROUP_PADDING;
-
-              // Set child group center based on its document bounds
-              const docXValues = childDocs.map(d => {
-                const p = positions[d.id];
-                return p ? p.x : getMonthCenterX(getYearMonth(d.createdAt).year, getYearMonth(d.createdAt).month);
-              });
-              const centerX = (Math.min(...docXValues) + Math.max(...docXValues)) / 2;
-              await storage.updateGroup(child.id, {
-                x: Math.round(centerX),
-                y: Math.round(contentY + childHeight / 2)
-              });
-
-              contentY += childHeight + CHILD_GROUP_GAP_Y;
-            } else {
-              const emptyHeight = DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
-              await storage.updateGroup(child.id, {
-                x: getMonthCenterX(2026, 2),
-                y: Math.round(contentY + emptyHeight / 2)
-              });
-              contentY += emptyHeight + CHILD_GROUP_GAP_Y;
-            }
-          }
-        }
-
-        // Set top-level group center based on all its descendants
-        const allDesc = getDescendantDocs(topGroup.id);
-        if (allDesc.length > 0) {
-          const docXValues = allDesc.map(d => {
-            const p = allDocPositions[d.id];
-            return p ? p.x : getMonthCenterX(getYearMonth(d.createdAt).year, getYearMonth(d.createdAt).month);
-          });
-          const centerX = (Math.min(...docXValues) + Math.max(...docXValues)) / 2;
-          const totalHeight = contentY - currentRowY;
-          await storage.updateGroup(topGroup.id, {
-            x: Math.round(centerX),
-            y: Math.round(currentRowY + totalHeight / 2)
-          });
-        } else {
-          await storage.updateGroup(topGroup.id, {
-            x: getMonthCenterX(2026, 2),
-            y: Math.round(currentRowY + 200)
-          });
-        }
-
-        currentRowY = contentY + TOP_GROUP_GAP_Y;
-      }
-
-      // Handle ungrouped documents at the bottom, also timeline-aligned
-      const ungroupedDocs = documents.filter(d => !d.groupId);
-      if (ungroupedDocs.length > 0) {
-        const { positions } = positionDocsInMonthColumns(ungroupedDocs, currentRowY);
-        Object.assign(allDocPositions, positions);
-      }
-
-      // Write all document positions to DB
-      for (const [docIdStr, pos] of Object.entries(allDocPositions)) {
+      for (const [docIdStr, pos] of Object.entries(documentPositions)) {
         await storage.updateDocument(parseInt(docIdStr), { x: Math.round(pos.x), y: Math.round(pos.y) });
       }
 
@@ -1443,8 +1239,8 @@ function calculateGroupedLayout(
   const GROUP_PADDING = 36;
   const GROUP_HEADER = 112;
   const GROUP_CONTENT_GAP = 32;
-  const CHILD_GROUP_GAP_Y = 90;
-  const TOP_GROUP_GAP_Y = 150;
+  const GROUP_GAP_X = 72;
+  const GROUP_ROW_GAP_Y = 80;
   const CANVAS_START_Y = 200;
   const MAX_DOCS_PER_ROW = 2;
 
@@ -1485,6 +1281,80 @@ function calculateGroupedLayout(
       if (!childrenOf[group.parentId]) childrenOf[group.parentId] = [];
       childrenOf[group.parentId].push(group);
     }
+  }
+
+  function getGroupDocIds(group: any): number[] {
+    return Array.isArray(group.documentIds) ? group.documentIds : [];
+  }
+
+  function getDocsForGroup(group: any): any[] {
+    const ids = new Set(getGroupDocIds(group));
+    return documents.filter((doc: any) => docToGroup[doc.id] === group.id || doc.groupId === group.id || ids.has(doc.id));
+  }
+
+  function getDescendantDocs(group: any): any[] {
+    const direct = getDocsForGroup(group);
+    const childDocs = (childrenOf[group.id] || []).flatMap((child) => getDescendantDocs(child));
+    return [...direct, ...childDocs];
+  }
+
+  function getDocMonthRange(docs: any[]): { left: number; right: number } {
+    if (docs.length === 0) {
+      const fallbackLeft = getMonthLeftX(2026, 2);
+      return { left: fallbackLeft, right: fallbackLeft + MONTH_WIDTH };
+    }
+
+    let left = Infinity;
+    let right = -Infinity;
+    for (const doc of docs) {
+      const { year, month } = getYearMonth(doc.createdAt);
+      const monthLeft = getMonthLeftX(year, month);
+      left = Math.min(left, monthLeft);
+      right = Math.max(right, monthLeft + MONTH_WIDTH);
+    }
+    return { left, right };
+  }
+
+  function boundsFromDocPositions(docs: any[]) {
+    const xs = docs
+      .map((doc) => documentPositions[doc.id]?.x)
+      .filter((value: number | undefined): value is number => typeof value === "number");
+    const ys = docs
+      .map((doc) => documentPositions[doc.id]?.y)
+      .filter((value: number | undefined): value is number => typeof value === "number");
+
+    if (xs.length === 0 || ys.length === 0) return null;
+
+    return {
+      minX: Math.min(...xs) - DOC_WIDTH / 2,
+      maxX: Math.max(...xs) + DOC_WIDTH / 2,
+      minY: Math.min(...ys) - DOC_HEIGHT / 2,
+      maxY: Math.max(...ys) + DOC_HEIGHT / 2,
+    };
+  }
+
+  function placeInRows<T extends { left: number; right: number; height: number }>(items: T[]): (T & { rowTop: number })[] {
+    const rows: { right: number; height: number; top: number }[] = [];
+    const placed: (T & { rowTop: number })[] = [];
+
+    for (const item of items) {
+      let rowIndex = rows.findIndex((row) => item.left >= row.right + GROUP_GAP_X);
+      if (rowIndex === -1) {
+        const previous = rows[rows.length - 1];
+        rows.push({
+          right: item.right,
+          height: item.height,
+          top: previous ? previous.top + previous.height + GROUP_ROW_GAP_Y : CANVAS_START_Y,
+        });
+        rowIndex = rows.length - 1;
+      } else {
+        rows[rowIndex].right = Math.max(rows[rowIndex].right, item.right);
+        rows[rowIndex].height = Math.max(rows[rowIndex].height, item.height);
+      }
+      placed.push({ ...item, rowTop: rows[rowIndex].top });
+    }
+
+    return placed;
   }
 
   // Position docs in their timeline month columns
@@ -1551,69 +1421,99 @@ function calculateGroupedLayout(
     .filter(g => !g.parentId || !groupIdSet.has(g.parentId))
     .sort((a: any, b: any) => getWorkflowOrder(a.name) - getWorkflowOrder(b.name));
 
-  let currentRowY = CANVAS_START_Y;
+  const topPlans = topLevelGroups
+    .map((group: any) => {
+      const docs = getDescendantDocs(group);
+      const range = getDocMonthRange(docs);
+      return {
+        group,
+        left: range.left,
+        right: range.right,
+        height: GROUP_HEADER + GROUP_CONTENT_GAP + DOC_HEIGHT + GROUP_PADDING,
+      };
+    })
+    .sort((a, b) => a.left - b.left || getWorkflowOrder(a.group.name) - getWorkflowOrder(b.group.name));
 
-  for (const topGroup of topLevelGroups) {
-    const children = childrenOf[topGroup.id] || [];
-    const directDocs = documents.filter((d: any) => docToGroup[d.id] === topGroup.id);
-    let contentY = currentRowY + GROUP_HEADER + GROUP_CONTENT_GAP;
+  const placedTopPlans = placeInRows(topPlans);
+  let layoutBottom = CANVAS_START_Y;
+
+  for (const topPlan of placedTopPlans) {
+    const topGroup = topPlan.group;
+    const children = [...(childrenOf[topGroup.id] || [])].sort((a: any, b: any) => {
+      const aRange = getDocMonthRange(getDescendantDocs(a));
+      const bRange = getDocMonthRange(getDescendantDocs(b));
+      return aRange.left - bRange.left || getWorkflowOrder(a.name) - getWorkflowOrder(b.name);
+    });
+    const directDocs = getDocsForGroup(topGroup);
+    const directBaseY = topPlan.rowTop + GROUP_HEADER + GROUP_CONTENT_GAP;
 
     if (directDocs.length > 0) {
-      const { maxRows } = positionDocsInMonthColumns(directDocs, contentY, topGroup.id);
-      contentY += maxRows * (DOC_HEIGHT + DOC_GAP_Y);
+      positionDocsInMonthColumns(directDocs, directBaseY, topGroup.id);
     }
 
-    if (children.length > 0) {
-      if (directDocs.length > 0) contentY += 60;
-      children.sort((a: any, b: any) => getWorkflowOrder(a.name) - getWorkflowOrder(b.name));
+    const childPlans = children.map((child: any) => {
+      const childDocs = getDocsForGroup(child);
+      const range = getDocMonthRange(childDocs);
+      const maxRowsByMonth = Math.max(
+        1,
+        ...Object.values(
+          childDocs.reduce((acc: Record<string, number>, doc: any) => {
+            const key = getMonthKey(doc.createdAt);
+            acc[key] = (acc[key] || 0) + 1;
+            return acc;
+          }, {}),
+        ).map((count) => Math.ceil(Number(count) / MAX_DOCS_PER_ROW)),
+      );
+      const height = GROUP_HEADER + GROUP_CONTENT_GAP + maxRowsByMonth * (DOC_HEIGHT + DOC_GAP_Y) + GROUP_PADDING;
+      return { child, childDocs, left: range.left, right: range.right, height };
+    });
 
-      for (const child of children) {
-        const childDocs = documents.filter((d: any) => docToGroup[d.id] === child.id);
-        const childContentY = contentY + GROUP_HEADER + GROUP_CONTENT_GAP;
+    const childRowStart = directDocs.length > 0
+      ? directBaseY + DOC_HEIGHT + DOC_GAP_Y
+      : directBaseY;
+    const placedChildren = placeInRows(childPlans).map((childPlan) => ({
+      ...childPlan,
+      rowTop: childPlan.rowTop - CANVAS_START_Y + childRowStart,
+    }));
 
-        if (childDocs.length > 0) {
-          const { maxRows } = positionDocsInMonthColumns(childDocs, childContentY, child.id);
-          const childHeight = GROUP_HEADER + GROUP_CONTENT_GAP + maxRows * (DOC_HEIGHT + DOC_GAP_Y) + GROUP_PADDING;
-
-          const docXValues = childDocs.map((d: any) => {
-            const p = documentPositions[d.id];
-            return p ? p.x : getMonthCenterX(getYearMonth(d.createdAt).year, getYearMonth(d.createdAt).month);
-          });
-          const centerX = (Math.min(...docXValues) + Math.max(...docXValues)) / 2;
-          groupPositions[child.id] = { x: Math.round(centerX), y: Math.round(contentY + childHeight / 2) };
-          contentY += childHeight + CHILD_GROUP_GAP_Y;
-        } else {
-          const emptyHeight = DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
-          groupPositions[child.id] = { x: getMonthCenterX(2026, 2), y: Math.round(contentY + emptyHeight / 2) };
-          contentY += emptyHeight + CHILD_GROUP_GAP_Y;
-        }
+    for (const childPlan of placedChildren) {
+      const childContentY = childPlan.rowTop + GROUP_HEADER + GROUP_CONTENT_GAP;
+      if (childPlan.childDocs.length > 0) {
+        positionDocsInMonthColumns(childPlan.childDocs, childContentY, childPlan.child.id);
       }
+      const childBounds = boundsFromDocPositions(childPlan.childDocs);
+      const centerX = childBounds
+        ? (childBounds.minX + childBounds.maxX) / 2
+        : (childPlan.left + childPlan.right) / 2;
+      groupPositions[childPlan.child.id] = {
+        x: Math.round(centerX),
+        y: Math.round(childPlan.rowTop + childPlan.height / 2),
+      };
     }
 
-    // Set top-level group center
-    const allDocIds = [...(topGroup.documentIds || [])];
-    for (const child of children) {
-      allDocIds.push(...(child.documentIds || []));
-    }
-    const allX = allDocIds
-      .map((id: number) => documentPositions[id]?.x)
-      .filter((x: number | undefined): x is number => x !== undefined);
-    
-    if (allX.length > 0) {
-      const centerX = (Math.min(...allX) + Math.max(...allX)) / 2;
-      const totalHeight = contentY - currentRowY;
-      groupPositions[topGroup.id] = { x: Math.round(centerX), y: Math.round(currentRowY + totalHeight / 2) };
-    } else {
-      groupPositions[topGroup.id] = { x: getMonthCenterX(2026, 2), y: Math.round(currentRowY + 200) };
-    }
-
-    currentRowY = contentY + TOP_GROUP_GAP_Y;
+    const topDocs = getDescendantDocs(topGroup);
+    const topBounds = boundsFromDocPositions(topDocs);
+    const childBottom = placedChildren.length > 0
+      ? Math.max(...placedChildren.map((childPlan) => childPlan.rowTop + childPlan.height))
+      : directBaseY + (directDocs.length > 0 ? DOC_HEIGHT + GROUP_PADDING : 0);
+    const topHeight = Math.max(
+      GROUP_HEADER + GROUP_CONTENT_GAP + DOC_HEIGHT + GROUP_PADDING,
+      childBottom - topPlan.rowTop + GROUP_PADDING,
+    );
+    const topCenterX = topBounds
+      ? (topBounds.minX + topBounds.maxX) / 2
+      : (topPlan.left + topPlan.right) / 2;
+    groupPositions[topGroup.id] = {
+      x: Math.round(topCenterX),
+      y: Math.round(topPlan.rowTop + topHeight / 2),
+    };
+    layoutBottom = Math.max(layoutBottom, topPlan.rowTop + topHeight);
   }
 
   // Handle unpositioned documents
   const unpositionedDocs = documents.filter((d: any) => !documentPositions[d.id]);
   if (unpositionedDocs.length > 0) {
-    positionDocsInMonthColumns(unpositionedDocs, currentRowY);
+    positionDocsInMonthColumns(unpositionedDocs, layoutBottom + GROUP_ROW_GAP_Y);
   }
 
   return { groupPositions, documentPositions };

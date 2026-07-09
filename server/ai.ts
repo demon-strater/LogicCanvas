@@ -312,11 +312,13 @@ Hard requirements:
 - Do not leave documents ungrouped.
 - Every document must appear exactly once in the final hierarchy.
 - Use major groups as broad stages, and medium groups as the actual buckets that hold documents.
-- Keep labels short and concrete. Korean labels are preferred.
+- Major group names may be broad workflow stages such as planning, execution, analysis, or reporting.
+- Medium child group names must be more specific than their parent. Name them from the actual report topics, deliverables, decisions, audience, or work package. Avoid generic medium names such as planning, execution, analysis, report, misc, or data.
+- Keep labels concise and concrete. Korean labels are preferred.
 - Use monthStart/monthEnd only when timing helps the grouping.
 
 Workflow edges:
-- Create document-to-document relations only for clear sequential or dependency links.
+- Do not create document-to-document relations. Always return an empty "relations" array.
 - Create groupRelations only between major groups, and order them in workflow sequence.
 - If there is no obvious relation, omit the edge rather than inventing one.
 
@@ -418,20 +420,7 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
     const parsed = JSON.parse(result);
     const docIds = new Set(documents.map(d => d.id));
     
-    const validRelations: DocumentRelation[] = (parsed.relations || [])
-      .filter((r: any) => 
-        docIds.has(Number(r.sourceId)) && 
-        docIds.has(Number(r.targetId)) &&
-        r.sourceId !== r.targetId
-      )
-      .map((r: any) => ({
-        sourceDocId: Number(r.sourceId),
-        targetDocId: Number(r.targetId),
-        label: String(r.label || ""),
-        edgeType: ["flow", "depends", "related", "parent"].includes(r.edgeType) 
-          ? r.edgeType as "flow" | "depends" | "related" | "parent"
-          : "related"
-      }));
+    const validRelations: DocumentRelation[] = [];
 
     const hierarchyLevels: Record<number, number> = {};
     if (parsed.hierarchyLevels) {
