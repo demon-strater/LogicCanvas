@@ -364,8 +364,6 @@ const GROUP_COLORS = [
 ];
 
 export async function analyzeDocumentWorkflow(documents: Document[]): Promise<WorkflowAnalysisResult> {
-  assertAIConfigured();
-
   if (documents.length === 0) {
     return { relations: [], hierarchyLevels: {}, groups: [], groupRelations: [], summary: "No documents to analyze" };
   }
@@ -386,6 +384,10 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
     };
   }
 
+  if (!isAIConfigured()) {
+    return buildFallbackWorkflowAnalysis(documents);
+  }
+
   const docSummaries = documents.map(doc => ({
     id: doc.id,
     title: doc.title,
@@ -393,7 +395,8 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
     preview: (doc.summary || doc.content || "").slice(0, 500)
   }));
 
-  const response = await openai.chat.completions.create({
+  try {
+    const response = await openai.chat.completions.create({
     model: "gpt-5.2",
     messages: [
       { role: "system", content: WORKFLOW_ANALYSIS_PROMPT_V2 },
@@ -580,10 +583,96 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
       groupRelations,
       summary: String(parsed.summary || "Workflow analysis complete")
     };
-  } catch (e) {
-    console.error("Failed to parse workflow analysis:", result);
-    throw new Error("Failed to parse workflow analysis as JSON");
+    } catch (e) {
+      console.error("Failed to parse workflow analysis:", result);
+      return buildFallbackWorkflowAnalysis(documents);
+    }
+  } catch (error) {
+    console.error("Workflow analysis request failed:", error);
+    return buildFallbackWorkflowAnalysis(documents);
   }
+}
+
+function buildFallbackWorkflowAnalysis(documents: Document[]): WorkflowAnalysisResult {
+  const orderedDocs = [...documents].sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : Number.MAX_SAFE_INTEGER;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : Number.MAX_SAFE_INTEGER;
+    if (aTime !== bTime) return aTime - bTime;
+    return a.title.localeCompare(b.title);
+  });
+
+  const majorCount = Math.min(4, Math.max(2, Math.ceil(orderedDocs.length / 4)));
+  const docsPerMajor = Math.ceil(orderedDocs.length / majorCount);
+  const stageNames = ["기획", "준비", "실행", "정리"];
+  const groups: GroupDefinition[] = [];
+  const hierarchyLevels: Record<number, number> = {};
+  const relations: DocumentRelation[] = [];
+  const groupRelations: GroupRelation[] = [];
+
+  orderedDocs.forEach((doc, index) => {
+    hierarchyLevels[doc.id] = index;
+  });
+
+  for (let i = 0; i < majorCount; i++) {
+    const majorDocs = orderedDocs.slice(i * docsPerMajor, (i + 1) * docsPerMajor);
+    if (majorDocs.length === 0) continue;
+
+    const majorName = stageNames[i] || `단계 ${i + 1}`;
+    const group: GroupDefinition = {
+      name: majorName,
+      description: `${majorName} 단계`,
+      color: GROUP_COLORS[i % GROUP_COLORS.length],
+      level: "major",
+      documentIds: [],
+      childGroups: [],
+    };
+
+    if (majorDocs.length >= 5) {
+      const mediumCount = Math.min(3, Math.max(2, Math.ceil(majorDocs.length / 3)));
+      const docsPerMedium = Math.ceil(majorDocs.length / mediumCount);
+      for (let j = 0; j < mediumCount; j++) {
+        const mediumDocs = majorDocs.slice(j * docsPerMedium, (j + 1) * docsPerMedium);
+        if (mediumDocs.length === 0) continue;
+        group.childGroups?.push({
+          name: `${majorName} ${j + 1}`,
+          description: `${majorName} 세부 단계`,
+          color: GROUP_COLORS[(i + j + 1) % GROUP_COLORS.length],
+          level: "medium",
+          documentIds: mediumDocs.map((doc) => doc.id),
+        });
+      }
+    } else {
+      group.documentIds = majorDocs.map((doc) => doc.id);
+    }
+
+    groups.push(group);
+  }
+
+  for (let i = 0; i < orderedDocs.length - 1; i++) {
+    relations.push({
+      sourceDocId: orderedDocs[i].id,
+      targetDocId: orderedDocs[i + 1].id,
+      label: "workflow flow",
+      edgeType: "flow",
+    });
+  }
+
+  for (let i = 0; i < groups.length - 1; i++) {
+    groupRelations.push({
+      sourceGroupName: groups[i].name,
+      targetGroupName: groups[i + 1].name,
+      label: "workflow flow",
+      edgeType: "flow",
+    });
+  }
+
+  return {
+    relations,
+    hierarchyLevels,
+    groups,
+    groupRelations,
+    summary: "Fallback workflow analysis generated from document order",
+  };
 }
 
 function processGroups(
