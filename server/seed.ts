@@ -6,7 +6,6 @@ export async function seedDatabase() {
   // Check if we already have data
   const existingDocs = await db.select().from(documents);
   if (existingDocs.length > 0) {
-    await seedGrowthStrategyData();
     console.log("Database already seeded, skipping...");
     return;
   }

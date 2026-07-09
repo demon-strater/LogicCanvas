@@ -1252,6 +1252,7 @@ function calculateGroupedLayout(
   const GROUP_MONTH_MARGIN = 56;
   const GROUP_GAP_X = 72;
   const GROUP_ROW_GAP_Y = 80;
+  const TOP_GROUP_GAP_X = 120;
   const CHILD_GROUP_INSET_X = 32;
   const CANVAS_START_Y = 200;
   const MAX_DOCS_PER_ROW = 2;
@@ -1493,6 +1494,11 @@ function calculateGroupedLayout(
   // Get workflow order for sorting
   function getWorkflowOrder(name: string): number {
     const n = (name || "").toLowerCase();
+    if (n.includes("기획")) return 0;
+    if (n.includes("준비")) return 1;
+    if (n.includes("실행")) return 2;
+    if (n.includes("정리")) return 3;
+    if (n.includes("마케팅")) return 4;
     if (n.includes("기획") || n.includes("planning")) return 0;
     if (n.includes("리서치") || n.includes("research")) return 1;
     if (n.includes("설계") || n.includes("design")) return 2;
@@ -1532,11 +1538,20 @@ function calculateGroupedLayout(
     })
     .sort((a, b) => a.left - b.left || getWorkflowOrder(a.group.name) - getWorkflowOrder(b.group.name));
 
-  let topRowY = CANVAS_START_Y;
+  let topCursorLeft = Math.min(
+    ...topPlans.map((topPlan) => topPlan.centerX - topPlan.manualWidth / 2),
+  );
+  if (!Number.isFinite(topCursorLeft)) topCursorLeft = OFFSET_X + GROUP_MONTH_MARGIN;
   const placedTopPlans = topPlans.map((topPlan) => {
-    const placed = { ...topPlan, rowTop: topRowY };
-    topRowY += topPlan.height + GROUP_ROW_GAP_Y;
-    return placed;
+    const manualWidth = Math.max(DOC_WIDTH + GROUP_PADDING * 2, topPlan.manualWidth);
+    const left = Math.max(topPlan.centerX - manualWidth / 2, topCursorLeft);
+    topCursorLeft = left + manualWidth + TOP_GROUP_GAP_X;
+    return {
+      ...topPlan,
+      centerX: left + manualWidth / 2,
+      manualWidth,
+      rowTop: CANVAS_START_Y,
+    };
   });
   let layoutBottom = CANVAS_START_Y;
 
