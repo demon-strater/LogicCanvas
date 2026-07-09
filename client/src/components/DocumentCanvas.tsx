@@ -774,7 +774,7 @@ export function DocumentCanvas({
 
   const getDocumentPosition = useCallback((doc: Document, index: number, width: number) => {
     if (doc.x != null && doc.y != null && (doc.x !== 100 || doc.y !== 100)) {
-      return { x: clampDocumentXToMonth(doc, doc.x), y: doc.y };
+      return clampDocumentToContainingGroup(doc, doc.x, doc.y);
     }
     const colWidth = DOC_WIDTH + DOC_GAP_X;
     const rowHeight = DOC_HEIGHT + DOC_GAP_Y;
@@ -784,10 +784,9 @@ export function DocumentCanvas({
     const { year, month } = getDocumentYearMonth(doc);
     const defaultX = getMonthCenterX(year, month) + (col - Math.floor(cols / 2)) * colWidth;
     return {
-      x: clampDocumentXToMonth(doc, defaultX),
-      y: 120 + row * rowHeight,
+      ...clampDocumentToContainingGroup(doc, clampDocumentXToMonth(doc, defaultX), 120 + row * rowHeight),
     };
-  }, []);
+  }, [clampDocumentToContainingGroup]);
 
   useEffect(() => {
     const positions: Record<number, { x: number; y: number }> = {};
@@ -815,6 +814,34 @@ export function DocumentCanvas({
     setGroupPositions(positions);
   }, [groups, getGroupPosition]);
 
+  function clampDocumentToContainingGroup(
+    doc: Document,
+    x: number,
+    y: number,
+    positions: Record<number, { x: number; y: number }> = groupPositions,
+  ) {
+    const clampedX = clampDocumentXToMonth(doc, x);
+    const group = groups.find((item) => item.id === doc.groupId);
+    if (!group || (group.manualWidth == null && group.manualHeight == null)) {
+      return { x: clampedX, y };
+    }
+
+    const groupPos = positions[group.id] ?? { x: group.x ?? 0, y: group.y ?? 0 };
+    const groupWidth = group.manualWidth ?? DOC_WIDTH + GROUP_PADDING * 2;
+    const groupHeight = group.manualHeight ?? DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
+    const visibleCenterY = groupPos.y + TIMELINE_GAP;
+
+    const minX = groupPos.x - groupWidth / 2 + GROUP_PADDING + DOC_WIDTH / 2;
+    const maxX = groupPos.x + groupWidth / 2 - GROUP_PADDING - DOC_WIDTH / 2;
+    const minY = visibleCenterY - groupHeight / 2 + GROUP_HEADER + GROUP_CONTENT_GAP + DOC_HEIGHT / 2;
+    const maxY = visibleCenterY + groupHeight / 2 - GROUP_PADDING - DOC_HEIGHT / 2;
+
+    return {
+      x: minX <= maxX ? clamp(clampedX, minX, maxX) : groupPos.x,
+      y: minY <= maxY ? clamp(y, minY, maxY) : visibleCenterY,
+    };
+  }
+
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent) => {
       if (e.target === e.currentTarget || (e.target as HTMLElement).closest('[data-canvas-bg]')) {
@@ -832,9 +859,9 @@ export function DocumentCanvas({
 
   const handleDocDragMove = useCallback((id: number, x: number, y: number) => {
     const doc = documents.find((item) => item.id === id);
-    const nextX = doc ? clampDocumentXToMonth(doc, x) : x;
-    setDocPositions(prev => ({ ...prev, [id]: { x: nextX, y } }));
-  }, [documents]);
+    const nextPos = doc ? clampDocumentToContainingGroup(doc, x, y) : { x, y };
+    setDocPositions(prev => ({ ...prev, [id]: nextPos }));
+  }, [clampDocumentToContainingGroup, documents]);
 
   const getGroupCascadeIds = useCallback((groupId: number) => {
     const groupIds = new Set<number>([groupId]);
@@ -936,10 +963,9 @@ export function DocumentCanvas({
         if (base) {
           const doc = documents.find((item) => item.id === docId);
           const proposedX = base.x + deltaX;
-          next[docId] = {
-            x: doc ? clampDocumentXToMonth(doc, proposedX) : proposedX,
-            y: base.y + deltaY,
-          };
+          next[docId] = doc
+            ? clampDocumentToContainingGroup(doc, proposedX, base.y + deltaY)
+            : { x: proposedX, y: base.y + deltaY };
         }
       });
       return next;
@@ -949,9 +975,9 @@ export function DocumentCanvas({
   // Handle multi-drag for documents
   const handleLocalPositionUpdate = (id: number, x: number, y: number, prevX: number, prevY: number) => {
     const activeDoc = documents.find((doc) => doc.id === id);
-    const clampedX = activeDoc ? clampDocumentXToMonth(activeDoc, x) : x;
-    const deltaX = clampedX - prevX;
-    const deltaY = y - prevY;
+    const clampedPos = activeDoc ? clampDocumentToContainingGroup(activeDoc, x, y) : { x, y };
+    const deltaX = clampedPos.x - prevX;
+    const deltaY = clampedPos.y - prevY;
     
     // If this document is part of multi-selection, move all selected items
     if (selectedDocIds.has(id) && selectedDocIds.size > 1) {
@@ -960,15 +986,16 @@ export function DocumentCanvas({
         if (docId !== id && docPositions[docId]) {
           const doc = documents.find((item) => item.id === docId);
           const proposedX = docPositions[docId].x + deltaX;
-          const newX = doc ? clampDocumentXToMonth(doc, proposedX) : proposedX;
-          const newY = docPositions[docId].y + deltaY;
-          newDocPositions[docId] = { x: newX, y: newY };
-          onUpdateDocumentPosition(docId, newX, newY);
+          const newPos = doc
+            ? clampDocumentToContainingGroup(doc, proposedX, docPositions[docId].y + deltaY)
+            : { x: proposedX, y: docPositions[docId].y + deltaY };
+          newDocPositions[docId] = newPos;
+          onUpdateDocumentPosition(docId, newPos.x, newPos.y);
         }
       });
-      newDocPositions[id] = { x: clampedX, y };
+      newDocPositions[id] = clampedPos;
       setDocPositions(newDocPositions);
-      onUpdateDocumentPosition(id, clampedX, y, prevX, prevY);
+      onUpdateDocumentPosition(id, clampedPos.x, clampedPos.y, prevX, prevY);
       
       // Also move selected groups
       if (selectedGroupIds.size > 0) {
@@ -984,8 +1011,8 @@ export function DocumentCanvas({
         setGroupPositions(newGroupPositions);
       }
     } else {
-      setDocPositions(prev => ({ ...prev, [id]: { x: clampedX, y } }));
-      onUpdateDocumentPosition(id, clampedX, y, prevX, prevY);
+      setDocPositions(prev => ({ ...prev, [id]: clampedPos }));
+      onUpdateDocumentPosition(id, clampedPos.x, clampedPos.y, prevX, prevY);
     }
   };
 
@@ -1050,10 +1077,11 @@ export function DocumentCanvas({
           if (base) {
             const doc = documents.find((item) => item.id === docId);
             const proposedX = base.x + deltaX;
-            const newX = doc ? clampDocumentXToMonth(doc, proposedX) : proposedX;
-            const newY = base.y + deltaY;
-            next[docId] = { x: newX, y: newY };
-            onUpdateDocumentPosition(docId, newX, newY);
+            const newPos = doc
+              ? clampDocumentToContainingGroup(doc, proposedX, base.y + deltaY)
+              : { x: proposedX, y: base.y + deltaY };
+            next[docId] = newPos;
+            onUpdateDocumentPosition(docId, newPos.x, newPos.y);
           }
         });
         return next;
@@ -1728,12 +1756,13 @@ export function DocumentCanvas({
         {zoom >= ZOOM_L3 && documents.map((doc) => {
           const pos = docPositions[doc.id];
           if (!pos) return null;
+          const renderPos = clampDocumentToContainingGroup(doc, pos.x, pos.y, docPositions);
           return (
             <DocumentBox
               key={`doc-${doc.id}`}
               document={doc}
-              x={pos.x}
-              y={pos.y}
+              x={renderPos.x}
+              y={renderPos.y}
               zoom={zoom}
               isSelected={selectedDocumentId === doc.id || selectedDocIds.has(doc.id)}
               isSpacePressed={isSpacePressed}
