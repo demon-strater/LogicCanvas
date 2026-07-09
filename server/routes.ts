@@ -1154,7 +1154,12 @@ export async function registerRoutes(
       );
 
       for (const [groupIdStr, pos] of Object.entries(groupPositions)) {
-        await storage.updateGroup(parseInt(groupIdStr), { x: Math.round(pos.x), y: Math.round(pos.y) });
+        await storage.updateGroup(parseInt(groupIdStr), {
+          x: Math.round(pos.x),
+          y: Math.round(pos.y),
+          manualWidth: null,
+          manualHeight: null,
+        });
       }
 
       for (const [docIdStr, pos] of Object.entries(documentPositions)) {
@@ -1239,6 +1244,7 @@ function calculateGroupedLayout(
   const GROUP_PADDING = 36;
   const GROUP_HEADER = 112;
   const GROUP_CONTENT_GAP = 32;
+  const GROUP_MONTH_MARGIN = 12;
   const GROUP_GAP_X = 72;
   const GROUP_ROW_GAP_Y = 80;
   const CANVAS_START_Y = 200;
@@ -1376,14 +1382,14 @@ function calculateGroupedLayout(
     for (const [monthKey, monthDocs] of Object.entries(byMonth)) {
       const [yr, mo] = monthKey.split("-").map(Number);
       const monthLeft = getMonthLeftX(yr, mo);
-      const availableWidth = MONTH_WIDTH - GROUP_PADDING * 2;
+      const availableWidth = MONTH_WIDTH - GROUP_MONTH_MARGIN * 2 - GROUP_PADDING * 2;
       const fittingCols = Math.max(
         1,
         Math.floor((availableWidth + DOC_GAP_X) / (DOC_WIDTH + DOC_GAP_X)),
       );
       const cols = Math.min(MAX_DOCS_PER_ROW, fittingCols, monthDocs.length);
       const totalRowWidth = cols * DOC_WIDTH + (cols - 1) * DOC_GAP_X;
-      const startX = monthLeft + GROUP_PADDING + (availableWidth - totalRowWidth) / 2 + DOC_WIDTH / 2;
+      const startX = monthLeft + GROUP_MONTH_MARGIN + GROUP_PADDING + (availableWidth - totalRowWidth) / 2 + DOC_WIDTH / 2;
 
       for (let i = 0; i < monthDocs.length; i++) {
         const col = i % cols;
@@ -1391,8 +1397,8 @@ function calculateGroupedLayout(
         const proposedX = startX + col * (DOC_WIDTH + DOC_GAP_X);
         documentPositions[monthDocs[i].id] = {
           x: Math.min(
-            monthLeft + MONTH_WIDTH - GROUP_PADDING - DOC_WIDTH / 2,
-            Math.max(monthLeft + GROUP_PADDING + DOC_WIDTH / 2, proposedX),
+            monthLeft + MONTH_WIDTH - GROUP_MONTH_MARGIN - GROUP_PADDING - DOC_WIDTH / 2,
+            Math.max(monthLeft + GROUP_MONTH_MARGIN + GROUP_PADDING + DOC_WIDTH / 2, proposedX),
           ),
           y: baseY + row * (DOC_HEIGHT + DOC_GAP_Y) + DOC_HEIGHT / 2,
           groupId

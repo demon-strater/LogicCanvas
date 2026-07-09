@@ -44,6 +44,7 @@ const DOC_GAP_Y = 86;
 const GROUP_PADDING = 36;
 const GROUP_HEADER = 112;
 const GROUP_CONTENT_GAP = 32;
+const GROUP_MONTH_MARGIN = 12;
 const TIMELINE_HEIGHT = 50;
 const TIMELINE_GAP = 80;
 const TIMELINE_MONTH_WIDTH = 800;
@@ -82,8 +83,8 @@ function getMonthCenterX(year: number, month: number) {
 function clampDocumentXToMonth(doc: Document, x: number) {
   const { year, month } = getDocumentYearMonth(doc);
   const monthLeft = getMonthLeftX(year, month);
-  const minX = monthLeft + DOC_WIDTH / 2 + GROUP_PADDING;
-  const maxX = monthLeft + TIMELINE_MONTH_WIDTH - DOC_WIDTH / 2 - GROUP_PADDING;
+  const minX = monthLeft + GROUP_MONTH_MARGIN + DOC_WIDTH / 2 + GROUP_PADDING;
+  const maxX = monthLeft + TIMELINE_MONTH_WIDTH - GROUP_MONTH_MARGIN - DOC_WIDTH / 2 - GROUP_PADDING;
   if (minX > maxX) {
     return getMonthCenterX(year, month);
   }
@@ -879,8 +880,8 @@ export function DocumentCanvas({
       ? Math.max(DOC_WIDTH + GROUP_PADDING * 2, (Math.max(...docXs) - Math.min(...docXs)) + DOC_WIDTH + GROUP_PADDING * 2)
       : DOC_WIDTH + GROUP_PADDING * 2;
     const groupWidth = Math.max(group?.manualWidth ?? 0, contentWidth);
-    const minX = monthLeft + groupWidth / 2;
-    const maxX = monthRight - groupWidth / 2;
+    const minX = monthLeft + GROUP_MONTH_MARGIN + groupWidth / 2;
+    const maxX = monthRight - GROUP_MONTH_MARGIN - groupWidth / 2;
 
     if (minX > maxX) {
       return (monthLeft + monthRight) / 2;
