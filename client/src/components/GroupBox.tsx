@@ -249,7 +249,7 @@ export function GroupBox({
   }, [documents, childGroups, calculateChildGroupBounds, getDocPos, x, y]);
 
   const groupWidth = resizeSize ? resizeSize.w : group.manualWidth ?? autoWidth;
-  const groupHeight = resizeSize ? resizeSize.h : Math.max(group.manualHeight ?? autoHeight, autoHeight);
+  const groupHeight = resizeSize ? resizeSize.h : group.manualHeight ?? autoHeight;
 
   useEffect(() => {
     if (isResizing || !resizeSize) return;
@@ -267,14 +267,17 @@ export function GroupBox({
   
   const hasLayoutContent = (documents || []).length > 0 || (childGroups || []).length > 0;
   hasLayoutContentRef.current = hasLayoutContent;
-  const baseCenterX = group.manualWidth != null ? x : hasLayoutContent ? computedCenterX : x;
-  const baseCenterY = hasLayoutContent ? computedCenterY : y;
+  const hasManualBounds = group.manualWidth != null || group.manualHeight != null;
+  const baseCenterX = hasManualBounds ? x : hasLayoutContent ? computedCenterX : x;
+  const baseCenterY = hasManualBounds ? y : hasLayoutContent ? computedCenterY : y;
   const effectiveCenterX = group.manualWidth != null
     ? baseCenterX
     : hasLayoutContent
     ? baseCenterX + Math.max(0, groupWidth - autoWidth) / 2
     : baseCenterX;
-  const effectiveCenterY = hasLayoutContent
+  const effectiveCenterY = group.manualHeight != null
+    ? baseCenterY
+    : hasLayoutContent
     ? baseCenterY + Math.max(0, groupHeight - autoHeight) / 2
     : baseCenterY;
 

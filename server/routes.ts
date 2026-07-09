@@ -983,7 +983,7 @@ export async function registerRoutes(
             x: pos.x,
             y: pos.y,
             manualWidth: pos.manualWidth ?? null,
-            manualHeight: null,
+            manualHeight: pos.manualHeight ?? null,
           });
         }
       }
@@ -1163,7 +1163,7 @@ export async function registerRoutes(
           x: Math.round(pos.x),
           y: Math.round(pos.y),
           manualWidth: pos.manualWidth ?? null,
-          manualHeight: null,
+          manualHeight: pos.manualHeight ?? null,
         });
       }
 
@@ -1230,10 +1230,10 @@ function calculateGroupedLayout(
   groups: any[],
   analysis: { hierarchyLevels: Record<number, number>; relations: any[] }
 ): {
-  groupPositions: Record<number, { x: number; y: number; manualWidth?: number }>;
+  groupPositions: Record<number, { x: number; y: number; manualWidth?: number; manualHeight?: number }>;
   documentPositions: Record<number, { x: number; y: number; groupId?: number }>;
 } {
-  const groupPositions: Record<number, { x: number; y: number; manualWidth?: number }> = {};
+  const groupPositions: Record<number, { x: number; y: number; manualWidth?: number; manualHeight?: number }> = {};
   const documentPositions: Record<number, { x: number; y: number; groupId?: number }> = {};
 
   // Timeline constants (must match frontend)
@@ -1559,7 +1559,7 @@ function calculateGroupedLayout(
       const childDocs = getDocsForGroup(child);
       const range = getDocMonthRange(childDocs);
       const maxRowsByMonth = getMaxRowsByMonth(childDocs) || 1;
-      const height = GROUP_HEADER + GROUP_CONTENT_GAP + maxRowsByMonth * (DOC_HEIGHT + DOC_GAP_Y) + GROUP_PADDING;
+      const height = GROUP_HEADER + GROUP_CONTENT_GAP + maxRowsByMonth * (DOC_HEIGHT + DOC_GAP_Y) + GROUP_PADDING * 2;
       return {
         child,
         childDocs,
@@ -1590,6 +1590,7 @@ function calculateGroupedLayout(
         x: Math.round(childPlan.centerX),
         y: Math.round(childPlan.rowTop + childPlan.height / 2),
         manualWidth: Math.round(Math.max(DOC_WIDTH + GROUP_PADDING * 2, childPlan.manualWidth)),
+        manualHeight: Math.round(childPlan.height),
       };
     }
 
@@ -1597,13 +1598,14 @@ function calculateGroupedLayout(
       ? Math.max(...placedChildren.map((childPlan) => childPlan.rowTop + childPlan.height))
       : directBaseY + (directDocs.length > 0 ? DOC_HEIGHT + GROUP_PADDING : 0);
     const topHeight = Math.max(
-      GROUP_HEADER + GROUP_CONTENT_GAP + DOC_HEIGHT + GROUP_PADDING,
-      childBottom - topPlan.rowTop + GROUP_PADDING,
+      GROUP_HEADER + GROUP_CONTENT_GAP + DOC_HEIGHT + GROUP_PADDING * 2,
+      childBottom - topPlan.rowTop + GROUP_PADDING * 2,
     );
     groupPositions[topGroup.id] = {
       x: Math.round(topPlan.centerX),
       y: Math.round(topPlan.rowTop + topHeight / 2),
       manualWidth: Math.round(topPlan.manualWidth),
+      manualHeight: Math.round(topHeight),
     };
     layoutBottom = Math.max(layoutBottom, topPlan.rowTop + topHeight);
   }
