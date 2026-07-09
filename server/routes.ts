@@ -979,7 +979,12 @@ export async function registerRoutes(
       for (const group of createdGroups) {
         const pos = groupPositions[group.id];
         if (pos) {
-          await storage.updateGroup(group.id, { x: pos.x, y: pos.y });
+          await storage.updateGroup(group.id, {
+            x: pos.x,
+            y: pos.y,
+            manualWidth: pos.manualWidth ?? null,
+            manualHeight: null,
+          });
         }
       }
 
@@ -1157,7 +1162,7 @@ export async function registerRoutes(
         await storage.updateGroup(parseInt(groupIdStr), {
           x: Math.round(pos.x),
           y: Math.round(pos.y),
-          manualWidth: null,
+          manualWidth: pos.manualWidth ?? null,
           manualHeight: null,
         });
       }
@@ -1225,10 +1230,10 @@ function calculateGroupedLayout(
   groups: any[],
   analysis: { hierarchyLevels: Record<number, number>; relations: any[] }
 ): {
-  groupPositions: Record<number, { x: number; y: number }>;
+  groupPositions: Record<number, { x: number; y: number; manualWidth?: number }>;
   documentPositions: Record<number, { x: number; y: number; groupId?: number }>;
 } {
-  const groupPositions: Record<number, { x: number; y: number }> = {};
+  const groupPositions: Record<number, { x: number; y: number; manualWidth?: number }> = {};
   const documentPositions: Record<number, { x: number; y: number; groupId?: number }> = {};
 
   // Timeline constants (must match frontend)
@@ -1321,6 +1326,14 @@ function calculateGroupedLayout(
     return { left, right };
   }
 
+  function getRangeCenter(range: { left: number; right: number }): number {
+    return (range.left + range.right) / 2;
+  }
+
+  function getRangeInnerWidth(range: { left: number; right: number }): number {
+    return Math.max(DOC_WIDTH + GROUP_PADDING * 2, range.right - range.left - GROUP_MONTH_MARGIN * 2);
+  }
+
   function getMaxRowsByMonth(docs: any[]): number {
     if (docs.length === 0) return 0;
 
@@ -1334,24 +1347,6 @@ function calculateGroupedLayout(
       1,
       ...Object.values(countsByMonth).map((count) => Math.ceil(Number(count) / MAX_DOCS_PER_ROW)),
     );
-  }
-
-  function boundsFromDocPositions(docs: any[]) {
-    const xs = docs
-      .map((doc) => documentPositions[doc.id]?.x)
-      .filter((value: number | undefined): value is number => typeof value === "number");
-    const ys = docs
-      .map((doc) => documentPositions[doc.id]?.y)
-      .filter((value: number | undefined): value is number => typeof value === "number");
-
-    if (xs.length === 0 || ys.length === 0) return null;
-
-    return {
-      minX: Math.min(...xs) - DOC_WIDTH / 2,
-      maxX: Math.max(...xs) + DOC_WIDTH / 2,
-      minY: Math.min(...ys) - DOC_HEIGHT / 2,
-      maxY: Math.max(...ys) + DOC_HEIGHT / 2,
-    };
   }
 
   function placeInRows<T extends { left: number; right: number; height: number }>(items: T[]): (T & { rowTop: number })[] {
@@ -1512,18 +1507,15 @@ function calculateGroupedLayout(
       if (childPlan.childDocs.length > 0) {
         positionDocsInMonthColumns(childPlan.childDocs, childContentY, childPlan.child.id);
       }
-      const childBounds = boundsFromDocPositions(childPlan.childDocs);
-      const centerX = childBounds
-        ? (childBounds.minX + childBounds.maxX) / 2
-        : (childPlan.left + childPlan.right) / 2;
+      const childRange = { left: childPlan.left, right: childPlan.right };
+      const centerX = getRangeCenter(childRange);
       groupPositions[childPlan.child.id] = {
         x: Math.round(centerX),
         y: Math.round(childPlan.rowTop + childPlan.height / 2),
+        manualWidth: Math.round(getRangeInnerWidth(childRange)),
       };
     }
 
-    const topDocs = getDescendantDocs(topGroup);
-    const topBounds = boundsFromDocPositions(topDocs);
     const childBottom = placedChildren.length > 0
       ? Math.max(...placedChildren.map((childPlan) => childPlan.rowTop + childPlan.height))
       : directBaseY + (directDocs.length > 0 ? DOC_HEIGHT + GROUP_PADDING : 0);
@@ -1531,12 +1523,12 @@ function calculateGroupedLayout(
       GROUP_HEADER + GROUP_CONTENT_GAP + DOC_HEIGHT + GROUP_PADDING,
       childBottom - topPlan.rowTop + GROUP_PADDING,
     );
-    const topCenterX = topBounds
-      ? (topBounds.minX + topBounds.maxX) / 2
-      : (topPlan.left + topPlan.right) / 2;
+    const topRange = { left: topPlan.left, right: topPlan.right };
+    const topCenterX = getRangeCenter(topRange);
     groupPositions[topGroup.id] = {
       x: Math.round(topCenterX),
       y: Math.round(topPlan.rowTop + topHeight / 2),
+      manualWidth: Math.round(getRangeInnerWidth(topRange)),
     };
     layoutBottom = Math.max(layoutBottom, topPlan.rowTop + topHeight);
   }

@@ -267,9 +267,11 @@ export function GroupBox({
   
   const hasLayoutContent = (documents || []).length > 0 || (childGroups || []).length > 0;
   hasLayoutContentRef.current = hasLayoutContent;
-  const baseCenterX = hasLayoutContent ? computedCenterX : x;
+  const baseCenterX = group.manualWidth != null ? x : hasLayoutContent ? computedCenterX : x;
   const baseCenterY = hasLayoutContent ? computedCenterY : y;
-  const effectiveCenterX = hasLayoutContent
+  const effectiveCenterX = group.manualWidth != null
+    ? baseCenterX
+    : hasLayoutContent
     ? baseCenterX + Math.max(0, groupWidth - autoWidth) / 2
     : baseCenterX;
   const effectiveCenterY = hasLayoutContent
