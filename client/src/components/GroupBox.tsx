@@ -248,7 +248,7 @@ export function GroupBox({
     };
   }, [documents, childGroups, calculateChildGroupBounds, getDocPos, x, y]);
 
-  const groupWidth = resizeSize ? resizeSize.w : Math.max(group.manualWidth ?? autoWidth, autoWidth);
+  const groupWidth = resizeSize ? resizeSize.w : group.manualWidth ?? autoWidth;
   const groupHeight = resizeSize ? resizeSize.h : Math.max(group.manualHeight ?? autoHeight, autoHeight);
 
   useEffect(() => {
