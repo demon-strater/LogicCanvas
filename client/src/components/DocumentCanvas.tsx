@@ -41,10 +41,10 @@ const DOC_WIDTH = 340;
 const DOC_HEIGHT = 190;
 const DOC_GAP_X = 24;
 const DOC_GAP_Y = 86;
-const GROUP_PADDING = 36;
+const GROUP_PADDING = 24;
 const GROUP_HEADER = 112;
-const GROUP_CONTENT_GAP = 32;
-const GROUP_MONTH_MARGIN = 12;
+const GROUP_CONTENT_GAP = 20;
+const GROUP_MONTH_MARGIN = 32;
 const TIMELINE_HEIGHT = 50;
 const TIMELINE_GAP = 80;
 const TIMELINE_MONTH_WIDTH = 800;
@@ -215,17 +215,17 @@ function rectToObstacle(rect: GroupEdgeRect, id?: number): ObstacleRect {
   };
 }
 
-function getGroupEdgeAnchors(rect: GroupEdgeRect, _gap: number): EdgePoint[] {
+function getGroupEdgeAnchors(rect: GroupEdgeRect, gap: number): EdgePoint[] {
   const left = rect.x - rect.width / 2;
   const right = rect.x + rect.width / 2;
   const top = rect.y - rect.height / 2;
   const bottom = rect.y + rect.height / 2;
 
   return [
-    { x: left, y: rect.y, portX: left, portY: rect.y, side: "left" },
-    { x: right, y: rect.y, portX: right, portY: rect.y, side: "right" },
-    { x: rect.x, y: top, portX: rect.x, portY: top, side: "top" },
-    { x: rect.x, y: bottom, portX: rect.x, portY: bottom, side: "bottom" },
+    { x: left, y: rect.y, portX: left - gap, portY: rect.y, side: "left" },
+    { x: right, y: rect.y, portX: right + gap, portY: rect.y, side: "right" },
+    { x: rect.x, y: top, portX: rect.x, portY: top - gap, side: "top" },
+    { x: rect.x, y: bottom, portX: rect.x, portY: bottom + gap, side: "bottom" },
   ];
 }
 
@@ -310,18 +310,21 @@ function buildOrthogonalRoutePath(
 function computeClosestGroupEdgePath(
   source: GroupEdgeRect,
   target: GroupEdgeRect,
-  _obstacles: ObstacleRect[] = [],
+  obstacles: ObstacleRect[] = [],
   sourceGap = 10,
   targetGap = 22
 ): string {
   const sourceAnchors = getGroupEdgeAnchors(source, sourceGap);
   const targetAnchors = getGroupEdgeAnchors(target, targetGap);
   let bestRoute: { points: { x: number; y: number }[]; cost: number } | null = null;
+  let fallbackRoute: { points: { x: number; y: number }[]; cost: number } | null = null;
 
   for (const start of sourceAnchors) {
     for (const end of targetAnchors) {
-      const startPoint = { x: start.x, y: start.y };
-      const endPoint = { x: end.x, y: end.y };
+      const dx = target.x - source.x;
+      const dy = target.y - source.y;
+      const startPoint = { x: start.portX, y: start.portY };
+      const endPoint = { x: end.portX, y: end.portY };
       const routes: { x: number; y: number }[][] = [
         [startPoint, { x: end.x, y: start.y }, endPoint],
         [startPoint, { x: start.x, y: end.y }, endPoint],
@@ -335,19 +338,26 @@ function computeClosestGroupEdgePath(
         });
 
         const bends = Math.max(0, normalizedPoints.length - 2);
-        const cost = routeLength(normalizedPoints) + bends * 0.001;
+        const directionCost = directionPenalty(start.side, dx, dy, true) + directionPenalty(end.side, dx, dy, false);
+        const cost = routeLength(normalizedPoints) + bends * 20 + directionCost;
+        const candidate = { points: [start, ...normalizedPoints, end], cost };
 
-        if (!bestRoute || cost < bestRoute.cost) {
-          bestRoute = { points: [start, ...normalizedPoints, end], cost };
+        if (!fallbackRoute || cost < fallbackRoute.cost) {
+          fallbackRoute = candidate;
+        }
+
+        if (!routeCrossesObstacles(normalizedPoints, obstacles) && (!bestRoute || cost < bestRoute.cost)) {
+          bestRoute = candidate;
         }
       }
     }
   }
 
-  if (bestRoute) {
-    const start = bestRoute.points[0] as EdgePoint;
-    const end = bestRoute.points[bestRoute.points.length - 1] as EdgePoint;
-    return buildOrthogonalRoutePath(start, bestRoute.points.slice(1, -1), end);
+  const route = bestRoute ?? fallbackRoute;
+  if (route) {
+    const start = route.points[0] as EdgePoint;
+    const end = route.points[route.points.length - 1] as EdgePoint;
+    return buildOrthogonalRoutePath(start, route.points.slice(1, -1), end);
   }
 
   return "";
@@ -879,7 +889,7 @@ export function DocumentCanvas({
     const contentWidth = docXs.length > 0
       ? Math.max(DOC_WIDTH + GROUP_PADDING * 2, (Math.max(...docXs) - Math.min(...docXs)) + DOC_WIDTH + GROUP_PADDING * 2)
       : DOC_WIDTH + GROUP_PADDING * 2;
-    const groupWidth = Math.max(group?.manualWidth ?? 0, contentWidth);
+    const groupWidth = group?.manualWidth ?? contentWidth;
     const minX = monthLeft + GROUP_MONTH_MARGIN + groupWidth / 2;
     const maxX = monthRight - GROUP_MONTH_MARGIN - groupWidth / 2;
 
@@ -1348,12 +1358,13 @@ export function DocumentCanvas({
             
             const getChildGroupBounds = (childGroup: typeof sourceGroup) => {
               const childDocs = documents.filter(d => d.groupId === childGroup.id);
+              const childLivePos = groupPositions[childGroup.id];
               if (childDocs.length === 0) {
-                const cgPos = groupPositions[childGroup.id];
+                const cgPos = childLivePos;
                 const cx = cgPos ? cgPos.x : childGroup.x;
                 const cy = cgPos ? cgPos.y + TIMELINE_GAP : (childGroup.y ?? 0) + TIMELINE_GAP;
-                const w = DOC_WIDTH + GROUP_PADDING * 2;
-                const h = DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
+                const w = childGroup.manualWidth ?? DOC_WIDTH + GROUP_PADDING * 2;
+                const h = childGroup.manualHeight ?? DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
                 return { centerX: cx, centerY: cy, width: w, height: h };
               }
               let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
@@ -1369,14 +1380,14 @@ export function DocumentCanvas({
                 }
               }
               if (mnX === Infinity) {
-                const cgPos = groupPositions[childGroup.id];
+                const cgPos = childLivePos;
                 const cx = cgPos ? cgPos.x : childGroup.x;
                 const cy = cgPos ? cgPos.y + TIMELINE_GAP : (childGroup.y ?? 0) + TIMELINE_GAP;
                 return {
                   centerX: cx,
                   centerY: cy,
-                  width: DOC_WIDTH + GROUP_PADDING * 2,
-                  height: DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
+                  width: childGroup.manualWidth ?? DOC_WIDTH + GROUP_PADDING * 2,
+                  height: childGroup.manualHeight ?? DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
                 };
               }
               const w = Math.max(DOC_WIDTH + GROUP_PADDING * 2, (mxX - mnX) + GROUP_PADDING * 2);
@@ -1386,7 +1397,12 @@ export function DocumentCanvas({
               );
               const topLeftX = mnX - GROUP_PADDING;
               const topLeftY = mnY - GROUP_HEADER - GROUP_CONTENT_GAP;
-              return { centerX: topLeftX + w / 2, centerY: topLeftY + h / 2, width: w, height: h };
+              return {
+                centerX: childGroup.manualWidth != null && childLivePos ? childLivePos.x : topLeftX + w / 2,
+                centerY: topLeftY + h / 2,
+                width: childGroup.manualWidth ?? w,
+                height: childGroup.manualHeight ?? h
+              };
             };
 
             const getGroupCenter = (group: typeof sourceGroup) => {
@@ -1439,10 +1455,10 @@ export function DocumentCanvas({
               }
               
               return {
-                x: cx,
+                x: group.manualWidth != null ? pos.x : cx,
                 y: cy,
-                width: autoW,
-                height: autoH
+                width: group.manualWidth ?? autoW,
+                height: group.manualHeight ?? autoH
               };
             };
             
@@ -1492,15 +1508,16 @@ export function DocumentCanvas({
           {/* Top-level workflow arrows, inferred from the visible major-group order. */}
           {zoom >= ZOOM_L1 && (() => {
             const getChildBounds = (childGroup: DocumentGroup) => {
+              const groupPos = groupPositions[childGroup.id];
               const childDocs = documents.filter((doc) => doc.groupId === childGroup.id);
               if (childDocs.length === 0) {
-                const pos = groupPositions[childGroup.id];
+                const pos = groupPos;
                 if (!pos) return null;
                 return {
                   x: pos.x,
                   y: pos.y + TIMELINE_GAP,
-                  width: DOC_WIDTH + GROUP_PADDING * 2,
-                  height: DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
+                  width: childGroup.manualWidth ?? DOC_WIDTH + GROUP_PADDING * 2,
+                  height: childGroup.manualHeight ?? DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
                 };
               }
 
@@ -1523,14 +1540,15 @@ export function DocumentCanvas({
               const topLeftX = minX - GROUP_PADDING;
               const topLeftY = minY - GROUP_HEADER - GROUP_CONTENT_GAP;
               return {
-                x: topLeftX + width / 2,
+                x: childGroup.manualWidth != null && groupPos ? groupPos.x : topLeftX + width / 2,
                 y: topLeftY + height / 2,
-                width,
-                height,
+                width: childGroup.manualWidth ?? width,
+                height: childGroup.manualHeight ?? height,
               };
             };
 
             const getTopBounds = (group: DocumentGroup) => {
+              const groupPos = groupPositions[group.id];
               const children = groups.filter((child) => child.parentId === group.id);
               const directDocs = documents.filter((doc) => doc.groupId === group.id);
               const items: GroupEdgeRect[] = [];
@@ -1548,13 +1566,13 @@ export function DocumentCanvas({
               });
 
               if (items.length === 0) {
-                const pos = groupPositions[group.id];
+                const pos = groupPos;
                 if (!pos) return null;
                 return {
                   x: pos.x,
                   y: pos.y + TIMELINE_GAP,
-                  width: DOC_WIDTH + GROUP_PADDING * 2,
-                  height: DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
+                  width: group.manualWidth ?? DOC_WIDTH + GROUP_PADDING * 2,
+                  height: group.manualHeight ?? DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
                 };
               }
 
@@ -1574,10 +1592,10 @@ export function DocumentCanvas({
               const topLeftX = minX - GROUP_PADDING;
               const topLeftY = minY - GROUP_HEADER - GROUP_CONTENT_GAP;
               return {
-                x: topLeftX + width / 2,
+                x: group.manualWidth != null && groupPos ? groupPos.x : topLeftX + width / 2,
                 y: topLeftY + height / 2,
-                width,
-                height,
+                width: group.manualWidth ?? width,
+                height: group.manualHeight ?? height,
               };
             };
 

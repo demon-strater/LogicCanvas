@@ -1246,10 +1246,10 @@ function calculateGroupedLayout(
   const DOC_HEIGHT = 190;
   const DOC_GAP_X = 24;
   const DOC_GAP_Y = 86;
-  const GROUP_PADDING = 36;
+  const GROUP_PADDING = 24;
   const GROUP_HEADER = 112;
-  const GROUP_CONTENT_GAP = 32;
-  const GROUP_MONTH_MARGIN = 12;
+  const GROUP_CONTENT_GAP = 20;
+  const GROUP_MONTH_MARGIN = 32;
   const GROUP_GAP_X = 72;
   const GROUP_ROW_GAP_Y = 80;
   const CANVAS_START_Y = 200;
@@ -1326,12 +1326,46 @@ function calculateGroupedLayout(
     return { left, right };
   }
 
-  function getRangeCenter(range: { left: number; right: number }): number {
-    return (range.left + range.right) / 2;
-  }
+  function assignSiblingSlots<T extends { left: number; right: number }>(
+    items: T[],
+  ): (T & { centerX: number; manualWidth: number; layoutLeft: number; layoutRight: number; isSplit: boolean })[] {
+    const MIN_SLOT_WIDTH = DOC_WIDTH;
+    const SLOT_GAP_X = GROUP_GAP_X;
+    const byRange = new Map<string, T[]>();
 
-  function getRangeInnerWidth(range: { left: number; right: number }): number {
-    return Math.max(DOC_WIDTH + GROUP_PADDING * 2, range.right - range.left - GROUP_MONTH_MARGIN * 2);
+    for (const item of items) {
+      const key = `${item.left}:${item.right}`;
+      if (!byRange.has(key)) byRange.set(key, []);
+      byRange.get(key)!.push(item);
+    }
+
+    const result: (T & { centerX: number; manualWidth: number; layoutLeft: number; layoutRight: number; isSplit: boolean })[] = [];
+    for (const rangeItems of Array.from(byRange.values())) {
+      const { left, right } = rangeItems[0];
+      const innerLeft = left + GROUP_MONTH_MARGIN;
+      const innerRight = right - GROUP_MONTH_MARGIN;
+      const innerWidth = innerRight - innerLeft;
+      const perRow = Math.max(1, Math.floor((innerWidth + SLOT_GAP_X) / (MIN_SLOT_WIDTH + SLOT_GAP_X)));
+      const slotsPerRow = Math.min(rangeItems.length, perRow);
+
+      for (let index = 0; index < rangeItems.length; index++) {
+        const slotIndex = index % slotsPerRow;
+        const rowSlots = Math.min(slotsPerRow, rangeItems.length - index + slotIndex);
+        const slotWidth = (innerWidth - (rowSlots - 1) * SLOT_GAP_X) / rowSlots;
+        const slotLeft = innerLeft + slotIndex * (slotWidth + SLOT_GAP_X);
+        const slotRight = slotLeft + slotWidth;
+        result.push({
+          ...rangeItems[index],
+          centerX: (slotLeft + slotRight) / 2,
+          manualWidth: slotWidth,
+          layoutLeft: slotLeft,
+          layoutRight: slotRight,
+          isSplit: rangeItems.length > 1 && slotsPerRow > 1,
+        });
+      }
+    }
+
+    return result;
   }
 
   function getMaxRowsByMonth(docs: any[]): number {
@@ -1420,6 +1454,41 @@ function calculateGroupedLayout(
     return { maxRows };
   }
 
+  function positionDocsInSlotColumns(
+    docs: any[],
+    baseY: number,
+    groupId: number | undefined,
+    slotLeft: number,
+    slotRight: number,
+  ): { maxRows: number } {
+    if (docs.length === 0) return { maxRows: 0 };
+
+    const slotWidth = slotRight - slotLeft;
+    const sidePadding = Math.min(GROUP_PADDING, Math.max(6, (slotWidth - DOC_WIDTH) / 2));
+    const availableWidth = Math.max(DOC_WIDTH, slotWidth - sidePadding * 2);
+    const fittingCols = Math.max(
+      1,
+      Math.floor((availableWidth + DOC_GAP_X) / (DOC_WIDTH + DOC_GAP_X)),
+    );
+    const cols = Math.min(MAX_DOCS_PER_ROW, fittingCols, docs.length);
+    const totalRowWidth = cols * DOC_WIDTH + (cols - 1) * DOC_GAP_X;
+    const startX = slotLeft + sidePadding + (availableWidth - totalRowWidth) / 2 + DOC_WIDTH / 2;
+    let maxRows = 0;
+
+    for (let i = 0; i < docs.length; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      documentPositions[docs[i].id] = {
+        x: startX + col * (DOC_WIDTH + DOC_GAP_X),
+        y: baseY + row * (DOC_HEIGHT + DOC_GAP_Y) + DOC_HEIGHT / 2,
+        groupId,
+      };
+      maxRows = Math.max(maxRows, row + 1);
+    }
+
+    return { maxRows };
+  }
+
   // Get workflow order for sorting
   function getWorkflowOrder(name: string): number {
     const n = (name || "").toLowerCase();
@@ -1437,7 +1506,7 @@ function calculateGroupedLayout(
     .filter(g => !g.parentId || !groupIdSet.has(g.parentId))
     .sort((a: any, b: any) => getWorkflowOrder(a.name) - getWorkflowOrder(b.name));
 
-  const topPlans = topLevelGroups
+  const topPlans = assignSiblingSlots(topLevelGroups
     .map((group: any) => {
       const docs = getDescendantDocs(group);
       const range = getDocMonthRange(docs);
@@ -1466,7 +1535,7 @@ function calculateGroupedLayout(
         height: GROUP_HEADER + GROUP_CONTENT_GAP + Math.max(DOC_HEIGHT, contentHeight) + GROUP_PADDING,
       };
     })
-    .sort((a, b) => a.left - b.left || getWorkflowOrder(a.group.name) - getWorkflowOrder(b.group.name));
+    .sort((a, b) => a.left - b.left || getWorkflowOrder(a.group.name) - getWorkflowOrder(b.group.name)));
 
   const placedTopPlans = placeInRows(topPlans);
   let layoutBottom = CANVAS_START_Y;
@@ -1483,16 +1552,20 @@ function calculateGroupedLayout(
     const directBaseY = topPlan.rowTop + GROUP_HEADER + GROUP_CONTENT_GAP;
 
     if (directDocs.length > 0) {
-      positionDocsInMonthColumns(directDocs, directBaseY, topGroup.id);
+      if (topPlan.isSplit) {
+        positionDocsInSlotColumns(directDocs, directBaseY, topGroup.id, topPlan.layoutLeft, topPlan.layoutRight);
+      } else {
+        positionDocsInMonthColumns(directDocs, directBaseY, topGroup.id);
+      }
     }
 
-    const childPlans = children.map((child: any) => {
+    const childPlans = assignSiblingSlots(children.map((child: any) => {
       const childDocs = getDocsForGroup(child);
       const range = getDocMonthRange(childDocs);
       const maxRowsByMonth = getMaxRowsByMonth(childDocs) || 1;
       const height = GROUP_HEADER + GROUP_CONTENT_GAP + maxRowsByMonth * (DOC_HEIGHT + DOC_GAP_Y) + GROUP_PADDING;
       return { child, childDocs, left: range.left, right: range.right, height };
-    });
+    }));
 
     const childRowStart = directDocs.length > 0
       ? directBaseY + directRows * (DOC_HEIGHT + DOC_GAP_Y) + 60
@@ -1505,14 +1578,16 @@ function calculateGroupedLayout(
     for (const childPlan of placedChildren) {
       const childContentY = childPlan.rowTop + GROUP_HEADER + GROUP_CONTENT_GAP;
       if (childPlan.childDocs.length > 0) {
-        positionDocsInMonthColumns(childPlan.childDocs, childContentY, childPlan.child.id);
+        if (childPlan.isSplit) {
+          positionDocsInSlotColumns(childPlan.childDocs, childContentY, childPlan.child.id, childPlan.layoutLeft, childPlan.layoutRight);
+        } else {
+          positionDocsInMonthColumns(childPlan.childDocs, childContentY, childPlan.child.id);
+        }
       }
-      const childRange = { left: childPlan.left, right: childPlan.right };
-      const centerX = getRangeCenter(childRange);
       groupPositions[childPlan.child.id] = {
-        x: Math.round(centerX),
+        x: Math.round(childPlan.centerX),
         y: Math.round(childPlan.rowTop + childPlan.height / 2),
-        manualWidth: Math.round(getRangeInnerWidth(childRange)),
+        manualWidth: Math.round(childPlan.manualWidth),
       };
     }
 
@@ -1523,12 +1598,10 @@ function calculateGroupedLayout(
       GROUP_HEADER + GROUP_CONTENT_GAP + DOC_HEIGHT + GROUP_PADDING,
       childBottom - topPlan.rowTop + GROUP_PADDING,
     );
-    const topRange = { left: topPlan.left, right: topPlan.right };
-    const topCenterX = getRangeCenter(topRange);
     groupPositions[topGroup.id] = {
-      x: Math.round(topCenterX),
+      x: Math.round(topPlan.centerX),
       y: Math.round(topPlan.rowTop + topHeight / 2),
-      manualWidth: Math.round(getRangeInnerWidth(topRange)),
+      manualWidth: Math.round(topPlan.manualWidth),
     };
     layoutBottom = Math.max(layoutBottom, topPlan.rowTop + topHeight);
   }
