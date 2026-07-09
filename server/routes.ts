@@ -1252,6 +1252,7 @@ function calculateGroupedLayout(
   const GROUP_MONTH_MARGIN = 32;
   const GROUP_GAP_X = 72;
   const GROUP_ROW_GAP_Y = 80;
+  const CHILD_GROUP_INSET_X = 32;
   const CANVAS_START_Y = 200;
   const MAX_DOCS_PER_ROW = 2;
 
@@ -1565,7 +1566,21 @@ function calculateGroupedLayout(
       const maxRowsByMonth = getMaxRowsByMonth(childDocs) || 1;
       const height = GROUP_HEADER + GROUP_CONTENT_GAP + maxRowsByMonth * (DOC_HEIGHT + DOC_GAP_Y) + GROUP_PADDING;
       return { child, childDocs, left: range.left, right: range.right, height };
-    }));
+    })).map((childPlan) => {
+      const insetLeft = topPlan.layoutLeft + CHILD_GROUP_INSET_X;
+      const insetRight = topPlan.layoutRight - CHILD_GROUP_INSET_X;
+      const layoutLeft = Math.max(childPlan.layoutLeft, insetLeft);
+      const layoutRight = Math.min(childPlan.layoutRight, insetRight);
+      const manualWidth = Math.max(DOC_WIDTH, layoutRight - layoutLeft);
+
+      return {
+        ...childPlan,
+        layoutLeft,
+        layoutRight,
+        centerX: (layoutLeft + layoutRight) / 2,
+        manualWidth,
+      };
+    });
 
     const childRowStart = directDocs.length > 0
       ? directBaseY + directRows * (DOC_HEIGHT + DOC_GAP_Y) + 60
