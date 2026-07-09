@@ -1175,11 +1175,12 @@ export function DocumentCanvas({
     >
       {isLayerSidebarOpen ? (
       <aside
-        className="absolute left-4 top-16 max-h-[calc(100%-8rem)] overflow-y-auto rounded-md border bg-card/95 shadow-lg backdrop-blur-sm"
+        className="absolute left-4 top-16 max-h-[calc(100%-8rem)] overflow-y-auto rounded-md border bg-card/95 shadow-lg backdrop-blur-sm [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         style={{ zIndex: 22, width: layerSidebarWidth }}
         data-testid="group-layer-sidebar"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
+        onWheel={(e) => e.stopPropagation()}
       >
         <div className="border-b px-3 py-2">
           <div className="flex items-center justify-between gap-3">
