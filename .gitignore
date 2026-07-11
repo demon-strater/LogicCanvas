@@ -9,3 +9,4 @@ vite.config.ts.*
 devserver-runtime*.log
 devserver.err.log
 devserver.log
+server-local.log

@@ -15,6 +15,12 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/postgres
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-local-placeholder}
       NOTION_API_KEY: ${NOTION_API_KEY:-}
+      NOTION_OAUTH_CLIENT_ID: ${NOTION_OAUTH_CLIENT_ID:-}
+      NOTION_OAUTH_CLIENT_SECRET: ${NOTION_OAUTH_CLIENT_SECRET:-}
+      NOTION_OAUTH_REDIRECT_URI: ${NOTION_OAUTH_REDIRECT_URI:-}
+      PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:5000}
+      SESSION_SECRET: ${SESSION_SECRET:-logiccanvas-local-session-secret}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
 
   migrate:
     build:

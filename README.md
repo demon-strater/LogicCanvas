@@ -18,7 +18,27 @@ The script starts the app and database with Docker Compose, then opens:
 http://127.0.0.1:5000
 ```
 
-AI and Notion integrations require real API keys. Create a local `.env` file from `.env.example` and set `OPENAI_API_KEY` and `NOTION_API_KEY` when you need those features. The app can still open without committing private keys.
+AI features require `OPENAI_API_KEY`.
+
+Notion can be connected in two ways:
+
+- User-facing OAuth: create a public Notion connection and set `NOTION_OAUTH_CLIENT_ID`, `NOTION_OAUTH_CLIENT_SECRET`, and `NOTION_OAUTH_REDIRECT_URI` in `.env`. Users then click "Notion 연결하기" and select pages in Notion without entering an API key.
+- Single-workspace fallback: set `NOTION_API_KEY` for an internal connection.
+
+For local Docker, use this redirect URI in the Notion developer portal:
+
+```text
+http://127.0.0.1:5000/api/notion/oauth/callback
+```
+
+Also set:
+
+```text
+PUBLIC_URL=http://127.0.0.1:5000
+COOKIE_SECURE=false
+```
+
+The app can still open without committing private keys.
 
 ## Included Documents
 

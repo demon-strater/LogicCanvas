@@ -1255,7 +1255,7 @@ function calculateGroupedLayout(
   const TOP_GROUP_GAP_X = 120;
   const CHILD_GROUP_INSET_X = 32;
   const CANVAS_START_Y = 200;
-  const MAX_DOCS_PER_ROW = 2;
+  const MAX_DOCS_PER_ROW = 1;
 
   function getMonthCenterX(year: number, month: number): number {
     const monthIndex = (year - TIMELINE_START_YEAR) * 12 + month - TIMELINE_START_MONTH;
@@ -1617,9 +1617,12 @@ function calculateGroupedLayout(
       };
     }
 
+    const directBottom = directDocs.length > 0
+      ? directBaseY + directRows * (DOC_HEIGHT + DOC_GAP_Y)
+      : directBaseY + DOC_HEIGHT;
     const childBottom = placedChildren.length > 0
-      ? Math.max(...placedChildren.map((childPlan) => childPlan.rowTop + childPlan.height))
-      : directBaseY + (directDocs.length > 0 ? DOC_HEIGHT + GROUP_PADDING : 0);
+      ? Math.max(directBottom, ...placedChildren.map((childPlan) => childPlan.rowTop + childPlan.height))
+      : directBottom;
     const topHeight = Math.max(
       GROUP_HEADER + GROUP_CONTENT_GAP + DOC_HEIGHT + GROUP_PADDING * 2,
       childBottom - topPlan.rowTop + GROUP_PADDING * 2,

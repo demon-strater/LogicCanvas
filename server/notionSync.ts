@@ -5,7 +5,7 @@ import { log } from "./index";
 
 let syncInterval: ReturnType<typeof setInterval> | null = null;
 let lastSyncTime: Date | null = null;
-let syncEnabled = true;
+let syncEnabled = process.env.NOTION_AUTO_SYNC === "true";
 let isSyncing = false;
 let lastSyncResult: { imported: number; skipped: number; errors: number } | null = null;
 

@@ -27,6 +27,18 @@ declare module "express-session" {
 
 app.set("trust proxy", 1);
 
+const shouldUseSecureCookies = () => {
+  if (process.env.COOKIE_SECURE) {
+    return process.env.COOKIE_SECURE === "true";
+  }
+
+  if (process.env.PUBLIC_URL) {
+    return process.env.PUBLIC_URL.startsWith("https://");
+  }
+
+  return process.env.NODE_ENV === "production" && process.env.RENDER === "true";
+};
+
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -45,7 +57,7 @@ app.use(
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: shouldUseSecureCookies(),
       maxAge: 1000 * 60 * 60 * 24 * 30,
     },
   }),
