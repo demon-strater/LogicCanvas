@@ -39,6 +39,74 @@ const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
+const DEFAULT_ANALYSIS_MODEL = "gpt-4.1-mini";
+const DEFAULT_GROUP_MODEL = "gpt-4.1-mini";
+
+function getModelList(primary: string | undefined, fallback: string[] = []): string[] {
+  const configuredFallbacks = (process.env.LOGICCANVAS_AI_FALLBACK_MODELS || "")
+    .split(",")
+    .map((model) => model.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set([
+    primary,
+    ...fallback,
+    ...configuredFallbacks,
+  ].filter(Boolean) as string[]));
+}
+
+function getAnalysisModels(): string[] {
+  return getModelList(
+    process.env.LOGICCANVAS_ANALYSIS_MODEL || process.env.LOGICCANVAS_AI_MODEL || DEFAULT_ANALYSIS_MODEL,
+    DEFAULT_ANALYSIS_MODEL === "gpt-4.1-mini" ? ["gpt-4.1"] : [DEFAULT_ANALYSIS_MODEL, "gpt-4.1-mini"],
+  );
+}
+
+function getGroupModels(): string[] {
+  return getModelList(
+    process.env.LOGICCANVAS_GROUP_MODEL || process.env.LOGICCANVAS_AI_MODEL || DEFAULT_GROUP_MODEL,
+    ["gpt-4.1-mini"],
+  );
+}
+
+function logOpenAIError(context: string, model: string, error: any) {
+  console.error(`[ai] ${context} failed with ${model}:`, {
+    status: error?.status,
+    code: error?.code,
+    type: error?.type,
+    message: error?.message,
+  });
+}
+
+async function createJsonChatCompletion(
+  context: string,
+  models: string[],
+  messages: any[],
+  maxCompletionTokens: number,
+) {
+  let lastError: any;
+
+  for (const model of models) {
+    try {
+      return await openai.chat.completions.create({
+        model,
+        messages,
+        response_format: { type: "json_object" },
+        max_completion_tokens: maxCompletionTokens,
+      });
+    } catch (error: any) {
+      lastError = error;
+      logOpenAIError(context, model, error);
+
+      if (error?.status === 401 || error?.code === "invalid_api_key") {
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error(`${context} failed`);
+}
+
 export function isAIConfigured(): boolean {
   return Boolean(process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
 }
@@ -48,6 +116,8 @@ export function getAIConfigStatus() {
     configured: isAIConfigured(),
     provider: process.env.AI_INTEGRATIONS_OPENAI_API_KEY ? "ai-integrations" : process.env.OPENAI_API_KEY ? "openai" : null,
     baseURLConfigured: Boolean(process.env.AI_INTEGRATIONS_OPENAI_BASE_URL),
+    analysisModels: getAnalysisModels(),
+    groupModels: getGroupModels(),
   };
 }
 
@@ -108,15 +178,15 @@ const VALID_EDGE_TYPES: EdgeType[] = ["related", "supports", "contradicts", "imp
 export async function parseDocumentWithAI(content: string): Promise<ParseResult> {
   assertAIConfigured();
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-5.2",
-    messages: [
+  const response = await createJsonChatCompletion(
+    "parse document",
+    getAnalysisModels(),
+    [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: `Perform Rhetorical Structure Analysis on this document. Segment it into discourse units, map their rhetorical relationships, identify structural gaps, and provide TQI feedback:\n\n${content}` },
     ],
-    response_format: { type: "json_object" },
-    max_completion_tokens: 4096,
-  });
+    4096,
+  );
 
   const result = response.choices[0]?.message?.content;
   if (!result) {
@@ -214,15 +284,15 @@ export async function assignDocumentToGroup(
   const availableColors = GROUP_COLORS.filter(c => !usedColors.has(c));
   const suggestedColor = availableColors.length > 0 ? availableColors[0] : GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)];
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4.1-mini",
-    messages: [
+  const response = await createJsonChatCompletion(
+    "assign document to group",
+    getGroupModels(),
+    [
       { role: "system", content: GROUP_ASSIGNMENT_PROMPT },
       { role: "user", content: `New document:\nTitle: ${docTitle}\nContent preview:\n${contentPreview}\n\nExisting groups:\n${groupList}\n\nIf creating a new group, suggest a color from these available colors: ${availableColors.join(", ")}. If none available, use: ${suggestedColor}` },
     ],
-    response_format: { type: "json_object" },
-    max_completion_tokens: 512,
-  });
+    512,
+  );
 
   const result = response.choices[0]?.message?.content;
   if (!result) {
@@ -398,27 +468,27 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
   }));
 
   try {
-    const response = await openai.chat.completions.create({
-    model: "gpt-5.2",
-    messages: [
-      { role: "system", content: WORKFLOW_ANALYSIS_PROMPT_V2 },
-      { 
-        role: "user", 
-        content: `Analyze the workflow relationships and create hierarchical groups for these documents:\n\n${JSON.stringify(docSummaries, null, 2)}` 
-      },
-    ],
-    response_format: { type: "json_object" },
-    max_completion_tokens: 4096,
-  });
+    const response = await createJsonChatCompletion(
+      "analyze document workflow",
+      getAnalysisModels(),
+      [
+        { role: "system", content: WORKFLOW_ANALYSIS_PROMPT_V2 },
+        {
+          role: "user",
+          content: `Analyze the workflow relationships and create hierarchical groups for these documents:\n\n${JSON.stringify(docSummaries, null, 2)}`,
+        },
+      ],
+      4096,
+    );
 
-  const result = response.choices[0]?.message?.content;
-  if (!result) {
-    throw new Error("No response from AI");
-  }
+    const result = response.choices[0]?.message?.content;
+    if (!result) {
+      throw new Error("No response from AI");
+    }
 
-  try {
-    const parsed = JSON.parse(result);
-    const docIds = new Set(documents.map(d => d.id));
+    try {
+      const parsed = JSON.parse(result);
+      const docIds = new Set(documents.map(d => d.id));
     
     const validRelations: DocumentRelation[] = [];
 
