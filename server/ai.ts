@@ -58,14 +58,14 @@ function getModelList(primary: string | undefined, fallback: string[] = []): str
 function getAnalysisModels(): string[] {
   return getModelList(
     process.env.LOGICCANVAS_ANALYSIS_MODEL || process.env.LOGICCANVAS_AI_MODEL || DEFAULT_ANALYSIS_MODEL,
-    DEFAULT_ANALYSIS_MODEL === "gpt-4.1-mini" ? ["gpt-4.1"] : [DEFAULT_ANALYSIS_MODEL, "gpt-4.1-mini"],
+    DEFAULT_ANALYSIS_MODEL === "gpt-4.1-mini" ? ["gpt-4.1", "gpt-4o-mini"] : [DEFAULT_ANALYSIS_MODEL, "gpt-4.1-mini", "gpt-4o-mini"],
   );
 }
 
 function getGroupModels(): string[] {
   return getModelList(
     process.env.LOGICCANVAS_GROUP_MODEL || process.env.LOGICCANVAS_AI_MODEL || DEFAULT_GROUP_MODEL,
-    ["gpt-4.1-mini"],
+    ["gpt-4.1-mini", "gpt-4o-mini"],
   );
 }
 
@@ -87,24 +87,42 @@ async function createJsonChatCompletion(
   let lastError: any;
 
   for (const model of models) {
-    try {
-      return await openai.chat.completions.create({
-        model,
-        messages,
-        response_format: { type: "json_object" },
-        max_completion_tokens: maxCompletionTokens,
-      });
-    } catch (error: any) {
-      lastError = error;
-      logOpenAIError(context, model, error);
+    const attempts = [
+      { response_format: { type: "json_object" }, max_completion_tokens: maxCompletionTokens },
+      { response_format: { type: "json_object" }, max_tokens: maxCompletionTokens },
+      { max_completion_tokens: maxCompletionTokens },
+      { max_tokens: maxCompletionTokens },
+    ];
 
-      if (error?.status === 401 || error?.code === "invalid_api_key") {
-        break;
+    for (const attempt of attempts) {
+      try {
+        return await openai.chat.completions.create({
+          model,
+          messages,
+          ...attempt,
+        } as any);
+      } catch (error: any) {
+        lastError = error;
+        logOpenAIError(context, model, error);
+
+        if (error?.status === 401 || error?.code === "invalid_api_key") {
+          throw error;
+        }
+
+        if (error?.status === 429 || error?.code === "insufficient_quota") {
+          break;
+        }
       }
     }
   }
 
   throw lastError || new Error(`${context} failed`);
+}
+
+function parseJsonResponse<T>(raw: string): T {
+  const trimmed = raw.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return JSON.parse(fenced ? fenced[1] : trimmed) as T;
 }
 
 export function isAIConfigured(): boolean {
@@ -194,7 +212,7 @@ export async function parseDocumentWithAI(content: string): Promise<ParseResult>
   }
 
   try {
-    const parsed = JSON.parse(result) as ParseResult;
+    const parsed = parseJsonResponse<ParseResult>(result);
     
     if (!Array.isArray(parsed.concepts) || !Array.isArray(parsed.relations)) {
       throw new Error("Invalid response structure");
@@ -300,7 +318,7 @@ export async function assignDocumentToGroup(
   }
 
   try {
-    const parsed = JSON.parse(result) as GroupAssignmentResult;
+    const parsed = parseJsonResponse<GroupAssignmentResult>(result);
     
     if (parsed.action === "existing" && parsed.existingGroupId) {
       const validGroup = existingGroups.find(g => g.id === parsed.existingGroupId);
@@ -487,7 +505,7 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
     }
 
     try {
-      const parsed = JSON.parse(result);
+      const parsed = parseJsonResponse<any>(result);
       const docIds = new Set(documents.map(d => d.id));
     
     const validRelations: DocumentRelation[] = [];
