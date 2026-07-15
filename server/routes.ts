@@ -8,7 +8,7 @@ import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import { storage, storageMode } from "./storage";
-import { parseDocumentWithAI, analyzeDocumentWorkflow, assignDocumentToGroup, getAIConfigStatus } from "./ai";
+import { parseDocumentWithAI, analyzeDocumentWorkflow, assignDocumentToGroup, getAIConfigStatus, diagnoseAI } from "./ai";
 import { listNotionPages, fetchNotionPageContent, isNotionConfigured, isNotionOAuthConfigured } from "./notion";
 import { syncNotionPages, getSyncStatus, setSyncEnabled, importSingleNotionPage } from "./notionSync";
 import { insertDocumentSchema, insertNodeSchema, insertEdgeSchema, insertTaskSchema, insertDocumentGroupSchema } from "@shared/schema";
@@ -126,6 +126,25 @@ export async function registerRoutes(
     }
 
     res.status(status.ok ? 200 : 503).json(status);
+  });
+
+  app.get("/api/ai/diagnostics", async (_req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      const diagnostics = await diagnoseAI();
+      res.status(diagnostics.ok ? 200 : 503).json(diagnostics);
+    } catch (error: any) {
+      console.error("AI diagnostics failed:", error);
+      res.status(500).json({
+        ok: false,
+        error: {
+          status: error?.status ?? null,
+          code: error?.code ?? null,
+          type: error?.type ?? null,
+          message: error?.message ?? String(error),
+        },
+      });
+    }
   });
 
   app.get("/api/download/planning-doc", (req, res) => {

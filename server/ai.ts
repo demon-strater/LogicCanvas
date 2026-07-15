@@ -139,6 +139,73 @@ export function getAIConfigStatus() {
   };
 }
 
+function sanitizeOpenAIError(error: any) {
+  return {
+    status: error?.status ?? null,
+    code: error?.code ?? null,
+    type: error?.type ?? null,
+    message: error?.message ?? String(error),
+  };
+}
+
+export async function diagnoseAI() {
+  const status = getAIConfigStatus();
+  if (!isAIConfigured()) {
+    return {
+      ok: false,
+      ...status,
+      attempts: [],
+      error: "OPENAI_API_KEY or AI_INTEGRATIONS_OPENAI_API_KEY is not configured.",
+    };
+  }
+
+  const attempts = [];
+  for (const model of getAnalysisModels()) {
+    try {
+      const response = await openai.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: "Return compact JSON only." },
+          { role: "user", content: "{\"ok\":true}" },
+        ],
+        max_tokens: 32,
+      });
+
+      return {
+        ok: true,
+        ...status,
+        workingModel: model,
+        attempts: [
+          ...attempts,
+          {
+            model,
+            ok: true,
+            content: response.choices[0]?.message?.content ?? null,
+          },
+        ],
+      };
+    } catch (error: any) {
+      const sanitized = sanitizeOpenAIError(error);
+      attempts.push({
+        model,
+        ok: false,
+        error: sanitized,
+      });
+      logOpenAIError("diagnostics", model, error);
+
+      if (error?.status === 401 || error?.code === "invalid_api_key") {
+        break;
+      }
+    }
+  }
+
+  return {
+    ok: false,
+    ...status,
+    attempts,
+  };
+}
+
 function assertAIConfigured() {
   if (!isAIConfigured()) {
     const error = new Error("AI service is not configured. Set OPENAI_API_KEY or AI_INTEGRATIONS_OPENAI_API_KEY in the deployment environment.");
