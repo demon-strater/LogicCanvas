@@ -129,6 +129,10 @@ export async function registerRoutes(
   });
 
   app.get("/api/ai/diagnostics", async (_req, res) => {
+    if (process.env.AI_DIAGNOSTICS_ENABLED !== "true") {
+      return res.status(404).json({ error: "Not found" });
+    }
+
     try {
       res.setHeader("Cache-Control", "no-store");
       const diagnostics = await diagnoseAI();
