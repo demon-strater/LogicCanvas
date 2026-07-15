@@ -196,22 +196,22 @@ const VALID_EDGE_TYPES: EdgeType[] = ["related", "supports", "contradicts", "imp
 export async function parseDocumentWithAI(content: string): Promise<ParseResult> {
   assertAIConfigured();
 
-  const response = await createJsonChatCompletion(
-    "parse document",
-    getAnalysisModels(),
-    [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: `Perform Rhetorical Structure Analysis on this document. Segment it into discourse units, map their rhetorical relationships, identify structural gaps, and provide TQI feedback:\n\n${content}` },
-    ],
-    4096,
-  );
-
-  const result = response.choices[0]?.message?.content;
-  if (!result) {
-    throw new Error("No response from AI");
-  }
-
   try {
+    const response = await createJsonChatCompletion(
+      "parse document",
+      getAnalysisModels(),
+      [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: `Perform Rhetorical Structure Analysis on this document. Segment it into discourse units, map their rhetorical relationships, identify structural gaps, and provide TQI feedback:\n\n${content}` },
+      ],
+      4096,
+    );
+
+    const result = response.choices[0]?.message?.content;
+    if (!result) {
+      throw new Error("No response from AI");
+    }
+
     const parsed = parseJsonResponse<ParseResult>(result);
     
     if (!Array.isArray(parsed.concepts) || !Array.isArray(parsed.relations)) {
@@ -253,9 +253,58 @@ export async function parseDocumentWithAI(content: string): Promise<ParseResult>
 
     return parsed;
   } catch (e) {
-    console.error("Failed to parse AI response:", result);
-    throw new Error("Failed to parse AI response as JSON");
+    console.error("[ai] Falling back to local document parser:", e);
+    return buildLocalParseResult(content);
   }
+}
+
+function buildLocalParseResult(content: string): ParseResult {
+  const sentences = content
+    .replace(/\r/g, "\n")
+    .split(/(?<=[.!?。！？])\s+|\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 8);
+
+  const sourceUnits = sentences.length > 0 ? sentences : [content.trim() || "No content provided."];
+  const concepts: ParsedConcept[] = sourceUnits.map((sentence, index) => {
+    const normalized = sentence.replace(/\s+/g, " ");
+    const label = normalized.length > 28 ? `${normalized.slice(0, 28)}...` : normalized;
+    const lower = normalized.toLowerCase();
+    const nodeType: NodeType =
+      normalized.includes("?") || normalized.includes("왜") || lower.includes("why")
+        ? "question"
+        : normalized.includes("근거") || normalized.includes("because") || normalized.includes("때문")
+          ? "evidence"
+          : index === 0
+            ? "claim"
+            : "concept";
+
+    return {
+      label: label || `Unit ${index + 1}`,
+      content: normalized,
+      nodeType,
+      weight: index === 0 ? 2 : 1,
+    };
+  });
+
+  const relations: ParsedRelation[] = concepts.slice(1).map((_, index) => ({
+    sourceIndex: index,
+    targetIndex: index + 1,
+    label: index === 0 ? "supports" : "related",
+    edgeType: index === 0 ? "supports" : "related",
+  }));
+
+  return {
+    concepts,
+    relations,
+    feedback: [
+      {
+        level: 1,
+        message: "AI 분석 서비스 응답이 지연되어 기본 문장 구조 기반 로직맵을 생성했습니다. 핵심 주장, 근거, 질문을 검토해 노드를 보완할 수 있습니다.",
+      },
+    ],
+  };
 }
 
 export type GroupAssignmentResult = {
