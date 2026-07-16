@@ -28,6 +28,12 @@ type PositionHistoryItem = {
   prevY: number;
 };
 
+type NewDocumentInput = {
+  title: string;
+  content: string;
+  createdAt?: string;
+};
+
 export default function Canvas() {
   const { toast } = useToast();
   const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null);
@@ -100,20 +106,35 @@ export default function Canvas() {
   }, [documents, groups, requestAIWorkflowGrouping]);
 
   const createDocumentMutation = useMutation({
-    mutationFn: async ({ title, content, createdAt }: { title: string; content: string; createdAt?: string }) => {
-      const summary = content.split("\n").filter((line) => line.trim()).slice(0, 3).join(" ").slice(0, 200);
-      const response = await apiRequest("POST", "/api/documents/parse", { title, content, summary, createdAt });
-      return response.json();
+    mutationFn: async (input: NewDocumentInput | NewDocumentInput[]) => {
+      const inputs = Array.isArray(input) ? input : [input];
+      const createdDocuments = [];
+
+      for (const { title, content, createdAt } of inputs) {
+        const summary = content.split("\n").filter((line) => line.trim()).slice(0, 3).join(" ").slice(0, 200);
+        const response = await apiRequest("POST", "/api/documents/parse", { title, content, summary, createdAt });
+        createdDocuments.push(await response.json());
+      }
+
+      return createdDocuments;
     },
-    onSuccess: () => {
+    onSuccess: (createdDocuments) => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
       queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
       setIsDocumentModalOpen(false);
       requestAIWorkflowGrouping();
-      toast({ title: "문서가 추가되었습니다" });
+      toast({
+        title: createdDocuments.length > 1
+          ? `${createdDocuments.length}개 문서가 추가되었습니다`
+          : "문서가 추가되었습니다",
+      });
     },
-    onError: () => {
-      toast({ title: "오류", description: "문서 추가에 실패했습니다.", variant: "destructive" });
+    onError: (error: any) => {
+      toast({
+        title: "문서 추가 실패",
+        description: error?.message || "문서 추가에 실패했습니다.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -276,12 +297,12 @@ export default function Canvas() {
       positionHistoryRef.current = [];
       autoWorkflowAnalysisKeyRef.current = "";
       toast({
-        title: "?? ???? ????? ??????",
-        description: `??? ${data.deletedDocuments || 0}?, ???? ${data.deletedGroups || 0}?? ???????.`,
+        title: "모든 보고서와 그룹박스를 삭제했습니다",
+        description: `보고서 ${data.deletedDocuments || 0}개, 그룹박스 ${data.deletedGroups || 0}개가 정리되었습니다.`,
       });
     },
     onError: () => {
-      toast({ title: "?? ??", description: "?? ?? ? ??? ??????.", variant: "destructive" });
+      toast({ title: "삭제 실패", description: "전체 삭제 중 오류가 발생했습니다.", variant: "destructive" });
     },
   });
 
@@ -445,7 +466,7 @@ export default function Canvas() {
 
   const handleClearCanvas = useCallback(() => {
     if (documents.length === 0 && groups.length === 0) return;
-    const confirmed = window.confirm("?? ???? ????? ????????? ? ??? ??? ? ????.");
+    const confirmed = window.confirm("모든 보고서와 그룹박스를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.");
     if (!confirmed) return;
     clearCanvasMutation.mutate();
   }, [clearCanvasMutation, documents.length, groups.length]);
@@ -492,17 +513,19 @@ export default function Canvas() {
 
         <div className="fixed bottom-4 right-4 flex items-center gap-2 z-30">
           {(documents.length >= 1 || (groups || []).length >= 1) && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="shadow-lg bg-card/90 backdrop-blur-sm"
-              onClick={() => relayoutMutation.mutate()}
-              disabled={relayoutMutation.isPending}
-              data-testid="button-relayout"
-            >
-              <LayoutGrid className="h-3.5 w-3.5 mr-1.5" />
-              {relayoutMutation.isPending ? "정렬 중..." : "재정렬"}
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shadow-lg bg-card/90 backdrop-blur-sm"
+                onClick={() => relayoutMutation.mutate()}
+                disabled={relayoutMutation.isPending}
+                data-testid="button-relayout"
+              >
+                <LayoutGrid className="h-3.5 w-3.5 mr-1.5" />
+                {relayoutMutation.isPending ? "정렬 중..." : "재정렬"}
+              </Button>
+            </>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -542,6 +565,7 @@ export default function Canvas() {
         isOpen={isDocumentModalOpen}
         onClose={() => setIsDocumentModalOpen(false)}
         onSubmit={(title, content, createdAt) => createDocumentMutation.mutate({ title, content, createdAt })}
+        onSubmitMany={(documents) => createDocumentMutation.mutate(documents)}
         onNotionImport={(pageIds) => importNotionMutation.mutate(pageIds)}
         isLoading={createDocumentMutation.isPending}
         isNotionImporting={importNotionMutation.isPending}

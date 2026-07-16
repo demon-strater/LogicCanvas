@@ -34,22 +34,31 @@ type NotionPage = {
   lastEditedTime: string;
 };
 
+type UploadedDocument = {
+  title: string;
+  content: string;
+  createdAt?: string;
+  fileName: string;
+};
+
 type Props = {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (title: string, content: string, createdAt?: string) => void;
+  onSubmitMany?: (documents: Array<{ title: string; content: string; createdAt?: string }>) => void;
   onNotionImport?: (pageIds: string[]) => void;
   isLoading: boolean;
   isNotionImporting?: boolean;
 };
 
-export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, isLoading, isNotionImporting }: Props) {
+export function DocumentInputModal({ isOpen, onClose, onSubmit, onSubmitMany, onNotionImport, isLoading, isNotionImporting }: Props) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [tab, setTab] = useState("paste");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState("");
+  const [uploadedDocuments, setUploadedDocuments] = useState<UploadedDocument[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -113,58 +122,87 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (tab === "upload" && uploadedDocuments.length > 0) {
+      const documents = uploadedDocuments.map(({ title, content, createdAt }) => ({ title, content, createdAt }));
+      if (documents.length > 1 && onSubmitMany) {
+        onSubmitMany(documents);
+        return;
+      }
+      const document = documents[0];
+      if (!document?.title.trim() || !document.content.trim()) return;
+      onSubmit(document.title.trim(), document.content.trim(), document.createdAt);
+      return;
+    }
     if (!title.trim() || !content.trim()) return;
     onSubmit(title.trim(), content.trim(), reportDate ? new Date(reportDate).toISOString() : undefined);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
-    const isTextFile = [".txt", ".md", ".text", ".csv"].includes(ext);
-    setReportDate(new Date(file.lastModified).toISOString().slice(0, 10));
-
-    if (isTextFile) {
-      const text = await file.text();
-      setContent(text);
-      setUploadedFileName(file.name);
-      if (!title) {
-        setTitle(file.name.replace(/\.[^/.]+$/, ""));
-      }
-      return;
-    }
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
     setIsUploading(true);
+    setUploadedDocuments([]);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      const extractedDocuments: UploadedDocument[] = [];
 
-      const response = await fetch("/api/upload-file", {
-        method: "POST",
-        body: formData,
-      });
+      for (const file of files) {
+        const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+        const isTextFile = [".txt", ".md", ".text", ".csv"].includes(ext);
+        const originalTitle = file.name.replace(/\.[^/.]+$/, "");
+        const createdAt = new Date(file.lastModified).toISOString();
 
-      if (!response.ok) {
-        let errorMessage = "파일 업로드 실패";
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorMessage;
-        } catch {
-          errorMessage = `서버 오류 (${response.status})`;
+        if (isTextFile) {
+          const text = await file.text();
+          extractedDocuments.push({
+            title: originalTitle,
+            content: text,
+            createdAt,
+            fileName: file.name,
+          });
+          continue;
         }
-        throw new Error(errorMessage);
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await fetch("/api/upload-file", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          let errorMessage = "파일 업로드 실패";
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            errorMessage = `서버 오류 (${response.status})`;
+          }
+          throw new Error(`${file.name}: ${errorMessage}`);
+        }
+
+        const data = await response.json();
+        extractedDocuments.push({
+          title: originalTitle,
+          content: data.text,
+          createdAt,
+          fileName: file.name,
+        });
       }
 
-      const data = await response.json();
-      setContent(data.text);
-      setUploadedFileName(file.name);
-      if (!title) {
-        setTitle(data.suggestedTitle || file.name.replace(/\.[^/.]+$/, ""));
+      const firstDocument = extractedDocuments[0];
+      setUploadedDocuments(extractedDocuments);
+      setUploadedFileName(extractedDocuments.map((document) => document.fileName).join(", "));
+      if (firstDocument) {
+        setTitle(firstDocument.title);
+        setContent(firstDocument.content);
+        setReportDate(firstDocument.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10));
       }
+      const totalCharacters = extractedDocuments.reduce((sum, document) => sum + document.content.length, 0);
       toast({
         title: "파일 업로드 완료",
-        description: `${data.text.length.toLocaleString()}자의 텍스트가 추출되었습니다.`,
+        description: `${extractedDocuments.length}개 문서에서 ${totalCharacters.toLocaleString()}자의 텍스트가 추출되었습니다.`,
       });
     } catch (error: any) {
       toast({
@@ -187,6 +225,7 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
       setContent("");
       setReportDate(new Date().toISOString().slice(0, 10));
       setUploadedFileName("");
+      setUploadedDocuments([]);
       setSelectedNotionPages(new Set());
       setNotionPages([]);
       setNotionError(null);
@@ -275,6 +314,7 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
                   <input
                     ref={fileInputRef}
                     type="file"
+                    multiple
                     accept={ACCEPTED_EXTENSIONS}
                     onChange={handleFileUpload}
                     className="hidden"
@@ -309,11 +349,13 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
                       </div>
                     </label>
                   )}
-                  {content && tab === "upload" && uploadedFileName && !isUploading && (
+                  {uploadedDocuments.length > 0 && tab === "upload" && uploadedFileName && !isUploading && (
                     <div className="mt-4 text-sm text-primary flex items-center justify-center gap-2">
                       <FileText className="h-4 w-4" />
                       <span>
-                        {uploadedFileName} ({getFileFormatLabel(uploadedFileName)}) - {content.length.toLocaleString()}자 추출됨
+                        {uploadedDocuments.length === 1
+                          ? `${uploadedDocuments[0].fileName} (${getFileFormatLabel(uploadedDocuments[0].fileName)}) - ${uploadedDocuments[0].content.length.toLocaleString()}자 추출됨`
+                          : `${uploadedDocuments.length}개 문서 선택됨 - ${uploadedDocuments.reduce((sum, document) => sum + document.content.length, 0).toLocaleString()}자 추출됨`}
                       </span>
                     </div>
                   )}
@@ -433,7 +475,7 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onNotionImport, 
               ) : (
                 <Button
                   type="submit"
-                  disabled={!title.trim() || !content.trim() || busy}
+                  disabled={(tab === "upload" ? uploadedDocuments.length === 0 : !title.trim() || !content.trim()) || busy}
                   data-testid="button-analyze"
                 >
                   {isLoading ? (
