@@ -293,6 +293,26 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/canvas", async (req, res) => {
+    try {
+      const [documents, groups] = await Promise.all([
+        storage.getAllDocuments(),
+        storage.getAllGroups(),
+      ]);
+
+      await storage.clearAllGroups();
+      await storage.clearAllDocuments();
+
+      res.json({
+        deletedDocuments: documents.length,
+        deletedGroups: groups.length,
+      });
+    } catch (error) {
+      console.error("Error clearing canvas:", error);
+      res.status(500).json({ error: "Failed to clear canvas" });
+    }
+  });
+
   app.get("/api/documents", async (req, res) => {
     try {
       const documents = await storage.getAllDocuments();

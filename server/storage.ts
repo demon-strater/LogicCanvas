@@ -13,6 +13,7 @@ export interface IStorage {
   createDocument(doc: InsertDocument): Promise<Document>;
   updateDocument(id: number, updates: Partial<Document>): Promise<Document | undefined>;
   deleteDocument(id: number): Promise<void>;
+  clearAllDocuments(): Promise<void>;
 
   getNodesByDocument(documentId: number): Promise<Node[]>;
   getNode(id: number): Promise<Node | undefined>;
@@ -92,6 +93,11 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDocument(id: number): Promise<void> {
     await db.delete(documents).where(eq(documents.id, id));
+  }
+
+  async clearAllDocuments(): Promise<void> {
+    await db.delete(documentEdges);
+    await db.delete(documents);
   }
 
   async getNodesByDocument(documentId: number): Promise<Node[]> {
@@ -361,6 +367,14 @@ class MemoryStorage implements IStorage {
     this.edges = this.edges.filter(edge => edge.documentId !== id);
     this.tasks = this.tasks.filter(task => task.documentId !== id);
     this.documentEdges = this.documentEdges.filter(edge => edge.sourceDocId !== id && edge.targetDocId !== id);
+  }
+
+  async clearAllDocuments(): Promise<void> {
+    this.documents = [];
+    this.nodes = [];
+    this.edges = [];
+    this.tasks = [];
+    this.documentEdges = [];
   }
 
   async getNodesByDocument(documentId: number): Promise<Node[]> {

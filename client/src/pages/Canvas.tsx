@@ -11,7 +11,7 @@ import { DocumentViewModal } from "@/components/DocumentViewModal";
 import { GroupInputModal } from "@/components/GroupInputModal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Wand2, FolderPlus, FileText, LayoutGrid, RefreshCw, Trash2 } from "lucide-react";
+import { Plus, Wand2, FolderPlus, FileText, LayoutGrid, RefreshCw } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -259,6 +259,32 @@ export default function Canvas() {
     },
   });
 
+  const clearCanvasMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("DELETE", "/api/canvas");
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/document-edges"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/group-edges"] });
+      setSelectedDocumentId(null);
+      setSelectedGroupId(null);
+      setViewingDocumentId(null);
+      setExpandedGroups(new Set());
+      positionHistoryRef.current = [];
+      autoWorkflowAnalysisKeyRef.current = "";
+      toast({
+        title: "?? ???? ????? ??????",
+        description: `??? ${data.deletedDocuments || 0}?, ???? ${data.deletedGroups || 0}?? ???????.`,
+      });
+    },
+    onError: () => {
+      toast({ title: "?? ??", description: "?? ?? ? ??? ??????.", variant: "destructive" });
+    },
+  });
+
   const createGroupMutation = useMutation({
     mutationFn: async ({ name, description, parentId, color }: { name: string; description: string; parentId: number | null; color: string }) => {
       const response = await apiRequest("POST", "/api/groups", { name, description, parentId, color });
@@ -417,11 +443,20 @@ export default function Canvas() {
     [deleteDocumentMutation]
   );
 
+  const handleClearCanvas = useCallback(() => {
+    if (documents.length === 0 && groups.length === 0) return;
+    const confirmed = window.confirm("?? ???? ????? ????????? ? ??? ??? ? ????.");
+    if (!confirmed) return;
+    clearCanvasMutation.mutate();
+  }, [clearCanvasMutation, documents.length, groups.length]);
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <Header
         documentCount={documents.length}
         groupCount={groups.length}
+        onClearCanvas={handleClearCanvas}
+        isClearingCanvas={clearCanvasMutation.isPending}
       />
 
       <div className="flex-1 relative">
