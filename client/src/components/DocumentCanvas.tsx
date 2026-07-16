@@ -822,23 +822,51 @@ export function DocumentCanvas({
   ) {
     const clampedX = clampDocumentXToMonth(doc, x);
     const group = groups.find((item) => item.id === doc.groupId);
-    if (!group || (group.manualWidth == null && group.manualHeight == null)) {
+    if (!group) {
       return { x: clampedX, y };
     }
 
     const groupPos = positions[group.id] ?? { x: group.x ?? 0, y: group.y ?? 0 };
-    const groupWidth = group.manualWidth ?? DOC_WIDTH + GROUP_PADDING * 2;
-    const groupHeight = group.manualHeight ?? DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
     const visibleCenterY = groupPos.y + TIMELINE_GAP;
+    const siblingDocs = documents.filter((item) => item.groupId === group.id && item.id !== doc.id);
+    const siblingPositions = siblingDocs
+      .map((item) => docPositions[item.id] ?? { x: item.x ?? 0, y: item.y ?? 0 })
+      .filter((pos) => Number.isFinite(pos.x) && Number.isFinite(pos.y));
 
-    const minX = groupPos.x - groupWidth / 2 + GROUP_PADDING + DOC_WIDTH / 2;
-    const maxX = groupPos.x + groupWidth / 2 - GROUP_PADDING - DOC_WIDTH / 2;
-    const minY = visibleCenterY - groupHeight / 2 + GROUP_HEADER + GROUP_CONTENT_GAP + DOC_HEIGHT / 2;
-    const maxY = visibleCenterY + groupHeight / 2 - GROUP_PADDING - DOC_HEIGHT / 2;
+    let groupWidth = group.manualWidth ?? DOC_WIDTH + GROUP_PADDING * 2;
+    let groupHeight = group.manualHeight ?? DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING;
+    let centerX = groupPos.x;
+    let centerY = visibleCenterY;
+
+    if ((group.manualWidth == null || group.manualHeight == null) && siblingPositions.length > 0) {
+      const minDocX = Math.min(...siblingPositions.map((pos) => pos.x - DOC_WIDTH / 2));
+      const maxDocX = Math.max(...siblingPositions.map((pos) => pos.x + DOC_WIDTH / 2));
+      const minDocY = Math.min(...siblingPositions.map((pos) => pos.y - DOC_HEIGHT / 2));
+      const maxDocY = Math.max(...siblingPositions.map((pos) => pos.y + DOC_HEIGHT / 2));
+      const autoWidth = Math.max(DOC_WIDTH + GROUP_PADDING * 2, (maxDocX - minDocX) + GROUP_PADDING * 2);
+      const autoHeight = Math.max(
+        DOC_HEIGHT + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
+        (maxDocY - minDocY) + GROUP_HEADER + GROUP_CONTENT_GAP + GROUP_PADDING,
+      );
+
+      if (group.manualWidth == null) {
+        groupWidth = autoWidth;
+        centerX = minDocX - GROUP_PADDING + autoWidth / 2;
+      }
+      if (group.manualHeight == null) {
+        groupHeight = autoHeight;
+        centerY = minDocY - GROUP_HEADER - GROUP_CONTENT_GAP + autoHeight / 2;
+      }
+    }
+
+    const minX = centerX - groupWidth / 2 + GROUP_PADDING + DOC_WIDTH / 2;
+    const maxX = centerX + groupWidth / 2 - GROUP_PADDING - DOC_WIDTH / 2;
+    const minY = centerY - groupHeight / 2 + GROUP_HEADER + GROUP_CONTENT_GAP + DOC_HEIGHT / 2;
+    const maxY = centerY + groupHeight / 2 - GROUP_PADDING - DOC_HEIGHT / 2;
 
     return {
-      x: minX <= maxX ? clamp(clampedX, minX, maxX) : groupPos.x,
-      y: minY <= maxY ? clamp(y, minY, maxY) : visibleCenterY,
+      x: minX <= maxX ? clamp(clampedX, minX, maxX) : centerX,
+      y: minY <= maxY ? clamp(y, minY, maxY) : centerY,
     };
   }
 
@@ -940,21 +968,19 @@ export function DocumentCanvas({
     }
     const start = cascadeDragStartRef.current;
 
-    setGroupPositions((prev) => {
-      const next = { ...prev };
-      groupIds.forEach((groupId) => {
-        const base = groupId === id
-          ? { x: prevX, y: prevY }
-          : start.groupPositions[groupId];
-        if (base) {
-          next[groupId] = {
-            x: clampGroupXToMonthRange(groupId, base.x + deltaX),
-            y: base.y + deltaY,
-          };
-        }
-      });
-      return next;
+    const nextGroupPositions = { ...groupPositions };
+    groupIds.forEach((groupId) => {
+      const base = groupId === id
+        ? { x: prevX, y: prevY }
+        : start.groupPositions[groupId];
+      if (base) {
+        nextGroupPositions[groupId] = {
+          x: clampGroupXToMonthRange(groupId, base.x + deltaX),
+          y: base.y + deltaY,
+        };
+      }
     });
+    setGroupPositions(nextGroupPositions);
 
     setDocPositions((prev) => {
       const next = { ...prev };
@@ -964,7 +990,7 @@ export function DocumentCanvas({
           const doc = documents.find((item) => item.id === docId);
           const proposedX = base.x + deltaX;
           next[docId] = doc
-            ? clampDocumentToContainingGroup(doc, proposedX, base.y + deltaY)
+            ? clampDocumentToContainingGroup(doc, proposedX, base.y + deltaY, nextGroupPositions)
             : { x: proposedX, y: base.y + deltaY };
         }
       });
@@ -1756,7 +1782,7 @@ export function DocumentCanvas({
         {zoom >= ZOOM_L3 && documents.map((doc) => {
           const pos = docPositions[doc.id];
           if (!pos) return null;
-          const renderPos = clampDocumentToContainingGroup(doc, pos.x, pos.y, docPositions);
+          const renderPos = clampDocumentToContainingGroup(doc, pos.x, pos.y);
           return (
             <DocumentBox
               key={`doc-${doc.id}`}

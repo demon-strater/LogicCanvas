@@ -126,7 +126,8 @@ function parseJsonResponse<T>(raw: string): T {
 }
 
 export function isAIConfigured(): boolean {
-  return Boolean(process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
+  const key = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY || "";
+  return Boolean(key && key !== "missing-api-key" && key !== "sk-local-placeholder");
 }
 
 export function getAIConfigStatus() {
@@ -261,7 +262,9 @@ const VALID_NODE_TYPES: NodeType[] = ["concept", "claim", "evidence", "question"
 const VALID_EDGE_TYPES: EdgeType[] = ["related", "supports", "contradicts", "implies", "cause", "result", "elaboration", "contrast"];
 
 export async function parseDocumentWithAI(content: string): Promise<ParseResult> {
-  assertAIConfigured();
+  if (!isAIConfigured()) {
+    return buildLocalParseResult(content);
+  }
 
   try {
     const response = await createJsonChatCompletion(
@@ -515,9 +518,11 @@ Hard requirements:
 - Use medium child groups under a major group whenever that major group has multiple documents. For larger sets, prefer 2 to 3 medium groups per major group.
 - Do not leave documents ungrouped.
 - Every document must appear exactly once in the final hierarchy.
-- Use major groups as broad stages, and medium groups as the actual buckets that hold documents.
-- Major group names may be broad workflow stages such as planning, execution, analysis, or reporting.
-- Medium child group names must be more specific than their parent. Name them from the actual report topics, deliverables, decisions, audience, or work package. Avoid generic medium names such as planning, execution, analysis, report, misc, or data.
+- Use major groups as broad stages, and medium groups as the actual concrete buckets that hold documents.
+- Major group names may be somewhat abstract workflow stages such as "기획", "준비", "실행", "분석", "정리", or broader topic-stage names.
+- Medium child group names must be specific and action-oriented. Name them from the actual report topics, deliverables, decisions, audience, place, product, interview target, or work package.
+- Prefer medium group names shaped like "<구체 주제>를 위한 기획", "<구체 주제>에 대한 분석", "<구체 산출물> 작성", "<대상/장소> 인터뷰 설계", or "<제품/행사> 실행 준비".
+- Medium group names must never be generic numbered labels such as "기획 1", "기획 2", "문서", "자료", "보고서", "개념", "분석", "정리", or "기타".
 - Keep labels concise and concrete. Korean labels are preferred.
 - Use monthStart/monthEnd only when timing helps the grouping.
 
@@ -532,21 +537,21 @@ Return valid JSON in this shape:
     { "sourceId": 1, "targetId": 2, "label": "description", "edgeType": "flow|depends|related" }
   ],
   "groupRelations": [
-    { "sourceGroupName": "기획", "targetGroupName": "실행", "label": "기획 -> 실행", "edgeType": "flow" }
+    { "sourceGroupName": "기획", "targetGroupName": "실행 준비", "label": "기획 -> 준비", "edgeType": "flow" }
   ],
   "hierarchyLevels": { "1": 0, "2": 1 },
   "groups": [
     {
       "name": "기획",
-      "description": "상위 단계",
+      "description": "봉산마을 프로젝트 방향을 잡기 위한 상위 단계",
       "level": "major",
       "monthStart": 12,
       "monthEnd": 1,
       "documentIds": [],
       "childGroups": [
         {
-          "name": "자료 정리",
-          "description": "중간 단계",
+          "name": "이해관계자 인터뷰를 위한 질문 설계",
+          "description": "인터뷰 대상과 질문지를 구체화하는 중간 단계",
           "level": "medium",
           "documentIds": [1, 2]
         }
@@ -575,11 +580,12 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
   }
 
   if (documents.length === 1) {
+    const groupName = buildConcreteGroupName(documents, "정리");
     return { 
       relations: [], 
       hierarchyLevels: { [documents[0].id]: 0 },
       groups: [{
-        name: "문서",
+        name: groupName,
         description: "단일 문서",
         color: GROUP_COLORS[0],
         level: "major",
@@ -645,6 +651,7 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
     // Process groups with validation and color assignment
     const assignedDocIds = new Set<number>();
       let groups = processGroups(parsed.groups || [], docIds, assignedDocIds, 0);
+      groups = refineConcreteGroupNames(groups, documents);
 
       const needsSyntheticHierarchy =
         documents.length >= 4 &&
@@ -670,7 +677,8 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
           const majorDocs = orderedDocs.slice(i * docsPerMajor, (i + 1) * docsPerMajor);
           if (majorDocs.length === 0) continue;
 
-          const majorName = stageNames[i] || `단계 ${i + 1}`;
+          const stageName = stageNames[i] || `단계 ${i + 1}`;
+          const majorName = stageName;
           const majorGroup: GroupDefinition = {
             name: majorName,
             description: `${majorName} 단계`,
@@ -691,7 +699,7 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
               const mediumDocs = majorDocs.slice(j * docsPerMedium, (j + 1) * docsPerMedium);
               if (mediumDocs.length === 0) continue;
               majorGroup.childGroups.push({
-                name: `${majorName} ${j + 1}`,
+                name: buildConcreteMediumGroupName(mediumDocs, stageName),
                 description: `${majorName} 세부 단계`,
                 color: GROUP_COLORS[(i + j + 1) % GROUP_COLORS.length],
                 level: "medium",
@@ -708,8 +716,8 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
 
       // If no groups were created by AI, create a single default group with all docs
       if (groups.length === 0) {
-      groups.push({
-        name: "전체 문서",
+          groups.push({
+        name: buildConcreteGroupName(documents, "정리"),
         description: "모든 문서",
         color: GROUP_COLORS[0],
         level: "major" as const,
@@ -723,7 +731,7 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
       const unassignedDocs = documents.filter(d => !assignedDocIds.has(d.id));
       if (unassignedDocs.length > 0) {
         groups.push({
-          name: "기타 문서",
+          name: buildConcreteGroupName(unassignedDocs, "정리"),
           description: "분류되지 않은 문서",
           color: GROUP_COLORS[groups.length % GROUP_COLORS.length],
           level: "major" as const,
@@ -772,7 +780,7 @@ export async function analyzeDocumentWorkflow(documents: Document[]): Promise<Wo
       return {
         relations: validRelations,
         hierarchyLevels,
-      groups,
+      groups: refineConcreteGroupNames(groups, documents),
       groupRelations,
       summary: String(parsed.summary || "Workflow analysis complete")
     };
@@ -810,7 +818,8 @@ function buildFallbackWorkflowAnalysis(documents: Document[]): WorkflowAnalysisR
     const majorDocs = orderedDocs.slice(i * docsPerMajor, (i + 1) * docsPerMajor);
     if (majorDocs.length === 0) continue;
 
-    const majorName = stageNames[i] || `단계 ${i + 1}`;
+    const stageName = stageNames[i] || `단계 ${i + 1}`;
+    const majorName = stageName;
     const group: GroupDefinition = {
       name: majorName,
       description: `${majorName} 단계`,
@@ -827,7 +836,7 @@ function buildFallbackWorkflowAnalysis(documents: Document[]): WorkflowAnalysisR
         const mediumDocs = majorDocs.slice(j * docsPerMedium, (j + 1) * docsPerMedium);
         if (mediumDocs.length === 0) continue;
         group.childGroups?.push({
-          name: `${majorName} ${j + 1}`,
+          name: buildConcreteMediumGroupName(mediumDocs, stageName),
           description: `${majorName} 세부 단계`,
           color: GROUP_COLORS[(i + j + 1) % GROUP_COLORS.length],
           level: "medium",
@@ -862,10 +871,127 @@ function buildFallbackWorkflowAnalysis(documents: Document[]): WorkflowAnalysisR
   return {
     relations,
     hierarchyLevels,
-    groups,
+    groups: refineConcreteGroupNames(groups, documents),
     groupRelations,
     summary: "Fallback workflow analysis generated from document order",
   };
+}
+
+const GENERIC_GROUP_NAMES = new Set([
+  "개념",
+  "문서",
+  "기획",
+  "준비",
+  "실행",
+  "정리",
+  "분석",
+  "보고서",
+  "자료",
+  "리서치",
+  "회의록",
+  "기타",
+  "그룹",
+  "전체 문서",
+  "기타 문서",
+]);
+
+function normalizeGroupNameForCheck(name: string): string {
+  return name
+    .replace(/\s+/g, " ")
+    .replace(/\d+$/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function isGenericGroupName(name: string): boolean {
+  const normalized = normalizeGroupNameForCheck(name);
+  if (GENERIC_GROUP_NAMES.has(normalized)) return true;
+  return /^(개념|문서|기획|준비|실행|정리|분석|보고서|자료|리서치|회의록|기타)\s*\d+$/.test(name.trim());
+}
+
+function compactDocumentTitle(title: string): string {
+  const cleaned = title
+    .replace(/\.[a-z0-9]+$/i, "")
+    .replace(/^\s*[\d._-]+\s*/, "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*(최종|final|보고서|문서|정리|자료|회의록)\s*$/i, "")
+    .trim();
+
+  if (!cleaned) return "프로젝트";
+  return cleaned.length > 18 ? `${cleaned.slice(0, 18).trim()}` : cleaned;
+}
+
+function buildConcreteGroupName(docs: Document[], stageName: string): string {
+  const topic = compactDocumentTitle(docs[0]?.title || "프로젝트");
+  const normalizedStage = isGenericGroupName(stageName) ? stageName.replace(/\d+$/g, "").trim() : stageName;
+
+  if (normalizedStage.includes("준비")) return `${topic} 실행 준비`;
+  if (normalizedStage.includes("실행")) return `${topic} 실행`;
+  if (normalizedStage.includes("분석")) return `${topic} 분석`;
+  if (normalizedStage.includes("정리")) return `${topic} 정리`;
+  if (normalizedStage.includes("보고")) return `${topic} 보고서 작성`;
+  return `${topic}를 위한 ${normalizedStage || "기획"}`;
+}
+
+function buildConcreteMediumGroupName(docs: Document[], stageName: string): string {
+  const topic = compactDocumentTitle(docs[0]?.title || "프로젝트");
+  const normalizedStage = isGenericGroupName(stageName) ? stageName.replace(/\d+$/g, "").trim() : stageName;
+
+  if (normalizedStage.includes("기획")) return `${topic}를 위한 기획`;
+  if (normalizedStage.includes("분석")) return `${topic}에 대한 분석`;
+  if (normalizedStage.includes("준비")) return `${topic} 실행 준비`;
+  if (normalizedStage.includes("실행")) return `${topic} 실행 준비`;
+  if (normalizedStage.includes("정리")) return `${topic} 정리`;
+  if (normalizedStage.includes("보고")) return `${topic} 보고서 작성`;
+  if (normalizedStage.includes("설계")) return `${topic} 설계`;
+  if (normalizedStage.includes("작성")) return `${topic} 작성`;
+  return `${topic}에 대한 ${normalizedStage || "분석"}`;
+}
+
+function isSpecificMediumGroupName(name: string): boolean {
+  const trimmed = name.trim();
+  if (isGenericGroupName(trimmed)) return false;
+  if (trimmed.length <= 6) return false;
+  return /(를 위한|을 위한|에 대한|분석|기획|설계|작성|준비|실행|인터뷰|조사|정리|보고|검토)/.test(trimmed);
+}
+
+function collectGroupDocumentIds(group: GroupDefinition): number[] {
+  return [
+    ...(group.documentIds || []),
+    ...((group.childGroups || []).flatMap((child) => collectGroupDocumentIds(child))),
+  ];
+}
+
+function refineConcreteGroupNames(groups: GroupDefinition[], documents: Document[]): GroupDefinition[] {
+  const documentMap = new Map(documents.map((document) => [document.id, document]));
+
+  return groups.map((group, index) => {
+    const childGroups = group.childGroups
+      ? refineConcreteGroupNames(group.childGroups, documents)
+      : undefined;
+    const groupDocIds = [
+      ...(group.documentIds || []),
+      ...((childGroups || []).flatMap((child) => collectGroupDocumentIds(child))),
+    ];
+    const groupDocs = groupDocIds
+      .map((id) => documentMap.get(id))
+      .filter(Boolean) as Document[];
+    const fallbackStage = group.level === "medium"
+      ? group.name || "분석"
+      : ["기획", "준비", "실행", "정리"][index] || "기획";
+    const sourceDocs = groupDocs.length > 0 ? groupDocs : documents;
+    const nextName = group.level === "medium"
+      ? (isSpecificMediumGroupName(group.name) ? group.name : buildConcreteMediumGroupName(sourceDocs, fallbackStage))
+      : (isGenericGroupName(group.name)
+          ? (group.name.replace(/\d+$/g, "").trim() || fallbackStage)
+          : group.name);
+
+    return {
+      ...group,
+      name: nextName,
+      childGroups: childGroups && childGroups.length > 0 ? childGroups : undefined,
+    };
+  });
 }
 
 function processGroups(
