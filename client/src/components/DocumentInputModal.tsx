@@ -39,6 +39,7 @@ type UploadedDocument = {
   content: string;
   createdAt?: string;
   fileName: string;
+  fileKey: string;
 };
 
 type Props = {
@@ -142,7 +143,7 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onSubmitMany, on
     if (files.length === 0) return;
 
     setIsUploading(true);
-    setUploadedDocuments([]);
+    const existingDocuments = uploadedDocuments;
     try {
       const extractedDocuments: UploadedDocument[] = [];
 
@@ -159,6 +160,7 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onSubmitMany, on
             content: text,
             createdAt,
             fileName: file.name,
+            fileKey: `${file.name}-${file.size}-${file.lastModified}`,
           });
           continue;
         }
@@ -188,21 +190,30 @@ export function DocumentInputModal({ isOpen, onClose, onSubmit, onSubmitMany, on
           content: data.text,
           createdAt,
           fileName: file.name,
+          fileKey: `${file.name}-${file.size}-${file.lastModified}`,
         });
       }
 
-      const firstDocument = extractedDocuments[0];
-      setUploadedDocuments(extractedDocuments);
-      setUploadedFileName(extractedDocuments.map((document) => document.fileName).join(", "));
-      if (firstDocument) {
+      const nextDocumentsByKey = new Map<string, UploadedDocument>();
+      for (const document of existingDocuments) {
+        nextDocumentsByKey.set(document.fileKey, document);
+      }
+      for (const document of extractedDocuments) {
+        nextDocumentsByKey.set(document.fileKey, document);
+      }
+      const nextDocuments = Array.from(nextDocumentsByKey.values());
+      const firstDocument = nextDocuments[0];
+      setUploadedDocuments(nextDocuments);
+      setUploadedFileName(nextDocuments.map((document) => document.fileName).join(", "));
+      if (firstDocument && existingDocuments.length === 0) {
         setTitle(firstDocument.title);
         setContent(firstDocument.content);
         setReportDate(firstDocument.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10));
       }
-      const totalCharacters = extractedDocuments.reduce((sum, document) => sum + document.content.length, 0);
+      const totalCharacters = nextDocuments.reduce((sum, document) => sum + document.content.length, 0);
       toast({
         title: "파일 업로드 완료",
-        description: `${extractedDocuments.length}개 문서에서 ${totalCharacters.toLocaleString()}자의 텍스트가 추출되었습니다.`,
+        description: `${nextDocuments.length}개 문서에서 ${totalCharacters.toLocaleString()}자의 텍스트가 추출되었습니다.`,
       });
     } catch (error: any) {
       toast({
